@@ -38,3 +38,10 @@ Where an apps-of-apps can be thought of as an entire domain or application team.
 For instance currently there is just the jdw app/domain.
 There is also a k8s folder for other resources that may be needed in future to be shared across all teams/app/domains.
 As of now there is nothing there and the folder is not included in git.
+
+## Addons
+### Ingress
+Minikube can enable ingress with the following command.
+```shell
+minikube addons enable ingress
+```
