@@ -4,12 +4,12 @@ metadata:
   name: dashboard-ingress
   namespace: kube-system
 spec:
-  ingressClassName: nginx
+  ingressClassName: public
   rules:
     - host: dashboard.jdw.com
       http:
         paths:
-          - path: /
+          - path: "/"
             pathType: Prefix
             backend:
               service:
