@@ -3,6 +3,8 @@ kind: Ingress
 metadata:
   name: dashboard-ingress
   namespace: kube-system
+  annotations:
+    kubernetes.io/ingress.class: public
 spec:
   ingressClassName: public
   rules:
