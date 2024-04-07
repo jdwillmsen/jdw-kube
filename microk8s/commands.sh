@@ -35,3 +35,5 @@ microk8s kubectl -n kube-system delete secret kubernetes-dashboard-certs
 microk8s kubectl -n kube-system create secret generic kubernetes-dashboard-certs --from-file=dashboard.crt --from-file=dashboard.key
 
 microk8s.enable metallb:$(curl ipinfo.io/ip)-$(curl ipinfo.io/ip)
+
+k get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d
