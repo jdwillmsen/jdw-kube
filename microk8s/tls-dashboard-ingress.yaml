@@ -1,0 +1,27 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kubernetes-dashboard-ingress
+  namespace: kube-system
+  annotations:
+    kubernetes.io/ingress.class: public
+    cert-manager.io/cluster-issuer: letsencrypt-microk8s
+  labels:
+    app: kubernetes-dashboard
+spec:
+  rules:
+    - host: dashboard.jdw.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kubernetes-dashboard
+                port:
+                  number: 443
+  tls:
+    - hosts:
+        - dashboard.jdw.com
+      secretName: kubernetes-dashboard-certs
