@@ -14,7 +14,7 @@ spec:
   ingressClassName: public
   tls:
     - hosts:
-        - dashboard.jdw.com
+        - *
       secretName: kubernetes-dashboard-ingress-tls
   rules:
     - http:
