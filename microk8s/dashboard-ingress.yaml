@@ -1,17 +1,19 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: dashboard-ingress
-  namespace: kube-system
   annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      rewrite ^(/dashboard)$ $1/ redirect;
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
     kubernetes.io/ingress.class: public
+  name: dashboard
+  namespace: kube-system
 spec:
-  ingressClassName: public
   rules:
-    - host: dashboard.jdw.com
-      http:
+    - http:
         paths:
-          - path: "/"
+          - path: /dashboard(/|$)(.*)
             pathType: Prefix
             backend:
               service:

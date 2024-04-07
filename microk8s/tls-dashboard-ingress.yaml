@@ -10,6 +10,10 @@ metadata:
   labels:
     app: kubernetes-dashboard
 spec:
+  tls:
+    - hosts:
+        - dashboard.jdw.com
+      secretName: kubernetes-dashboard-certs
   rules:
     - host: dashboard.jdw.com
       http:
@@ -21,7 +25,3 @@ spec:
                 name: kubernetes-dashboard
                 port:
                   number: 443
-  tls:
-    - hosts:
-        - dashboard.jdw.com
-      secretName: kubernetes-dashboard-certs
