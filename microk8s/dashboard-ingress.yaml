@@ -10,6 +10,7 @@ metadata:
   name: dashboard
   namespace: kube-system
 spec:
+  ingressClassName: public
   rules:
     - http:
         paths:
