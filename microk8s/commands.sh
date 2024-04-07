@@ -33,3 +33,5 @@ openssl req -nodes -newkey rsa:2048 -keyout dashboard.key -new -x509 -days 3650 
 
 microk8s kubectl -n kube-system delete secret kubernetes-dashboard-certs
 microk8s kubectl -n kube-system create secret generic kubernetes-dashboard-certs --from-file=dashboard.crt --from-file=dashboard.key
+
+microk8s.enable metallb:$(curl ipinfo.io/ip)-$(curl ipinfo.io/ip)
