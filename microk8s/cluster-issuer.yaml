@@ -2,13 +2,13 @@
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
-  name: letsencrypt-microk8s
+  name: lets-encrypt
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
     email: jdwillmsen@gmail.com
     privateKeySecretRef:
-      name: letsencrypt-microk8s
+      name: lets-encrypt-private-key
     solvers:
       - http01:
           ingress:
