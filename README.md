@@ -1,6 +1,9 @@
 # JDW Kube
 Repository for configuring JDW Kubernetes Cluster
 
+## Microk8s
+Currently, this is being hosted on Ubuntu Server 22 LTS and everything in microk8s folder is used to configure the setup.
+
 ## [Minikube](https://minikube.sigs.k8s.io/docs/)
 To set up and run Kubernetes locally you can make use of minikube.
 
