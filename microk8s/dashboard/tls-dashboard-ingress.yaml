@@ -3,6 +3,7 @@ kind: Ingress
 metadata:
   annotations:
     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    acme.cert-manager.io/http01-edit-in-place: "true"
     kubernetes.io/ingress.class: public
     cert-manager.io/cluster-issuer: lets-encrypt
   name: dashboard
