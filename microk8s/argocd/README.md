@@ -41,3 +41,8 @@ argocd login <ARGOCD_SERVER>
 ```shell
 argocd account update-password
 ```
+
+## Editing config map for resource exclusion/inclusion
+```shell
+kubectl edit configmap argocd-cm -n argocd
+```

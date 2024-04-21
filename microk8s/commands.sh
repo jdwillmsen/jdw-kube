@@ -47,6 +47,9 @@ sudo snap remove microk8s
 # Install cluster
 sudo snap install microk8s --classic
 
+# Remove & Install cluster
+sudo snap remove microk8s && sudo snap install microk8s --classic
+
 # Enable ingress addons
 microk8s enable ingress
 
