@@ -1,4 +1,10 @@
 apps:
+  - chart: argo
+    name: argocd
+    repo: https://argoproj.github.io/argo-helm
+    revision: 6.7.13
+    namespace: argocd
+    postInstall: true
   - chart: kubernetes-dashboard
     name: kubernetes-dashboard
     repo: https://kubernetes.github.io/dashboard
