@@ -1,5 +1,12 @@
 # [Argo CD](https://argo-cd.readthedocs.io/en/stable/getting_started/)
 
+## Setup within Microk8s cluster
+```shell
+microk8s kubectl apply -f argocd-namespace.yaml
+microk8s kubectl apply -f argocd.yaml -n argocd
+microk8s kubectl apply -f argocd-application.yaml
+```
+
 ## Setup Within Kubernetes Cluster
 Run the following command
 ```shell

@@ -36,7 +36,7 @@ microk8s kubectl -n kube-system create secret generic kubernetes-dashboard-certs
 
 microk8s.enable metallb:$(curl ipinfo.io/ip)-$(curl ipinfo.io/ip)
 
-microk8s kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d
+echo $(microk8s kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d)
 
 # Reset cluster - this will put the cluster back to the default state
 sduo microk8s reset --destroy-storage
@@ -52,3 +52,4 @@ microk8s enable ingress
 
 # Setup cluster access
 microk8s config # copy the values into ~/.kube/config
+
