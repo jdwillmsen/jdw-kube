@@ -25,4 +25,4 @@ spec:
               service:
                 name: vault-ui
                 port:
-                  name: "8200"
+                  number: 8200
