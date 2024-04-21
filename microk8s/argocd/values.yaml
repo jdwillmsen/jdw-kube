@@ -2,8 +2,8 @@ configs:
   cm:
     resource.exclusions: |
       - apiGroups:
-        - admissionregistration.k8s.io
+          - admissionregistration.k8s.io
         kinds:
-        - MutatingWebhookConfiguration
+          - MutatingWebhookConfiguration
         clusters:
-        - "*"
+          - "*"
