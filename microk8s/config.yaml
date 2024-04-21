@@ -20,7 +20,7 @@ apps:
   - chart: postgresql
     name: postgresql
     repo: https://charts.bitnami.com/bitnami
-    revision: 12.12.10
+    revision: 15.2.5
     namespace: default
     postInstall: true
   - chart: cert-manager
@@ -32,6 +32,6 @@ apps:
   - chart: charts/atlas-operator
     name: atlas
     repo: ghcr.io/ariga
-    revision: 0.4.2
+    revision: 0.4.4
     namespace: atlas
     postInstall: false
