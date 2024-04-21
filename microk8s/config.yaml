@@ -4,7 +4,7 @@ apps:
     repo: https://kubernetes.github.io/dashboard
     revision: 7.3.2
     namespace: kubernetes-dashboard
-    postInstall: false
+    postInstall: true
   - chart: vault
     name: vault
     repo: https://helm.releases.hashicorp.com
