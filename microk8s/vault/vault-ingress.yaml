@@ -4,8 +4,8 @@ metadata:
   name: vault-ui-ingress
   namespace: vault
   annotations:
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
-    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+#    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
     acme.cert-manager.io/http01-edit-in-place: "true"
     kubernetes.io/ingress.class: public
     cert-manager.io/cluster-issuer: letsencrypt-prod
