@@ -6,8 +6,8 @@ metadata:
     acme.cert-manager.io/http01-edit-in-place: "true"
     kubernetes.io/ingress.class: public
     cert-manager.io/cluster-issuer: letsencrypt-prod
-  name: kubernetes-dashboard
-  namespace: kubernetes-dashboard
+  name: dashboard
+  namespace: kube-system
 spec:
   ingressClassName: public
   tls:
@@ -22,6 +22,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: kubernetes-dashboard-web
+                name: kubernetes-dashboard
                 port:
                   number: 443
