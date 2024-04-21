@@ -1,0 +1,15 @@
+ingress:
+  enabled: true
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    acme.cert-manager.io/http01-edit-in-place: "true"
+    kubernetes.io/ingress.class: public
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    - hosts:
+        - dashboard.jdw.com
+      secretName: kubernetes-dashboard-tls
+  paths:
+    - /
+  hosts:
+    - dashboard.jdw.com
