@@ -1,0 +1,42 @@
+apiVersion: kyverno.io/v1
+kind: Policy
+metadata:
+  name: policy-resize-pod
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  mutateExistingOnPolicyUpdate: true
+  rules:
+    - name: resize-pod
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      context:
+        - name: pod_name
+          variable:
+            jmesPath: "request.object.metadata.name"
+            default: ''
+        - name: pod_status
+          variable:
+            jmesPath: "request.object.status.containerStatuses[0].ready"
+            default: false
+      mutate:
+        targets:
+          - apiVersion: v1
+            kind: Pod
+            name: "{{pod_name}}"
+            namespace: demo
+            preconditions:
+              all:
+                - key: "{{target.status.containerStatuses[0].ready}}"
+                  operator: Equals
+                  value: true
+        patchStrategicMerge:
+          spec:
+            containers:
+              - (name): sample-kotlin-spring
+                resources:
+                  limits:
+                    cpu: 0.5
