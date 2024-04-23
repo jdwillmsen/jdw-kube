@@ -59,3 +59,16 @@ microk8s config # copy the values into ~/.kube/config
 # Enable hostpath-storage
 microk8s enable hostpath-storage
 
+# Commands to setup cluster
+sudo snap remove microk8s && \
+sudo snap install microk8s --classic && \
+microk8s enable ingress && \
+microk8s enable hostpath-storage && \
+microk8s kubectl apply -f argocd/argocd-namespace.yaml && \
+microk8s kubectl apply -f argocd/argocd.yaml -n argocd && \
+microk8s kubectl apply -f argocd/argocd-application.yaml && \
+sleep 120 && \
+microk8s kubectl apply -f bootstrap.yaml && \
+microk8s config && \
+export ARGOCD_PASSWORD=$(microk8s kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d) && \
+echo "${ARGOCD_PASSWORD}"
