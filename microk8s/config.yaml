@@ -46,7 +46,7 @@ apps:
     repo: https://cloudnative-pg.github.io/charts
     revision: 0.20.2
     namespace: cnpg-system
-    postInstall: false
+    postInstall: true
   - chart: cluster
     name: postgresql-cluster-non
     repo: https://cloudnative-pg.github.io/charts
