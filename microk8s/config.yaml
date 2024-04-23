@@ -52,7 +52,7 @@ apps:
     repo: https://cloudnative-pg.github.io/charts
     revision: 0.0.8
     namespace: database
-    postInstall: true
+    postInstall: false
   - chart: kube-prometheus-stack
     name: kube-prometheus-stack
     repo: https://prometheus-community.github.io/helm-charts

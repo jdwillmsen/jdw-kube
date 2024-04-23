@@ -56,3 +56,6 @@ microk8s enable ingress
 # Setup cluster access
 microk8s config # copy the values into ~/.kube/config
 
+# Enable hostpath-storage
+microk8s enable hostpath-storage
+
