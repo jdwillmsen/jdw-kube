@@ -23,12 +23,6 @@ apps:
     revision: v0.8.25
     namespace: vault-config-operator
     postInstall: false
-#  - chart: postgresql
-#    name: postgresql
-#    repo: https://charts.bitnami.com/bitnami
-#    revision: 15.2.5
-#    namespace: default
-#    postInstall: true
   - chart: cert-manager
     name: cert-manager
     repo: https://charts.jetstack.io
