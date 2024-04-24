@@ -13,7 +13,7 @@ spec:
   tls:
     - hosts:
         - grafana.jdw.com
-      secretName: vault-ui-tls
+      secretName: grafana-tls
   rules:
     - host: grafana.jdw.com
       http:
@@ -22,6 +22,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: prometheus-community-grafana
+                name: kube-prometheus-stack-grafana
                 port:
                   number: 80
