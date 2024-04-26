@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: postgresql-non-ingress
+  namespace: database
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    acme.cert-manager.io/http01-edit-in-place: "true"
+    kubernetes.io/ingress.class: public
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: public
+  tls:
+    - hosts:
+        - postgresql.non.jdw.com
+      secretName: postgresql-non-tls
+  rules:
+    - host: postgresql.non.jdw.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: postgresql-cluster-non-rw
+                port:
+                  number: 5432
