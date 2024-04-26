@@ -53,3 +53,8 @@ apps:
     revision: 58.2.1
     namespace: monitoring
     postInstall: true
+  - chart: ingress-nginx
+    name: ingress-nginx
+    repo: https://kubernetes.github.io/ingress-nginx
+    revision: 4.10.0
+    postInstall: false
