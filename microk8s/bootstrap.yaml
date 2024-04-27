@@ -21,7 +21,7 @@ spec:
     metadata:
       name: '{{ .name }}'
       annotations:
-        argocd.argoproj.io/sync-wave: "1"
+        argocd.argoproj.io/sync-wave: "{{ .sync-wave | 1 }}"
     spec:
       syncPolicy:
         automated:
@@ -36,6 +36,7 @@ spec:
       project: default
   templatePatch: |
     spec:
+    
       sources:
         - repoURL: '{{ .repo }}'
           chart: '{{ .chart }}'
