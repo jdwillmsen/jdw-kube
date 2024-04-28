@@ -68,3 +68,10 @@ apps:
     namespace: ingress-nginx
     postInstall: false
     syncWave: -1
+  - chart: nginx-ingress
+    name: nginx-ingress
+    repo: oci://ghcr.io/nginxinc/charts/nginx-ingress
+    revision: 1.2.0
+    namespace: nginx-ingress
+    postInstall: false
+    syncWave: -1
