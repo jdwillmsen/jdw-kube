@@ -61,13 +61,13 @@ apps:
     namespace: monitoring
     postInstall: true
     syncWave: 1
-  - chart: ingress-nginx
-    name: ingress-nginx
-    repo: https://kubernetes.github.io/ingress-nginx
-    revision: 4.10.0
-    namespace: ingress-nginx
-    postInstall: false
-    syncWave: -1
+#  - chart: ingress-nginx
+#    name: ingress-nginx
+#    repo: https://kubernetes.github.io/ingress-nginx
+#    revision: 4.10.0
+#    namespace: ingress-nginx
+#    postInstall: false
+#    syncWave: -1
   - chart: nginx-ingress
     name: nginx-ingress
     repo: https://helm.nginx.com/stable
