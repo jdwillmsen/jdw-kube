@@ -11,36 +11,42 @@ apps:
     revision: 7.3.2
     namespace: kubernetes-dashboard
     postInstall: true
+    syncWave: 1
   - chart: vault
     name: vault
     repo: https://helm.releases.hashicorp.com
     revision: 0.28.0
     namespace: vault
     postInstall: true
+    syncWave: 1
   - chart: vault-config-operator
     name: vault-config-operator
     repo: https://redhat-cop.github.io/vault-config-operator
     revision: v0.8.25
     namespace: vault-config-operator
     postInstall: false
+    syncWave: 1
   - chart: cert-manager
     name: cert-manager
     repo: https://charts.jetstack.io
     revision: v1.14.4
     namespace: cert-manager
     postInstall: true
+    syncWave: 1
   - chart: charts/atlas-operator
     name: atlas
     repo: ghcr.io/ariga
     revision: 0.4.4
     namespace: atlas
     postInstall: false
+    syncWave: 1
   - chart: cloudnative-pg
     name: cloudnative-operator
     repo: https://cloudnative-pg.github.io/charts
     revision: 0.20.2
     namespace: cnpg-system
     postInstall: true
+    syncWave: 1
   - chart: cluster
     name: postgresql-cluster-non
     repo: https://cloudnative-pg.github.io/charts
@@ -54,6 +60,7 @@ apps:
     revision: 58.2.1
     namespace: monitoring
     postInstall: true
+    syncWave: 1
   - chart: ingress-nginx
     name: ingress-nginx
     repo: https://kubernetes.github.io/ingress-nginx

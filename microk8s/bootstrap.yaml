@@ -20,8 +20,8 @@ spec:
   template:
     metadata:
       name: '{{ .name }}'
-#      annotations:
-#        argocd.argoproj.io/sync-wave: "1"
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{ .syncWave }}'
     spec:
       syncPolicy:
         automated:
@@ -35,15 +35,6 @@ spec:
         server: https://kubernetes.default.svc
       project: default
   templatePatch: |
-    {{- if .syncWave }}
-    metadata:
-      annotations:
-        argocd.argoproj.io/sync-wave: '{{ .syncWave }}'
-    {{- else }}
-    metadata:
-      annotations:
-        argocd.argoproj.io/sync-wave: '1'
-    {{- end }}
     spec:
       sources:
         - repoURL: '{{ .repo }}'
