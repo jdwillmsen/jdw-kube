@@ -68,10 +68,10 @@ apps:
 #    namespace: ingress-nginx
 #    postInstall: false
 #    syncWave: -1
-  - chart: nginx-ingress
-    name: nginx-ingress
-    repo: https://helm.nginx.com/stable
-    revision: 1.2.0
-    namespace: nginx-ingress
-    postInstall: false
-    syncWave: -1
+#  - chart: nginx-ingress
+#    name: nginx-ingress
+#    repo: https://helm.nginx.com/stable
+#    revision: 1.2.0
+#    namespace: nginx-ingress
+#    postInstall: false
+#    syncWave: -1
