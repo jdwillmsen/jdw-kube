@@ -16,12 +16,12 @@ spec:
               files:
                 - path: microk8s/config.yaml
           - list:
-              elementsYaml: "{{ .apps | toJson }}"
+              elementsYaml: "{{.apps | toJson}}"
   template:
     metadata:
-      name: '{{ .name }}'
+      name: '{{.name}}'
       annotations:
-        argocd.argoproj.io/sync-wave: '{{ .syncWave }}'
+        argocd.argoproj.io/sync-wave: "{{.syncWave}}"
     spec:
       syncPolicy:
         automated:
@@ -31,7 +31,7 @@ spec:
           - CreateNamespace=true
           - PruneLast=true
       destination:
-        namespace: '{{ .namespace }}'
+        namespace: '{{.namespace}}'
         server: https://kubernetes.default.svc
       project: default
   templatePatch: |
