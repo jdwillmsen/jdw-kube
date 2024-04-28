@@ -1,0 +1,21 @@
+apps:
+  - chart: argo
+    name: argocd
+    repo: https://argoproj.github.io/argo-helm
+    revision: 6.7.13
+    namespace: argocd
+    postInstall: true
+  - chart: ingress-nginx
+    name: ingress-nginx
+    repo: https://kubernetes.github.io/ingress-nginx
+    revision: 4.10.0
+    namespace: ingress-nginx
+    postInstall: false
+    syncWave: -1
+  - chart: nginx-ingress
+    name: nginx-ingress
+    repo: https://helm.nginx.com/stable
+    revision: 1.2.0
+    namespace: nginx-ingress
+    postInstall: false
+    syncWave: -1
