@@ -47,7 +47,7 @@ apps:
     revision: 0.0.8
     namespace: database
     postInstall: true
-    sync-wave: 2
+    syncWave: 2
   - chart: kube-prometheus-stack
     name: kube-prometheus-stack
     repo: https://prometheus-community.github.io/helm-charts
@@ -60,3 +60,4 @@ apps:
     revision: 4.10.0
     namespace: ingress-nginx
     postInstall: false
+    syncWave: -1
