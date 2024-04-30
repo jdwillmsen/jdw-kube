@@ -5,8 +5,6 @@ metadata:
     argocd.argoproj.io/sync-wave: "3"
   name: jdw-non-atlas-schema
 spec:
-  connectionSecretRef:
-    namespace: database
   credentials:
     scheme: auth
     host: postgresql-cluster-non-rw.database.svc
