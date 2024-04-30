@@ -3,7 +3,7 @@ kind: AtlasSchema
 metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "3"
-  name: jdw-non-atlas-schema
+  name: jdw-atlas-schema
 spec:
   credentials:
     scheme: postgres
