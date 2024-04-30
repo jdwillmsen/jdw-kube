@@ -32,7 +32,7 @@ apps:
     repo: ghcr.io/ariga
     revision: 0.4.4
     namespace: atlas
-    postInstall: false
+    postInstall: true
     syncWave: 1
   - chart: cloudnative-pg
     name: cloudnative-operator
