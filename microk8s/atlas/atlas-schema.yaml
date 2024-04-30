@@ -6,7 +6,7 @@ metadata:
   name: jdw-non-atlas-schema
 spec:
   credentials:
-    scheme: auth
+    scheme: postgres
     host: postgresql-cluster-non-rw
     user: postgres
     passwordFrom:
