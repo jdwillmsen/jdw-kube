@@ -3,7 +3,7 @@ kind: AtlasSchema
 metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "3"
-  name: myapp
+  name: jdw-non-atlas-schema
 spec:
   connectionSecretRef:
     namespace: database
