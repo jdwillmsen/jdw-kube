@@ -12,7 +12,7 @@ spec:
     passwordFrom:
       secretKeyRef:
         key: password
-        name: pg-password
+        name: postgresql-cluster-non-superuser
     database: jdw
     port: 5432
     parameters:
