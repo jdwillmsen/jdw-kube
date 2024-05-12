@@ -9,4 +9,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: dashboard-admin-sa
-    namespace: default
+    namespace: kubernetes-dashboard
