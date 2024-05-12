@@ -6,13 +6,13 @@ apps:
     namespace: kubernetes-dashboard
     postInstall: true
     syncWave: 1
-  - chart: vault
-    name: vault
-    repo: https://helm.releases.hashicorp.com
-    revision: 0.28.0
-    namespace: vault
-    postInstall: true
-    syncWave: 1
+#  - chart: vault
+#    name: vault
+#    repo: https://helm.releases.hashicorp.com
+#    revision: 0.28.0
+#    namespace: vault
+#    postInstall: true
+#    syncWave: 1
   - chart: vault-config-operator
     name: vault-config-operator
     repo: https://redhat-cop.github.io/vault-config-operator
