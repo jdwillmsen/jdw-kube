@@ -4,18 +4,12 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
     acme.cert-manager.io/http01-edit-in-place: "true"
-    kubernetes.io/ingress.class: public
+    kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: letsencrypt-prod
-#    kubernetes.io/ingress.class: "nginx"
-#    ingress.kubernetes.io/add-base-url: "true"
-#    nginx.ingress.kubernetes.io/secure-backends: "true"
-#    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
-#    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
-#    nginx.ingress.kubernetes.io/rewrite-target: /$2
   name: kubernetes-dashboard
   namespace: kubernetes-dashboard
 spec:
-  ingressClassName: public
+  ingressClassName: nginx
   tls:
     - hosts:
         - dashboard.jdw.com
@@ -28,6 +22,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: kubernetes-dashboard-web
+                name: kubernetes-dashboard-kong-proxy
                 port:
                   number: 443
