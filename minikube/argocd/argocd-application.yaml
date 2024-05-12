@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: 'https://github.com/jdwillmsen/jdw-kube.git'
-    path: microk8s/argocd
+    path: minikube/argocd
     targetRevision: main
   destination:
     server: 'https://kubernetes.default.svc'

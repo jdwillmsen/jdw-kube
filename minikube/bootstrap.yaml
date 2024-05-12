@@ -14,7 +14,7 @@ spec:
               repoURL: https://github.com/jdwillmsen/jdw-kube.git
               revision: main
               files:
-                - path: microk8s/config.yaml
+                - path: minikube/config.yaml
           - list:
               elementsYaml: "{{.apps | toJson}}"
   template:
@@ -42,12 +42,12 @@ spec:
           targetRevision: '{{ .revision }}'
           helm:
             valueFiles:
-              - $values/microk8s/{{ .name }}/values.yaml
+              - $values/minikube/{{ .name }}/values.yaml
         - repoURL: https://github.com/jdwillmsen/jdw-kube.git
           targetRevision: main
           ref: values
         {{- if .postInstall }}
         - repoURL: https://github.com/jdwillmsen/jdw-kube.git
           targetRevision: main
-          path: microk8s/{{ .name }}
+          path: minikube/{{ .name }}
         {{- end }}
