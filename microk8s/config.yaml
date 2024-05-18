@@ -55,3 +55,10 @@ apps:
     namespace: monitoring
     postInstall: true
     syncWave: 1
+  - chart: external-secrets
+    name: external-secrets
+    repo: https://charts.external-secrets.io
+    revision: 0.9.18
+    namespace: external-secrets
+    postInstall: false
+    syncWave: 1
