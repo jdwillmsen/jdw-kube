@@ -18,7 +18,7 @@ minikube start \
 # Start Minikube DA - 1 Node Extra Memory + CPU
 minikube start \
   --driver=hyperv \
-  --profile=jdw-cluster-da \
+  --profile=jdw-cluster-dr \
   --addons=default-storageclass,ingress,ingress-dns \
   --nodes=1 \
   --memory=6000mb \
