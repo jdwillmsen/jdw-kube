@@ -1,2 +1,2 @@
 # Generate access token
-microk8s kubectl create token default --duration 525600m
+kubectl create token dashboard-admin-sa --duration 525600m -n kubernetes-dashboard
