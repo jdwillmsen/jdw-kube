@@ -72,3 +72,6 @@ microk8s kubectl apply -f bootstrap.yaml && \
 microk8s config && \
 export ARGOCD_PASSWORD=$(microk8s kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d) && \
 echo "${ARGOCD_PASSWORD}"
+
+# Enable VM ips
+sudo apt install linux-cloud-tools-virtual
