@@ -97,4 +97,5 @@ data:
     END
     $$;
 
+    GRANT USAGE ON SCHEMA auth TO app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA auth TO app;
