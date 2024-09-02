@@ -89,4 +89,6 @@ data:
         CONSTRAINT fk_profile FOREIGN KEY (profile_id) REFERENCES auth.profiles (profile_id)
     );
     
+    CREATE ROLE app LOGIN;
+
     GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA auth TO app;
