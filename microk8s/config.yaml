@@ -69,7 +69,7 @@ apps:
     namespace: external-secrets
     postInstall: false
     syncWave: 1
-  - chart: ectobit
+  - chart: ectobit/pgweb
     name: pgweb
     repo: https://charts.ectobit.com
     revision: 0.1.9
