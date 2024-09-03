@@ -71,6 +71,7 @@ apps:
     syncWave: 1
   - chart: test
     name: pgweb
+    revision: 0.0.1
     namespace: database
     postInstall: true
     syncWave: 2
