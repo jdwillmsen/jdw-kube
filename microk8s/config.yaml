@@ -69,7 +69,8 @@ apps:
     namespace: external-secrets
     postInstall: false
     syncWave: 1
-  - name: pgweb
+  - chart: test
+    name: pgweb
     namespace: database
     postInstall: true
     syncWave: 2
