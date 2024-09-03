@@ -72,6 +72,7 @@ apps:
   - chart: runix/pgadmin4
     name: pgweb
     revision: 1.28.0
+    repo: https://helm.runix.net
     namespace: database
     postInstall: true
     syncWave: 2
