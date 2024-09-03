@@ -48,6 +48,13 @@ apps:
     namespace: database
     postInstall: true
     syncWave: 2
+  - chart: cluster
+    name: postgresql-cluster-prd
+    repo: https://cloudnative-pg.github.io/charts
+    revision: 0.0.8
+    namespace: database
+    postInstall: true
+    syncWave: 2
   - chart: kube-prometheus-stack
     name: kube-prometheus-stack
     repo: https://prometheus-community.github.io/helm-charts
