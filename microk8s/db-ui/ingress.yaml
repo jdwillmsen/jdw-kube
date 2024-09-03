@@ -21,6 +21,6 @@ spec:
             path: '/'
             backend:
               service:
-                name: pgweb-adminer
+                name: db-ui-adminer
                 port:
                   number: 80
