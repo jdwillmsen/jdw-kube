@@ -74,5 +74,5 @@ apps:
     revision: 0.2.1
     repo: https://cetic.github.io/helm-charts
     namespace: database
-    postInstall: false
+    postInstall: true
     syncWave: 2

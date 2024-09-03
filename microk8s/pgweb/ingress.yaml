@@ -21,6 +21,6 @@ spec:
             path: '/'
             backend:
               service:
-                name: pgweb-service
+                name: pgweb-adminer
                 port:
-                  number: 8080
+                  number: 80
