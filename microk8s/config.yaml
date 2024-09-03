@@ -69,7 +69,7 @@ apps:
     namespace: external-secrets
     postInstall: false
     syncWave: 1
-  - chart: cetic/adminer
+  - chart: adminer
     name: pgweb
     revision: 0.2.1
     repo: https://cetic.github.io/helm-charts
