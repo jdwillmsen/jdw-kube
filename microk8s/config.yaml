@@ -5,14 +5,12 @@ apps:
     revision: 7.3.2
     namespace: kubernetes-dashboard
     postInstall: true
-    helmChart: true
     syncWave: 1
   - chart: vault
     name: vault
     repo: https://helm.releases.hashicorp.com
     revision: 0.28.0
     namespace: vault
-    helmChart: true
     postInstall: true
     syncWave: 1
   - chart: vault-config-operator
@@ -20,7 +18,6 @@ apps:
     repo: https://redhat-cop.github.io/vault-config-operator
     revision: v0.8.25
     namespace: vault-config-operator
-    helmChart: true
     postInstall: false
     syncWave: 1
   - chart: cert-manager
@@ -28,7 +25,6 @@ apps:
     repo: https://charts.jetstack.io
     revision: v1.14.4
     namespace: cert-manager
-    helmChart: true
     postInstall: true
     syncWave: 1
   - chart: charts/atlas-operator
@@ -36,7 +32,6 @@ apps:
     repo: ghcr.io/ariga
     revision: 0.4.4
     namespace: atlas
-    helmChart: true
     postInstall: true
     syncWave: 1
   - chart: cloudnative-pg
@@ -44,7 +39,6 @@ apps:
     repo: https://cloudnative-pg.github.io/charts
     revision: 0.20.2
     namespace: cnpg-system
-    helmChart: true
     postInstall: true
     syncWave: 1
   - chart: cluster
@@ -52,7 +46,6 @@ apps:
     repo: https://cloudnative-pg.github.io/charts
     revision: 0.0.8
     namespace: database
-    helmChart: true
     postInstall: true
     syncWave: 2
   - chart: cluster
@@ -60,7 +53,6 @@ apps:
     repo: https://cloudnative-pg.github.io/charts
     revision: 0.0.8
     namespace: database
-    helmChart: true
     postInstall: true
     syncWave: 2
   - chart: kube-prometheus-stack
@@ -68,7 +60,6 @@ apps:
     repo: https://prometheus-community.github.io/helm-charts
     revision: 58.2.1
     namespace: monitoring
-    helmChart: true
     postInstall: true
     syncWave: 1
   - chart: external-secrets
@@ -76,14 +67,12 @@ apps:
     repo: https://charts.external-secrets.io
     revision: 0.9.18
     namespace: external-secrets
-    helmChart: true
     postInstall: false
     syncWave: 1
-  - chart: runix
+  - chart: cetic/adminer
     name: pgweb
-    revision: 1.28.0
-    repo: https://helm.runix.net
+    revision: 0.2.1
+    repo: https://cetic.github.io/helm-charts
     namespace: database
-    helmChart: false
-    postInstall: true
+    postInstall: false
     syncWave: 2

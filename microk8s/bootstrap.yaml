@@ -37,18 +37,15 @@ spec:
   templatePatch: |
     spec:
       sources:
-        {{- if .helmChart }}
         - repoURL: '{{ .repo }}'
           chart: '{{ .chart }}'
           targetRevision: '{{ .revision }}'
           helm:
             valueFiles:
               - $values/microk8s/{{ .name }}/values.yaml
-        {{- if .helmChart }}
         - repoURL: https://github.com/jdwillmsen/jdw-kube.git
           targetRevision: main
           ref: values
-        {{- end }}
         {{- if .postInstall }}
         - repoURL: https://github.com/jdwillmsen/jdw-kube.git
           targetRevision: main
