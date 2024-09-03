@@ -5,9 +5,15 @@ ingress:
     cert-manager.io/cluster-issuer: 'lets-encrypt'
   hosts:
     - host: dbui.jdw.com
-      paths:
-        - path: /
-          pathType: Prefix
+      http:
+        paths:
+          - pathType: Prefix
+            path: '/'
+            backend:
+              service:
+                name: pgweb-adminer
+                port:
+                  number: 80
   tls:
     - secreteName: pgweb-tls
       hosts:
