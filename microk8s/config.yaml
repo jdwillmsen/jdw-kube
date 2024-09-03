@@ -69,7 +69,7 @@ apps:
     namespace: external-secrets
     postInstall: false
     syncWave: 1
-  - chart: runix/pgadmin4
+  - chart: runix
     name: pgweb
     revision: 1.28.0
     repo: https://helm.runix.net
