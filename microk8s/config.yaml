@@ -76,3 +76,10 @@ apps:
     namespace: database
     postInstall: true
     syncWave: 2
+  - chart: metrics-server/metrics-server
+    name: metrics-server
+    repo: https://kubernetes-sigs.github.io/metrics-server
+    revision: 3.12.1
+    namespace: metrics-server
+    postInstall: false
+    syncWave: 1
