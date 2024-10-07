@@ -13,6 +13,11 @@ spec:
           env:
             - name: VAULT_ADDR
               value: http://vault.vault.svc:8200
+            - name: VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vault
+                  key: token
           command:
             - /bin/sh
             - -c
