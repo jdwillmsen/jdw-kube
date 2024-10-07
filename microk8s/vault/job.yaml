@@ -22,7 +22,6 @@ spec:
             - /bin/sh
             - -c
             - |
-              export VAULT_TOKEN=root
               sleep 10
               vault auth enable kubernetes
               vault secrets enable database

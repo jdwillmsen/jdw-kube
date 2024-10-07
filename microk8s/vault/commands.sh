@@ -2,7 +2,7 @@
 kind: Secret
 apiVersion: v1
 metadata:
-  name: token
+  name: vault
 data:
   token: token_here
 type: Opaque
