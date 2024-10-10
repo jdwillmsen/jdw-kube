@@ -12,10 +12,10 @@ spec:
   ingressClassName: public
   tls:
     - hosts:
-        - postgresql.non.jdw.com
+        - postgresql.non.jdwkube.com
       secretName: postgresql-non-tls
   rules:
-    - host: postgresql.non.jdw.com
+    - host: postgresql.non.jdwkube.com
       http:
         paths:
           - path: /

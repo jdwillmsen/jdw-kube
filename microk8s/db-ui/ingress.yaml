@@ -11,10 +11,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - dbui.jdw.com
+        - dbui.jdwkube.com
       secretName: db-ui-tls
   rules:
-    - host: dbui.jdw.com
+    - host: dbui.jdwkube.com
       http:
         paths:
           - pathType: Prefix

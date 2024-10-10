@@ -6,7 +6,7 @@ metadata:
     ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
-    - host: test.jdw.com
+    - host: test.jdwkube.com
       http:
         paths:
           - path: /apple
@@ -30,7 +30,7 @@ spec:
                 name: orange-service
                 port:
                   number: 5678
-    - host: orange.jdw.com
+    - host: orange.jdwkube.com
       http:
         paths:
           - path: /orange

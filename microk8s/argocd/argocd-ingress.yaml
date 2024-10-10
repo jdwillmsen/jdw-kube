@@ -13,10 +13,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - argocd.jdw.com
+        - argocd.jdwkube.com
       secretName: argocd-server-tls
   rules:
-    - host: argocd.jdw.com
+    - host: argocd.jdwkube.com
       http:
         paths:
           - path: /

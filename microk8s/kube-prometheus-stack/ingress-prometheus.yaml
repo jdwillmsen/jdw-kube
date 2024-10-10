@@ -12,10 +12,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - prometheus.jdw.com
+        - prometheus.jdwkube.com
       secretName: prometheus-tls
   rules:
-    - host: prometheus.jdw.com
+    - host: prometheus.jdwkube.com
       http:
         paths:
           - path: /

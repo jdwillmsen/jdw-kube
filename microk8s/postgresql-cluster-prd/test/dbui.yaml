@@ -45,10 +45,10 @@ spec:
   ingressClassName: public
   tls:
     - hosts:
-        - dbui.jdw.com
+        - dbui.jdwkube.com
       secretName: pgweb-tls
   rules:
-    - host: dbui.jdw.com
+    - host: dbui.jdwkube.com
       http:
         paths:
           - pathType: Prefix

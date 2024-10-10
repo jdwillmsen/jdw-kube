@@ -12,10 +12,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - grafana.jdw.com
+        - grafana.jdwkube.com
       secretName: grafana-tls
   rules:
-    - host: grafana.jdw.com
+    - host: grafana.jdwkube.com
       http:
         paths:
           - path: /

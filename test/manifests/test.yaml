@@ -6,7 +6,7 @@ metadata:
 spec:
   ingressClassName: public
   rules:
-    - host: test.jdw.com
+    - host: test.jdwkube.com
       http:
         paths:
           - pathType: Prefix

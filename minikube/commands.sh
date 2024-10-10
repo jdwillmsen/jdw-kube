@@ -41,8 +41,8 @@ minikube --profile=jdw-cluster addons enable default-storageclass
 minikube --profile=jdw-cluster ip
 
 # Powershell admin
-Add-DnsClientNrptRule -Namespace ".jdw.com" -NameServers "$(minikube -p jdw-cluster ip)"
-Get-DnsClientNrptRule | Where-Object {$_.Namespace -eq '.jdw.com'} | Remove-DnsClientNrptRule -Force; Add-DnsClientNrptRule -Namespace ".test" -NameServers "$(minikube -p jdw-cluster ip)"
+Add-DnsClientNrptRule -Namespace ".jdwkube.com" -NameServers "$(minikube -p jdw-cluster ip)"
+Get-DnsClientNrptRule | Where-Object {$_.Namespace -eq '.jdwkube.com'} | Remove-DnsClientNrptRule -Force; Add-DnsClientNrptRule -Namespace ".test" -NameServers "$(minikube -p jdw-cluster ip)"
 
 # Setup ArgoCD
 kubectl apply -f argocd/argocd-namespace.yaml && \

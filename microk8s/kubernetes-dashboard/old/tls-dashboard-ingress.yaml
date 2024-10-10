@@ -18,10 +18,10 @@ spec:
   ingressClassName: public
   tls:
     - hosts:
-        - dashboard.jdw.com
+        - dashboard.jdwkube.com
       secretName: kubernetes-dashboard-tls
   rules:
-    - host: dashboard.jdw.com
+    - host: dashboard.jdwkube.com
       http:
         paths:
           - path: /

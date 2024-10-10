@@ -12,10 +12,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - vault.jdw.com
+        - vault.jdwkube.com
       secretName: vault-ui-tls
   rules:
-    - host: vault.jdw.com
+    - host: vault.jdwkube.com
       http:
         paths:
           - path: /
