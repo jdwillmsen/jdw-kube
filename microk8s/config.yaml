@@ -71,8 +71,8 @@ apps:
     syncWave: 1
   - chart: adminer
     name: db-ui
-    revision: 0.2.1
     repo: https://cetic.github.io/helm-charts
+    revision: 0.2.1
     namespace: database
     postInstall: true
     syncWave: 2
@@ -81,5 +81,12 @@ apps:
     repo: https://kubernetes-sigs.github.io/metrics-server/
     revision: 3.12.1
     namespace: metrics-server
+    postInstall: false
+    syncWave: 1
+  - chart: ingress-nginx
+    name: ingress-nginx
+    repo: https://kubernetes.github.io/ingress-nginx
+    revision: 4.11.3
+    namespace: ingress-nginx
     postInstall: false
     syncWave: 1
