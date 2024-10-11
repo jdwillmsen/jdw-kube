@@ -90,10 +90,3 @@ apps:
     namespace: ingress-nginx
     postInstall: false
     syncWave: 1
-  - chart: porkbun-webhook
-    name: porkbun-webhook
-    repo: https://github.com/jdwillmsen/jdw-kube.git
-    namespace: porkbun-webhook
-    revision: main
-    postInstall: false
-    syncWave: 1
