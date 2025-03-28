@@ -92,7 +92,7 @@ apps:
     syncWave: 1
   - chart: openebs
     name: openebs
-    repo: https://openebs.github.io/charts
+    repo: https://openebs.github.io/openebs
     revision: 4.2.0
     namespace: openebs
     postInstall: false
