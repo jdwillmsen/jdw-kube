@@ -356,6 +356,10 @@ template:
       - name: runner
         image: ghcr.io/actions/actions-runner:2.323.0
         command: ["/home/runner/run.sh"]
+        env:
+          - name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER
+            value: "false"
+
 ## Optional controller service account that needs to have required Role and RoleBinding
 ## to operate this gha-runner-scale-set installation.
 ## The helm chart will try to find the controller deployment and its service account at installation time.
