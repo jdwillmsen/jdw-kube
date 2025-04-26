@@ -125,3 +125,10 @@ apps:
     namespace: arc-runners
     postInstall: false
     syncWave: 3
+  - chart: loki
+    name: loki
+    repo: https://grafana.github.io/helm-charts
+    revision: 6.29.0
+    namespace: monitoring
+    postInstall: false
+    syncWave: 1
