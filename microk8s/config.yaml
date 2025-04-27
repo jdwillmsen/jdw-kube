@@ -137,5 +137,5 @@ apps:
     repo: https://grafana.github.io/helm-charts
     revision: 6.29.0
     namespace: monitoring
-    postInstall: false
+    postInstall: true
     syncWave: 1
