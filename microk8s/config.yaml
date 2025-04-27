@@ -125,3 +125,17 @@ apps:
     namespace: monitoring
     postInstall: true
     syncWave: 1
+  - chart: grafana
+    name: grafana
+    repo: https://grafana.github.io/helm-charts
+    revision: 8.13.1
+    namespace: monitoring
+    postInstall: true
+    syncWave: 1
+  - chart: loki
+    name: loki
+    repo: https://grafana.github.io/helm-charts
+    revision: 6.29.0
+    namespace: monitoring
+    postInstall: false
+    syncWave: 1
