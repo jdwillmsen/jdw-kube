@@ -1,16 +1,15 @@
 datasources:
-  datasources:
-    prometheus:
-      name: Prometheus
-      type: prometheus
-      access: proxy
-      url: http://prometheus:9090
-      isDefault: true
-    loki:
-      name: Loki
-      type: loki
-      access: proxy
-      url: http://loki:3100
+  prometheus:
+    name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+  loki:
+    name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
 
 persistence:
   enabled: true
