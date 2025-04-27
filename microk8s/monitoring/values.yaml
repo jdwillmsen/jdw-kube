@@ -10,3 +10,12 @@ clusterEvents:
 
 podLogs:
   enabled: true
+
+nodeLogs:
+  enabled: true
+
+destinations:
+  - name: loki
+    url: "http://loki:3100/loki/api/v1/push"
+  - name: prometheus
+    url: "http://prometheus:9090"
