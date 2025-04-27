@@ -139,3 +139,10 @@ apps:
     namespace: monitoring
     postInstall: true
     syncWave: 1
+  - chart: prometheus
+    name: prometheus
+    repo: https://prometheus-community.github.io/helm-charts
+    revision: 27.11.0
+    namespace: monitoring
+    postInstall: true
+    syncWave: 1
