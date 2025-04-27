@@ -29,4 +29,4 @@ destinations:
     url: "http://loki:3100/loki/api/v1/push"
   - name: Prometheus
     type: prometheus
-    url: "http://prometheus-server"
+    url: "http://prometheus-server:9090/api/v1/write"
