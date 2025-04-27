@@ -1,0 +1,22 @@
+apps:
+  - chart: kube-prometheus-stack
+    name: kube-prometheus-stack
+    repo: https://prometheus-community.github.io/helm-charts
+    revision: 58.2.1
+    namespace: monitoring
+    postInstall: true
+    syncWave: 1
+  - chart: loki
+    name: loki
+    repo: https://grafana.github.io/helm-charts
+    revision: 6.29.0
+    namespace: monitoring
+    postInstall: false
+    syncWave: 1
+  - chart: alloy
+    name: alloy
+    repo: https://grafana.github.io/helm-charts
+    revision: 1.0.2
+    namespace: monitoring
+    postInstall: false
+    syncWave: 1

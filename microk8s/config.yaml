@@ -55,13 +55,6 @@ apps:
     namespace: database
     postInstall: true
     syncWave: 2
-  - chart: kube-prometheus-stack
-    name: kube-prometheus-stack
-    repo: https://prometheus-community.github.io/helm-charts
-    revision: 58.2.1
-    namespace: monitoring
-    postInstall: true
-    syncWave: 1
   - chart: external-secrets
     name: external-secrets
     repo: https://charts.external-secrets.io
@@ -125,17 +118,10 @@ apps:
     namespace: arc-runners
     postInstall: false
     syncWave: 3
-  - chart: loki
-    name: loki
+  - chart: k8s-monitoring
+    name: monitoring
     repo: https://grafana.github.io/helm-charts
-    revision: 6.29.0
+    revision: 2.0.26
     namespace: monitoring
-    postInstall: false
-    syncWave: 1
-  - chart: alloy
-    name: alloy
-    repo: https://grafana.github.io/helm-charts
-    revision: 1.0.2
-    namespace: monitoring
-    postInstall: false
+    postInstall: true
     syncWave: 1
