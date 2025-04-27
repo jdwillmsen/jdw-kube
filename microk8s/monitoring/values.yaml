@@ -1,0 +1,10 @@
+cluster:
+  name: jdw
+  namespace: monitoring
+
+#destinations:
+#  - name: loki
+#    url: "http://loki:3100/loki/api/v1/push" # Replace with the actual URL of your Loki service
+#  - name: prometheus
+#    url: "http://prometheus:9090" # Replace with the URL of your Prometheus service
+
