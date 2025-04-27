@@ -133,7 +133,7 @@ apps:
     postInstall: false
     syncWave: 1
   - chart: alloy
-    name: loki
+    name: alloy
     repo: https://grafana.github.io/helm-charts
     revision: 1.0.2
     namespace: monitoring
