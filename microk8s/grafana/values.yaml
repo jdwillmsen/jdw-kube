@@ -19,3 +19,16 @@ persistence:
   accessModes:
     - ReadWriteOnce
   size: 2Gi
+
+configData:
+  grafana.ini: |
+    [auth]
+    disable_login_form = false
+    disable_signout_menu = false
+  provisioning:
+    dashboards:
+      default:
+        home-dashboard:
+          enabled: true
+
+adminPassword: "admin"
