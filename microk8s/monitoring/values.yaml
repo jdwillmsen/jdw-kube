@@ -24,9 +24,9 @@ alloy-singleton:
   enabled: true
 
 destinations:
-  - name: loki
+  - name: Loki
     type: loki
     url: "http://loki:3100/loki/api/v1/push"
-  - name: prometheus
+  - name: Prometheus
     type: prometheus
-    url: "http://prometheus:9090"
+    url: "http://prometheus-server"
