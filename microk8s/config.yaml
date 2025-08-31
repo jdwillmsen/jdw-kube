@@ -23,7 +23,7 @@ apps:
   - chart: cert-manager
     name: cert-manager
     repo: https://charts.jetstack.io
-    revision: v1.14.4
+    revision: v1.18.2
     namespace: cert-manager
     postInstall: true
     syncWave: 1
