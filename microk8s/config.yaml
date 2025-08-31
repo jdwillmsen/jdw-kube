@@ -128,7 +128,7 @@ apps:
   - chart: grafana
     name: grafana
     repo: https://grafana.github.io/helm-charts
-    revision: 8.13.1
+    revision: 9.4.3
     namespace: monitoring
     postInstall: true
     syncWave: 1
