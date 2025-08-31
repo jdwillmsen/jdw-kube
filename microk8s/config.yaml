@@ -30,7 +30,7 @@ apps:
   - chart: charts/atlas-operator
     name: atlas
     repo: ghcr.io/ariga
-    revision: 0.4.4
+    revision: 0.7.11
     namespace: atlas
     postInstall: true
     syncWave: 1
