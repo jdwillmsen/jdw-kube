@@ -1,8 +1,8 @@
 installCRDs: true
 
-webhook:
-  limits:
-    ephemeral-storage: 500Mi
+#webhook:
+#  limits:
+#    ephemeral-storage: 500Mi
 
 #cainjector:
 #  enabled: false
