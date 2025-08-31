@@ -86,7 +86,7 @@ apps:
   - chart: openebs
     name: openebs
     repo: https://openebs.github.io/openebs
-    revision: 4.2.0
+    revision: 4.3.3
     namespace: openebs
     postInstall: false
     syncWave: 1
