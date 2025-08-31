@@ -142,7 +142,7 @@ apps:
   - chart: prometheus
     name: prometheus
     repo: https://prometheus-community.github.io/helm-charts
-    revision: 27.11.0
+    revision: 27.32.0
     namespace: monitoring
     postInstall: true
     syncWave: 1
