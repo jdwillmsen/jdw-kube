@@ -121,7 +121,7 @@ apps:
   - chart: k8s-monitoring
     name: monitoring
     repo: https://grafana.github.io/helm-charts
-    revision: 2.0.26
+    revision: 3.3.2
     namespace: monitoring
     postInstall: true
     syncWave: 1
