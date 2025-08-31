@@ -72,7 +72,7 @@ apps:
   - chart: metrics-server
     name: metrics-server
     repo: https://kubernetes-sigs.github.io/metrics-server/
-    revision: 3.12.1
+    revision: 3.13.0
     namespace: metrics-server
     postInstall: false
     syncWave: 1
