@@ -135,7 +135,7 @@ apps:
   - chart: loki
     name: loki
     repo: https://grafana.github.io/helm-charts
-    revision: 6.29.0
+    revision: 6.38.0
     namespace: monitoring
     postInstall: true
     syncWave: 1
