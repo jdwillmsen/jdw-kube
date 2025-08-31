@@ -16,7 +16,7 @@ apps:
   - chart: vault-config-operator
     name: vault-config-operator
     repo: https://redhat-cop.github.io/vault-config-operator
-    revision: v0.8.25
+    revision: v0.8.33
     namespace: vault-config-operator
     postInstall: false
     syncWave: 1
