@@ -12,6 +12,6 @@ startupapicheck:
 #  limits:
 #    ephemeral-storage: 500Mi
 
-resources:
-  limits:
-    ephemeral-storage: 500Mi
+#resources:
+#  limits:
+#    ephemeral-storage: 500Mi
