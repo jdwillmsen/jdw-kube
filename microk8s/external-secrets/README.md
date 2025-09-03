@@ -52,7 +52,7 @@ Secrets.
 After installation, define an `ExternalSecret` CR to pull data:
 
 ```yaml
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: my-db-creds
