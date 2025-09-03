@@ -55,13 +55,13 @@ apps:
     namespace: database
     postInstall: true
     syncWave: 2
-  - chart: external-secrets
-    name: external-secrets
-    repo: https://charts.external-secrets.io
-    revision: 0.19.2
-    namespace: external-secrets
-    postInstall: false
-    syncWave: 1
+#  - chart: external-secrets
+#    name: external-secrets
+#    repo: https://charts.external-secrets.io
+#    revision: 0.19.2
+#    namespace: external-secrets
+#    postInstall: false
+#    syncWave: 1
   - chart: adminer
     name: db-ui
     repo: https://cetic.github.io/helm-charts
