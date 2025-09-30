@@ -62,3 +62,9 @@ engines:
   replicated:
     mayastor:
       enabled: false
+
+minio:
+  replicas: 1
+
+loki:
+    replicaCount: 1
