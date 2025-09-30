@@ -43,6 +43,7 @@ mayastor:
 
 # -- Configuration options for pre-upgrade helm hook job.
 preUpgradeHook:
+  enabled: false
   image:
     # -- The container image registry URL for the hook job
     registry: docker.io
