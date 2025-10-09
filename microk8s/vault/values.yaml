@@ -2,5 +2,11 @@
 #  dev:
 #    enabled: true
 
+server:
+  ha:
+    enabled: true
+    replicas: 3
+
+
 ui:
   enabled: true
