@@ -146,10 +146,10 @@ apps:
     namespace: monitoring
     postInstall: true
     syncWave: 1
-#  - chart: metallb
-#    name: metallb
-#    repo: https://metallb.github.io/metallb
-#    revision: 0.15.2
-#    namespace: metallb-system
-#    postInstall: false
-#    syncWave: 0
+  - chart: metallb
+    name: metallb
+    repo: https://metallb.github.io/metallb
+    revision: 0.15.2
+    namespace: metallb-system
+    postInstall: false
+    syncWave: 0
