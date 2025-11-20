@@ -1,0 +1,6 @@
+commonMetaLabels:
+  origin_prometheus: "prometheus-server-1"
+
+prometheus-node-exporter:
+  service:
+    port: 9200

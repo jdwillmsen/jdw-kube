@@ -1,0 +1,148 @@
+apps:
+  - chart: kubernetes-dashboard
+    name: kubernetes-dashboard
+    repo: https://kubernetes.github.io/dashboard
+    revision: 7.13.0
+    namespace: kubernetes-dashboard
+    postInstall: true
+    syncWave: 1
+  - chart: vault
+    name: vault
+    repo: https://helm.releases.hashicorp.com
+    revision: 0.30.1
+    namespace: vault
+    postInstall: true
+    syncWave: 1
+  - chart: vault-config-operator
+    name: vault-config-operator
+    repo: https://redhat-cop.github.io/vault-config-operator
+    revision: v0.8.33
+    namespace: vault-config-operator
+    postInstall: false
+    syncWave: 1
+  - chart: cert-manager
+    name: cert-manager
+    repo: https://charts.jetstack.io
+    revision: v1.18.2
+    namespace: cert-manager
+    postInstall: true
+    syncWave: 1
+#  - chart: charts/atlas-operator
+#    name: atlas
+#    repo: ghcr.io/ariga
+#    revision: 0.7.11
+#    namespace: atlas
+#    postInstall: true
+#    syncWave: 1
+#  - chart: cloudnative-pg
+#    name: cloudnative-operator
+#    repo: https://cloudnative-pg.github.io/charts
+#    revision: 0.26.0
+#    namespace: cnpg-system
+#    postInstall: true
+#    syncWave: 1
+#  - chart: cluster
+#    name: postgresql-cluster-non
+#    repo: https://cloudnative-pg.github.io/charts
+#    revision: 0.3.1
+#    namespace: database
+#    postInstall: true
+#    syncWave: 2
+#  - chart: cluster
+#    name: postgresql-cluster-prd
+#    repo: https://cloudnative-pg.github.io/charts
+#    revision: 0.3.1
+#    namespace: database
+#    postInstall: true
+#    syncWave: 2
+  - chart: external-secrets
+    name: external-secrets
+    repo: https://charts.external-secrets.io
+    revision: 0.19.2
+    namespace: external-secrets
+    postInstall: false
+    syncWave: 1
+#  - chart: adminer
+#    name: db-ui
+#    repo: https://cetic.github.io/helm-charts
+#    revision: 0.2.1
+#    namespace: database
+#    postInstall: true
+#    syncWave: 2
+  - chart: metrics-server
+    name: metrics-server
+    repo: https://kubernetes-sigs.github.io/metrics-server/
+    revision: 3.13.0
+    namespace: metrics-server
+    postInstall: false
+    syncWave: 1
+  - chart: ingress-nginx
+    name: ingress-nginx
+    repo: https://kubernetes.github.io/ingress-nginx
+    revision: 4.13.2
+    namespace: ingress-nginx
+    postInstall: false
+    syncWave: 1
+  - chart: openebs
+    name: openebs
+    repo: https://openebs.github.io/openebs
+    revision: 4.3.3
+    namespace: openebs
+    postInstall: false
+    syncWave: 1
+#  - chart: gha-runner-scale-set-controller
+#    name: arc-systems
+#    repo: ghcr.io/actions/actions-runner-controller-charts
+#    revision: 0.12.1
+#    namespace: arc-systems
+#    postInstall: true
+#    syncWave: 2
+#  - chart: gha-runner-scale-set
+#    name: arc-runner-set-1
+#    repo: ghcr.io/actions/actions-runner-controller-charts
+#    revision: 0.12.1
+#    namespace: arc-runners
+#    postInstall: false
+#    syncWave: 4
+#  - chart: gha-runner-scale-set
+#    name: arc-runner-set-2
+#    repo: ghcr.io/actions/actions-runner-controller-charts
+#    revision: 0.12.1
+#    namespace: arc-runners
+#    postInstall: false
+#    syncWave: 4
+#  - chart: gha-runner-scale-set
+#    name: arc-runner-set-3
+#    repo: ghcr.io/actions/actions-runner-controller-charts
+#    revision: 0.12.1
+#    namespace: arc-runners
+#    postInstall: false
+#    syncWave: 4
+  - chart: k8s-monitoring
+    name: monitoring
+    repo: https://grafana.github.io/helm-charts
+    revision: 3.3.2
+    namespace: monitoring
+    postInstall: true
+    syncWave: 1
+  - chart: grafana
+    name: grafana
+    repo: https://grafana.github.io/helm-charts
+    revision: 9.4.3
+    namespace: monitoring
+    postInstall: true
+    syncWave: 1
+  - chart: loki
+    name: loki
+    repo: https://grafana.github.io/helm-charts
+    revision: 6.38.0
+    namespace: monitoring
+    postInstall: true
+    syncWave: 1
+  - chart: prometheus
+    name: prometheus
+    repo: https://prometheus-community.github.io/helm-charts
+    revision: 27.32.0
+    namespace: monitoring
+    postInstall: true
+    syncWave: 1
