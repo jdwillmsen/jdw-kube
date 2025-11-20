@@ -151,5 +151,5 @@ apps:
     repo: https://metallb.github.io/metallb
     revision: 0.15.2
     namespace: metallb-system
-    postInstall: false
+    postInstall: true
     syncWave: 0
