@@ -5,3 +5,6 @@ machine:
         dhcp: true
   install:
     disk: /dev/nvme0n1
+  kubelet:
+    extraArgs:
+      register-with-taints: ""
