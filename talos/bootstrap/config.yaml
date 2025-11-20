@@ -146,7 +146,7 @@ apps:
     namespace: monitoring
     postInstall: true
     syncWave: 1
-  - chart: metallb
+  - chart: charts/metallb
     name: metallb
     repo: https://metallb.github.io/metallb
     revision: 0.15.2
