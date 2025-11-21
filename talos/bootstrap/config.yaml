@@ -76,13 +76,13 @@ apps:
     namespace: metrics-server
     postInstall: false
     syncWave: 1
-  - chart: ingress-nginx
-    name: ingress-nginx
-    repo: https://kubernetes.github.io/ingress-nginx
-    revision: 4.13.2
-    namespace: ingress-nginx
-    postInstall: false
-    syncWave: 1
+#  - chart: ingress-nginx
+#    name: ingress-nginx
+#    repo: https://kubernetes.github.io/ingress-nginx
+#    revision: 4.13.2
+#    namespace: ingress-nginx
+#    postInstall: false
+#    syncWave: 1
   - chart: openebs
     name: openebs
     repo: https://openebs.github.io/openebs
