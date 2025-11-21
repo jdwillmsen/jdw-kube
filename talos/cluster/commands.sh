@@ -59,12 +59,15 @@ talosctl config merge ./talosconfig
 
 ### Set endpoints of control plane nodes
 talosctl config endpoint <control_plane_IP_1> <control_plane_IP_2> <control_plane_IP_3>
+talosctl config endpoint $NODE_1 $NODE_2 $NODE_3
 
 ### Bootstrap Kubernetes cluster
 talosctl bootstrap --nodes <control-plane-IP>
+talosctl bootstrap --nodes $NODE_3
 
 ### Get Kubernetes access
 talosctl kubeconfig --nodes <control-plane-IP>
+talosctl kubeconfig --nodes $NODE_3
 
 ## Setup Hosts File
 ```
@@ -72,4 +75,27 @@ talosctl kubeconfig --nodes <control-plane-IP>
 192.168.1.221 kube.cluster1.jdwkube.com
 192.168.1.222 kube.cluster1.jdwkube.com
 192.168.1.223 kube.cluster1.jdwkube.com
+```
+
+## Patch lb
+```
+for ip in "${CONTROL_PLANE_IP[@]}"; do
+  echo "=== Applying configuration to node $ip ==="
+  talosctl apply-config --insecure \
+    --nodes $ip \
+    --file controlplane.yaml
+  echo "Configuration applied to $ip"
+  echo ""
+done
+```
+
+```
+for ip in "${WORKER_IP[@]}"; do
+  echo "=== Applying configuration to node $ip ==="
+  talosctl apply-config --insecure \
+    --nodes $ip \
+    --file worker.yaml
+  echo "Configuration applied to $ip"
+  echo ""
+done
 ```
