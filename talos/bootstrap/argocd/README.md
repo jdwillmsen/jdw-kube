@@ -1,6 +1,8 @@
-# 🚀 Argo CD – GitOps for JDW Platform
+# 🚀 Argo CD – GitOps for JDW Platform (Talos Edition)
 
-This folder contains everything you need to bootstrap and configure Argo CD in your MicroK8s or Kubernetes cluster.
+This folder contains everything needed to bootstrap and configure **Argo CD** on a **Talos Linux** Kubernetes cluster.
+
+Talos is an immutable, API-driven OS, so some installation steps differ from traditional Linux distros.
 
 ---
 
@@ -9,102 +11,165 @@ This folder contains everything you need to bootstrap and configure Argo CD in y
 - **README.md** – This guide
 - **argocd-namespace.yaml** – Namespace for Argo CD
 - **argocd.yaml** – Core Argo CD installation manifests
-- **argocd-application.yaml** – Sample Application resource to deploy your apps
-- **argocd-ingress.yaml** – Ingress configuration for external access
+- **argocd-application.yaml** – Sample Application resource
+- **argocd-ingress.yaml** – Ingress configuration
 - **oci-helm-secret.yaml** – Secret for pulling OCI Helm charts
 - **values.yaml** – Helm values (if installing via Helm chart)
 
 ---
 
-## 🛠️ Quickstart (MicroK8s)
+## 🛠️ Quickstart on Talos
+
+### 1️⃣ Get Your Cluster Kubeconfig
+Talos does not use kubeconfig files by default — you generate one:
 
 ```shell
-microk8s kubectl apply -f argocd-namespace.yaml      # 1️⃣ Create namespace  
-microk8s kubectl apply -f argocd.yaml -n argocd      # 2️⃣ Install Argo CD core  
-microk8s kubectl apply -f argocd-application.yaml    # 3️⃣ Deploy sample Application  
+talosctl kubeconfig .
+export KUBECONFIG=./kubeconfig
 ```
 
 ---
 
-## 🐳 Quickstart (Any Kubernetes)
+### 2️⃣ Apply Argo CD Core Manifests
 
 ```shell
-kubectl create namespace argocd                       # 1️⃣ Namespace  
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml  
-                                                     # 2️⃣ Core install  
+kubectl apply -f argocd-namespace.yaml
+kubectl apply -n argocd -f argocd.yaml
+```
+
+---
+
+### 3️⃣ Deploy Sample Application
+
+```shell
+kubectl apply -f argocd-application.yaml
+```
+
+---
+
+## 🐳 Installing Argo CD on Any Talos-based Kubernetes Cluster
+
+Alternatively, install the official manifests:
+
+```shell
+kubectl create namespace argocd
+kubectl apply -n argocd \
+-f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 ```
 
 ---
 
 ## 🔓 Accessing the UI & API
 
-### Service-Type LoadBalancer
+Talos doesn't use kube-proxy or traditional OS networking — but services work normally once deployed.
+
+### Option A: LoadBalancer (preferred with Cilium or MetalLB)
+
+If your Talos cluster uses **MetalLB**:
 
 ```shell
-kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "LoadBalancer"}}'
-```  
+kubectl patch svc argocd-server -n argocd \
+-p '{"spec": {"type": "LoadBalancer"}}'
+```
 
-🔗 Then browse to the external IP.
-
-### Ingress
-
-See 👉 https://argo-cd.readthedocs.io/en/stable/operator-manual/ingress/
-
-### Port-Forward
-
-```shell
-kubectl port-forward svc/argocd-server -n argocd 8080:443  
-```  
-
-🎯 Access at <http://localhost:8080>
+Browse to the IP assigned by MetalLB.
 
 ---
 
-## 🔑 Login via CLI
+### Option B: Ingress
 
-1. Get the initial admin password:
-   ```shell
-   argocd admin initial-password -n argocd
-   kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d
-   ```
-2. Login:
-   ```shell
-   argocd login <ARGOCD_SERVER>  
-   ```
-3. Change your password:
-   ```shell
-   argocd account update-password  
-   ```
+If using an Ingress Controller (Traefik, NGINX, or Cilium Ingress):
+
+```shell
+kubectl apply -f argocd-ingress.yaml
+```
+
+Reference: https://argo-cd.readthedocs.io/en/stable/operator-manual/ingress/
+
+---
+
+### Option C: Talos Port Forwarding
+
+```shell
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+```
+
+Access at:  
+👉 http://localhost:8080
+
+---
+
+## 🔑 Logging In (CLI or UI)
+
+### 1️⃣ Get Initial Admin Password
+
+```shell
+kubectl get secret argocd-initial-admin-secret -n argocd \
+-o jsonpath="{.data.password}" | base64 -d
+```
+
+or:
+
+```shell
+argocd admin initial-password -n argocd
+```
+
+---
+
+### 2️⃣ Login to Argo CD
+
+```shell
+argocd login <ARGOCD_SERVER>
+```
+
+---
+
+### 3️⃣ Change Password
+
+```shell
+argocd account update-password
+```
 
 ---
 
 ## ⚙️ Customization
 
-### Exclude/Include Resources
-
-Edit the main config map to tweak resource filtering:
+### Exclusion/Filtering of Resources
 
 ```shell
-kubectl edit configmap argocd-cm -n argocd  
-```
-
-### OCI Helm Secret
-
-If you need private OCI Helm charts, apply:
-
-```shell
-kubectl apply -f oci-helm-secret.yaml -n argocd  
-```
-
-### values.yaml
-
-Use when installing Argo CD via Helm:
-
-```shell
-helm repo add argo https://argoproj.github.io/argo-helm  
-helm install argocd argo/argo-cd -n argocd -f values.yaml  
+kubectl edit configmap argocd-cm -n argocd
 ```
 
 ---
 
-Maintained by **JDW Platform Infra Team** 🌐🔧  
+### OCI Helm Secrets
+
+```shell
+kubectl apply -f oci-helm-secret.yaml -n argocd
+```
+
+---
+
+## 📦 Installing Argo CD via Helm (Optional)
+
+Talos supports Helm normally once the cluster is up.
+
+```shell
+helm repo add argo https://argoproj.github.io/argo-helm
+helm install argocd argo/argo-cd \
+-n argocd \
+-f values.yaml
+```
+
+---
+
+## 🛡️ Notes for Talos Users
+
+- Talos nodes are immutable; **do not SSH** — use `talosctl`.
+- Kubernetes networking depends on your CNI (Cilium, Flannel, etc.).
+- For TLS, certificates, or ingress controllers, configure them in the cluster config or via Kubernetes objects.
+- GitOps is ideal for Talos — consider managing Argo CD **via MachineConfig patches** in the future.
+
+---
+
+Maintained by **JDW Platform Infra Team** 🌐🔧
