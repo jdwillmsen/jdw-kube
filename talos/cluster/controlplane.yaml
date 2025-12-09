@@ -63,7 +63,7 @@ cluster:
         admissionControl:
             - name: PodSecurity
               configuration:
-                apiVersion: pod-security.admission.config.k8s.io/v1alpha1
+                apiVersion: pod-security.admission.config.k8s.io/v1beta1
                 defaults:
                     audit: restricted
                     audit-version: latest
@@ -74,6 +74,7 @@ cluster:
                 exemptions:
                     namespaces:
                         - kube-system
+                        - openebs
                     runtimeClasses: []
                     usernames: []
                 kind: PodSecurityConfiguration

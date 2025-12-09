@@ -2,7 +2,7 @@
 export NODE_1=192.168.1.221
 export NODE_2=192.168.1.222
 export NODE_3=192.168.1.223
-export NODE_4=TBD
+export NODE_4=192.168.1.220
 
 # Single Control Plane Setup
 export CONTROL_PLANE_IP=${NODE_1}
@@ -20,6 +20,7 @@ talosctl gen config --with-secrets secrets.yaml $CLUSTER_NAME https://$YOUR_ENDP
 
 ### Check network interfaces - Run this command to view all network interfaces on any node, whether control plane or worker.
 talosctl --nodes <node-ip-address> get links --insecure
+talosctl --nodes $NODE_1 get links --insecure
 export NETWORK_ID=eno1
 
 ### Check available disks - Run this command to check all available disks on any node.
@@ -51,8 +52,10 @@ machine:
 ```
 ### Apply the patch for control plane node
 talosctl machineconfig patch controlplane.yaml --patch @controlplane-patch-1.yaml --output controlplane.yaml
+talosctl machineconfig patch controlplane.yaml --patch @cp.yaml --output controlplane.yaml
 ### Apply the patch for the work node
 talosctl machineconfig patch worker.yaml --patch @worker-patch-1.yaml --output worker.yaml
+talosctl machineconfig patch worker.yaml --patch @wp.yaml --output worker.yaml
 
 ### Manage talos configuration file
 talosctl config merge ./talosconfig
@@ -99,3 +102,18 @@ for ip in "${WORKER_IP[@]}"; do
   echo ""
 done
 ```
+
+## Patch lb secure
+```
+for ip in "${CONTROL_PLANE_IP[@]}"; do
+  echo "=== Applying configuration to node $ip ==="
+  talosctl apply-config \
+    --nodes $ip \
+    --file controlplane.yaml
+  echo "Configuration applied to $ip"
+  echo ""
+done
+```
+
+## Upgrade Node (https://factory.talos.dev/)
+talosctl upgrade --nodes $NODE_1 --image factory.talos.dev/metal-installer/bb69404eed88748ae3cfc1625b9561ff6a74f8e4ea7f8d1e715d999f127c8863:v1.11.5
