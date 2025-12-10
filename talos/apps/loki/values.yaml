@@ -1,6 +1,7 @@
 loki:
   auth_enabled: false
-  storage:
+  persistence:
+    enabled: true
     storageClass: "openebs-loki-localpv"
   commonConfig:
     replication_factor: 1
@@ -22,6 +23,9 @@ loki:
     enable_api: true
 
 minio:
+  persistence:
+    enabled: true
+    storageClass: "openebs-loki-localpv"
   enabled: true
 
 deploymentMode: SingleBinary
