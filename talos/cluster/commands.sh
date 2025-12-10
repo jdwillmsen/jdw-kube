@@ -53,6 +53,7 @@ machine:
 ### Apply the patch for control plane node
 talosctl machineconfig patch controlplane.yaml --patch @controlplane-patch-1.yaml --output controlplane.yaml
 talosctl machineconfig patch controlplane.yaml --patch @cp.yaml --output controlplane.yaml
+talosctl machineconfig patch controlplane.yaml --patch @wp.yaml --output controlplane.yaml
 ### Apply the patch for the work node
 talosctl machineconfig patch worker.yaml --patch @worker-patch-1.yaml --output worker.yaml
 talosctl machineconfig patch worker.yaml --patch @wp.yaml --output worker.yaml

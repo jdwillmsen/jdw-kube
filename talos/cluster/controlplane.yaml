@@ -12,6 +12,14 @@ machine:
         image: ghcr.io/siderolabs/kubelet:v1.34.1
         extraArgs:
             register-with-taints: ""
+        extraMounts:
+            - destination: /var/local
+              type: bind
+              source: /var/local
+              options:
+                - bind
+                - rshared
+                - rw
         defaultRuntimeSeccompProfileEnabled: true
         disableManifestsDirectory: true
     network:
@@ -20,8 +28,10 @@ machine:
               dhcp: true
     install:
         disk: /dev/nvme0n1
-        image: ghcr.io/siderolabs/installer:v1.11.3
+        image: factory.talos.dev/metal-installer/bb69404eed88748ae3cfc1625b9561ff6a74f8e4ea7f8d1e715d999f127c8863:v1.11.5
         wipe: false
+    sysctls:
+        vm.nr_hugepages: "1024"
     features:
         rbac: true
         stableHostname: true
@@ -33,6 +43,8 @@ machine:
         hostDNS:
             enabled: true
             forwardKubeDNSToHost: true
+    nodeLabels:
+        openebs.io/engine: mayastor
 cluster:
     id: PNO7QBAme-0ruxsT5DFD4OZlg_aYxQxbfW-X8vVRAHg=
     secret: XVeZMsSczkLsDDNVYqrv0F83Fap+9EOyON3VfVwNeoo=
