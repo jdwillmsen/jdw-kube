@@ -2,7 +2,7 @@ loki:
   auth_enabled: false
   persistence:
     enabled: true
-    storageClass: "openebs-loki-localpv"
+    storageClassName: "openebs-loki-localpv"
   commonConfig:
     replication_factor: 1
   schemaConfig:
@@ -25,7 +25,7 @@ loki:
 minio:
   persistence:
     enabled: true
-    storageClass: "openebs-loki-localpv"
+    storageClassName: "openebs-loki-localpv"
   enabled: true
 
 deploymentMode: SingleBinary
