@@ -1,0 +1,3 @@
+zfs-localpv:
+  zfsNode:
+    encrKeysDir: /var/openebs/keys
