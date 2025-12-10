@@ -1,5 +1,7 @@
 loki:
   auth_enabled: false
+  storage:
+    storageClass: "openebs-loki-localpv"
   commonConfig:
     replication_factor: 1
   schemaConfig:
