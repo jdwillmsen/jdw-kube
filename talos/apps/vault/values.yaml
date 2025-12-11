@@ -2,5 +2,5 @@ ui:
   enabled: true
 
 server:
-  datasource:
+  dataStorage:
     storageClass: "openebs-hostpath"
