@@ -4,3 +4,5 @@ ui:
 server:
   dataStorage:
     storageClass: "openebs-hostpath"
+  auditStorage:
+    storageClass: "openebs-hostpath"
