@@ -3,6 +3,6 @@ ui:
 
 server:
   dataStorage:
-    storageClass: "openebs-hostpath"
+    storageClass: "openebs-loki-localpv"
   auditStorage:
-    storageClass: "openebs-hostpath"
+    storageClass: "openebs-loki-localpv"
