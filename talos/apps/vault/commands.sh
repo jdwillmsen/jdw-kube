@@ -13,4 +13,21 @@ kubectl create secret generic vault \
 
 kubectl create secret generic vault-token \
   -n external-secrets \
-  --from-literal=token=s.xxxxxxxxx
+  --from-literal=token=<VAULT_TOKEN>
+
+# cluster-secret-store.yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: vault
+spec:
+  provider:
+    vault:
+      server: "http://vault.vault.svc.cluster.local:8200E"
+      path: "kv"
+      version: "v2"
+      auth:
+        tokenSecretRef:
+          name: vault-token
+          namespace: external-secrets
+          key: token
