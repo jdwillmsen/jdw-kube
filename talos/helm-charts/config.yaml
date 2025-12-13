@@ -1,6 +1,6 @@
 apps:
   - name: porkbun-webhook
-    helmPath: microk8s/helm-charts/porkbun-webhook
+    helmPath: talos/helm-charts/porkbun-webhook
     namespace: porkbun-webhook
     values:
       - values.yaml
