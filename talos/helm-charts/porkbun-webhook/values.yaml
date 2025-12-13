@@ -41,3 +41,9 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+externalSecrets:
+  - refreshInterval: 1m
+    secretStoreName: vault
+    secretStoreKind: ClusterSecretStore
+    secretName: porkbun
