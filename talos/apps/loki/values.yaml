@@ -32,6 +32,8 @@ deploymentMode: SingleBinary
 
 singleBinary:
   replicas: 1
+  persistance:
+    storageClassname: "openebs-loki-localpv"
 
 # Zero out replica counts of other deployment modes
 backend:

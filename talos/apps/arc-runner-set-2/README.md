@@ -25,7 +25,7 @@ containerMode:
   type: "kubernetes"
   kubernetesModeWorkVolumeClaim:
     accessModes: ["ReadWriteOnce"]
-    storageClassName: "openebs-hostpath"
+    storageClassName: "openebs-loki-localpv"
     resources:
       requests:
         storage: 8Gi
