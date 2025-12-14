@@ -4,3 +4,4 @@ commonMetaLabels:
 prometheus-node-exporter:
   service:
     port: 9200
+  storageClass: "openebs-loki-localpv"
