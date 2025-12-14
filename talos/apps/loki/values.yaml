@@ -34,6 +34,11 @@ loki:
     enable_api: true
 
 minio:
+  resources:
+    requests:
+      memory: 256Mi
+    limits:
+      memory: 512Mi
   persistence:
     enabled: true
     storageClassName: "openebs-loki-localpv"
