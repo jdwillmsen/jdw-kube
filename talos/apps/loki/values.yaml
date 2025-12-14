@@ -11,11 +11,12 @@ singleBinary:
     enabled: true
     storageClassName: "openebs-loki-localpv"
     storageClass: "openebs-loki-localpv"
-  chunksCache:
-    enabled: true
-    allocatedMemory: 512   # MB
-    maxItemMemory: 5
-    replicas: 1
+
+chunksCache:
+  enabled: true
+  allocatedMemory: 512   # MB
+  maxItemMemory: 5
+  replicas: 1
 
 loki:
   auth_enabled: false
