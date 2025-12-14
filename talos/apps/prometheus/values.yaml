@@ -10,6 +10,10 @@ server:
     size: 10Gi
 
 alertmanager:
+  enabled: true
   persistentVolume:
     enabled: true
     storageClass: openebs-loki-localpv
+    accessModes:
+      - ReadWriteOnce
+    size: 2Gi
