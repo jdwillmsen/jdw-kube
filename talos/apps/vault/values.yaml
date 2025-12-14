@@ -6,3 +6,5 @@ server:
     storageClass: "openebs-loki-localpv"
   auditStorage:
     storageClass: "openebs-loki-localpv"
+  ha:
+    enabled: true
