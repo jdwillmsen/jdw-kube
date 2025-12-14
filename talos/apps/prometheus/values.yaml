@@ -11,4 +11,5 @@ server:
 
 alertmanager:
   persistentVolume:
+    enabled: true
     storageClass: openebs-loki-localpv
