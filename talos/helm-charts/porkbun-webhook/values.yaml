@@ -44,7 +44,7 @@ affinity: {}
 
 externalSecrets:
   - refreshInterval: 1m
-    secretStoreName: vault-secret-store
+    secretStoreName: vault
     secretStoreKind: ClusterSecretStore
     secretName: porkbun
 
