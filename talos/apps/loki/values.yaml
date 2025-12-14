@@ -5,6 +5,7 @@ singleBinary:
   persistence:
     enabled: true
     storageClassName: "openebs-loki-localpv"
+    storageClass: "openebs-loki-localpv"
 
 loki:
   auth_enabled: false
@@ -31,10 +32,15 @@ minio:
   persistence:
     enabled: true
     storageClassName: "openebs-loki-localpv"
+    storageClass: "openebs-loki-localpv"
   enabled: true
 
 # Zero out other deployment modes
 backend:
+  persistence:
+    enabled: true
+    storageClassName: "openebs-loki-localpv"
+    storageClass: "openebs-loki-localpv"
   replicas: 0
 read:
   replicas: 0

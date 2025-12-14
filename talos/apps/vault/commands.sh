@@ -23,7 +23,7 @@ metadata:
 spec:
   provider:
     vault:
-      server: "http://vault.vault.svc.cluster.local:8200E"
+      server: "http://vault.vault.svc.cluster.local:8200"
       path: "kv"
       version: "v2"
       auth:
