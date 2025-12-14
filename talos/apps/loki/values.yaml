@@ -12,11 +12,10 @@ singleBinary:
     storageClassName: "openebs-loki-localpv"
     storageClass: "openebs-loki-localpv"
   chunksCache:
-    resources:
-      requests:
-        memory: 2Gi
-      limits:
-        memory: 4Gi
+    enabled: true
+    allocatedMemory: 512   # MB
+    maxItemMemory: 5
+    replicas: 1
 
 loki:
   auth_enabled: false
