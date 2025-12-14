@@ -2,6 +2,11 @@ deploymentMode: SingleBinary
 
 singleBinary:
   replicas: 1
+  resources:
+    requests:
+      memory: 512Mi
+    limits:
+      memory: 1Gi
   persistence:
     enabled: true
     storageClassName: "openebs-loki-localpv"
