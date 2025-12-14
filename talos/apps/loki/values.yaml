@@ -11,6 +11,12 @@ singleBinary:
     enabled: true
     storageClassName: "openebs-loki-localpv"
     storageClass: "openebs-loki-localpv"
+  chunksCache:
+    resources:
+      requests:
+        memory: 2Gi
+      limits:
+        memory: 4Gi
 
 loki:
   auth_enabled: false
