@@ -8,3 +8,7 @@ server:
     accessModes:
       - ReadWriteOnce
     size: 10Gi
+
+alertmanager:
+  persistentVolume:
+    storageClass: openebs-loki-localpv
