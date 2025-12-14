@@ -47,3 +47,13 @@ externalSecrets:
     secretStoreName: vault-secret-store
     secretStoreKind: ClusterSecretStore
     secretName: porkbun
+
+envSecrets:
+  - secretKey: secret-key
+    key: secret-key
+    property: secret-key
+    secretName: porkbun
+  - secretKey: api-key
+    key: api-key
+    property: api-key
+    secretName: porkbun
