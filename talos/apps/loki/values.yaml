@@ -1,8 +1,13 @@
-loki:
-  auth_enabled: false
+deploymentMode: SingleBinary
+
+singleBinary:
+  replicas: 1
   persistence:
     enabled: true
     storageClassName: "openebs-loki-localpv"
+
+loki:
+  auth_enabled: false
   commonConfig:
     replication_factor: 1
   schemaConfig:
@@ -28,21 +33,13 @@ minio:
     storageClassName: "openebs-loki-localpv"
   enabled: true
 
-deploymentMode: SingleBinary
-
-singleBinary:
-  replicas: 1
-  persistence:
-    storageClassname: "openebs-loki-localpv"
-
-# Zero out replica counts of other deployment modes
+# Zero out other deployment modes
 backend:
   replicas: 0
 read:
   replicas: 0
 write:
   replicas: 0
-
 ingester:
   replicas: 0
 querier:
