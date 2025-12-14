@@ -7,9 +7,9 @@ server:
   auditStorage:
     storageClass: "openebs-loki-localpv"
   ha:
-    enabled: true
+    enabled: false
     raft:
-      enabled: true
+      enabled: false
       setNodeId: true
       config: |
         cluster_name = "vault-integrated-storage"

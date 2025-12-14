@@ -31,3 +31,10 @@ spec:
           name: vault-token
           namespace: external-secrets
           key: token
+
+kubectl exec -n vault vault-0 -- vault operator init \
+  -key-shares=1 \
+  -key-threshold=1
+kubectl exec -n vault vault-1 -- vault operator raft join http://vault-0.vault-internal:8200
+kubectl exec -n vault vault-2 -- vault operator raft join http://vault-0.vault-internal:8200
+
