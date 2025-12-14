@@ -50,10 +50,10 @@ externalSecrets:
 
 envSecrets:
   - secretKey: secret-key
-    key: secret-key
+    key: porkbun
     property: secret-key
     secretName: porkbun
   - secretKey: api-key
-    key: api-key
+    key: porkbun
     property: api-key
     secretName: porkbun
