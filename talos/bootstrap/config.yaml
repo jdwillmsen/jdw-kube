@@ -62,13 +62,13 @@ apps:
     namespace: external-secrets
     postInstall: false
     syncWave: 1
-#  - chart: adminer
-#    name: db-ui
-#    repo: https://cetic.github.io/helm-charts
-#    revision: 0.2.1
-#    namespace: database
-#    postInstall: true
-#    syncWave: 2
+  - chart: ectobit/adminer
+    name: db-ui
+    repo: https://charts.ectobit.com
+    revision: 0.1.8
+    namespace: database
+    postInstall: true
+    syncWave: 2
   - chart: metrics-server
     name: metrics-server
     repo: https://kubernetes-sigs.github.io/metrics-server/
