@@ -1,8 +1,10 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: mayastor-3
-parameters:
-  protocol: nvmf
-  repl: "3"
+  name: openebs-replicated
 provisioner: io.openebs.csi-mayastor
+parameters:
+  numberOfReplicas: "3"
+  poolSelector: "pool-type=fast"
+reclaimPolicy: Delete
+volumeBindingMode: Immediate

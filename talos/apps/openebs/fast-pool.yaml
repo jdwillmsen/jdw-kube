@@ -1,0 +1,11 @@
+apiVersion: openebs.io/v1beta3
+kind: DiskPool
+metadata:
+  name: fast-pool
+  namespace: openebs
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: talos-node-1
+  disks:
+    - /dev/nvme0n1
+  poolType: striped   # options: striped, mirrored
