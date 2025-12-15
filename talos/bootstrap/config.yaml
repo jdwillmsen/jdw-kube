@@ -62,7 +62,7 @@ apps:
     namespace: external-secrets
     postInstall: false
     syncWave: 1
-  - chart: ectobit/adminer
+  - chart: adminer
     name: db-ui
     repo: https://charts.ectobit.com
     revision: 0.1.8
