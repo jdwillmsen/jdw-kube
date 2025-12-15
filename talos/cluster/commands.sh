@@ -25,6 +25,7 @@ export NETWORK_ID=eno1
 
 ### Check available disks - Run this command to check all available disks on any node.
 talosctl get disks --insecure --nodes <node-ip-address>
+talosctl get disks -n $NODE_1
 export DISK_NAME=nvme0n1
 
 ### Patch machine configuration - You can patch your worker and control plane machine configuration to reflect the correct network interface and disk of your control plane nodes.

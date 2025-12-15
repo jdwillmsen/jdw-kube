@@ -1,0 +1,8 @@
+piVersion: "openebs.io/v1beta3"
+kind: DiskPool
+metadata:
+  name: pool-on-node-1
+  namespace: openebs
+spec:
+  node: talos-cad-6gf
+  disks: ["aio:///dev/nvme0n1"]
