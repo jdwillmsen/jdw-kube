@@ -172,4 +172,29 @@ helm install argocd argo/argo-cd \
 
 ---
 
+## ♻️ Resetting Admin Password
+
+```bash
+kubectl -n argocd patch secret argocd-secret -p '{"data": {"admin.password": null, "admin.passwordMtime": null}}'
+kubectl delete pods -n argocd -l app.kubernetes.io/name=argocd-server
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+```
+
+---
+
+## Updating Default Admin Password
+
+```bash
+export ARGOCD_SERVER=argocd.jdwkube.com
+export NEW_PASSWORD=$ARGOCD_PASSWORD
+export ARGOCD_INITIAL_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d) && \
+argocd login $ARGOCD_SERVER --username admin --password $ARGOCD_INITIAL_PASSWORD --insecure && \
+argocd account update-password --account admin --current-password $ARGOCD_INITIAL_PASSWORD --new-password $NEW_PASSWORD && \
+unset ARGOCD_INITIAL_PASSWORD
+unset ARGOCD_SERVER
+unset NEW_PASSWORD
+```
+
+---
+
 Maintained by **JDW Platform Infra Team** 🌐🔧
