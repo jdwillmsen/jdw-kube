@@ -37,7 +37,7 @@ schema bootstrapping via AtlasConfigMaps and test manifests.
 
 3. **Deploy Atlas schema ConfigMaps**
    ```bash
-   kubectl apply -f atlas-schema-configmap.yaml
+   kubectl apply -f atlas-schema-configmap-jdw.yaml
    kubectl apply -f atlas-schema-dbtech-dev.yaml
    ```
 

@@ -37,7 +37,7 @@ kubectl create namespace database
 ### 3. Apply Atlas Schema ConfigMaps
 
 ```bash
-kubectl apply -f atlas-schema-configmap.yaml
+kubectl apply -f atlas-schema-configmap-jdw.yaml
 kubectl apply -f atlas-schema-prd.yaml
 kubectl apply -f atlas-schema-dbtech.yaml
 kubectl apply -f atlas-schema-dbtech-prd.yaml

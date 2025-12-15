@@ -3,7 +3,7 @@ kind: AtlasSchema
 metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "3"
-  name: dbtech-atlas-schema-dev
+  name: jdw-atlas-schema-dev
 spec:
   credentials:
     scheme: postgres
@@ -13,11 +13,11 @@ spec:
       secretKeyRef:
         key: password
         name: postgresql-cluster-non-superuser
-    database: dbtech_non
+    database: jdw_dev
     port: 5432
     parameters:
       sslmode: disable
   schema:
     configMapKeyRef:
       key: schema.sql
-      name: dbtech-postgresql-non-schema
+      name: jdw-postgresql-non-schema

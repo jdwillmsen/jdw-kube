@@ -1,0 +1,4 @@
+cluster:
+  storage:
+    size: 8Gi
+    storageClass: "openebs-loki-localpv"
