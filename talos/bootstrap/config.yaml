@@ -27,20 +27,20 @@ apps:
     namespace: cert-manager
     postInstall: true
     syncWave: 1
-#  - chart: charts/atlas-operator
-#    name: atlas
-#    repo: ghcr.io/ariga
-#    revision: 0.7.11
-#    namespace: atlas
-#    postInstall: true
-#    syncWave: 1
-#  - chart: cloudnative-pg
-#    name: cloudnative-operator
-#    repo: https://cloudnative-pg.github.io/charts
-#    revision: 0.26.0
-#    namespace: cnpg-system
-#    postInstall: true
-#    syncWave: 1
+  - chart: charts/atlas-operator
+    name: atlas
+    repo: ghcr.io/ariga
+    revision: 0.7.13
+    namespace: atlas
+    postInstall: true
+    syncWave: 1
+  - chart: cloudnative-pg
+    name: cloudnative-operator
+    repo: https://cloudnative-pg.github.io/charts
+    revision: 0.27.0
+    namespace: cnpg-system
+    postInstall: true
+    syncWave: 1
 #  - chart: cluster
 #    name: postgresql-cluster-non
 #    repo: https://cloudnative-pg.github.io/charts
