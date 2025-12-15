@@ -8,12 +8,12 @@ data:
 type: Opaque
 
 kubectl create secret generic vault \
-  --from-literal=token=<VAULT_TOKEN> \
+  --from-literal=token=$VAULT_TOKEN \
   -n vault
 
 kubectl create secret generic vault-token \
   -n external-secrets \
-  --from-literal=token=<VAULT_TOKEN>
+  --from-literal=token=$VAULT_TOKEN
 
 # cluster-secret-store.yaml
 apiVersion: external-secrets.io/v1beta1
