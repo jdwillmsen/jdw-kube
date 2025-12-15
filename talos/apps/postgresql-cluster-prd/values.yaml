@@ -1,4 +1,4 @@
 cluster:
   storage:
-    size: 12Gi
-    storageClass: "openebs-single-replica"
+    size: 6Gi
+    storageClass: "openebs-loki-localpv"

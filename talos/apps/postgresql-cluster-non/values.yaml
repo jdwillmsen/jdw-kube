@@ -1,4 +1,4 @@
 cluster:
   storage:
-    size: 8Gi
+    size: 2Gi
     storageClass: "openebs-single-replica"
