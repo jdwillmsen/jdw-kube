@@ -2,6 +2,7 @@ commonMetaLabels:
   origin_prometheus: "prometheus-server-1"
 
 server:
+  port: 8200
   persistentVolume:
     enabled: true
     storageClass: openebs-loki-localpv
@@ -17,29 +18,3 @@ alertmanager:
     accessModes:
       - ReadWriteOnce
     size: 2Gi
-
-nodeExporter:
-  enabled: true
-  hostNetwork: true        # Use host networking
-  service:
-    enabled: false         # No ClusterIP service needed for DaemonSet
-  podSecurityContext:
-    runAsUser: 65534
-    runAsGroup: 65534
-    runAsNonRoot: true
-  securityContext:
-    readOnlyRootFilesystem: true
-    allowPrivilegeEscalation: false
-  nodeSelector:
-    kubernetes.io/os: linux
-  tolerations:
-    - key: node.kubernetes.io/not-ready
-      operator: Exists
-      effect: NoExecute
-    - key: node.kubernetes.io/unreachable
-      operator: Exists
-      effect: NoExecute
-    - operator: Exists
-      effect: NoSchedule
-  hostPort: {}             # Remove hostPort to avoid conflicts
-  resources: {}
