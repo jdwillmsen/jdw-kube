@@ -5,4 +5,4 @@ metadata:
   namespace: openebs
 spec:
   node: talos-ro2-u82
-  disks: ["aio:///dev/nvme0n1"]
+  disks: ["aio:///dev/disk/by-id/nvme-AirDisk_512GB_SSD_QEN472W004677P1129"]
