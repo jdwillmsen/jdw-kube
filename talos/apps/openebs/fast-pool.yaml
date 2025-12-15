@@ -4,8 +4,7 @@ metadata:
   name: fast-pool
   namespace: openebs
 spec:
-  nodeSelector:
-    kubernetes.io/hostname: talos-node-1
+  node: talos-nmo-zkd
   disks:
     - /dev/nvme0n1
   poolType: striped   # options: striped, mirrored
