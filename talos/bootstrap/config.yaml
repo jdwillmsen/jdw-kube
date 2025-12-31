@@ -5,21 +5,21 @@ apps:
     revision: 7.13.0
     namespace: kubernetes-dashboard
     postInstall: true
-    syncWave: 1
+    syncWave: 2
   - chart: vault
     name: vault
     repo: https://helm.releases.hashicorp.com
     revision: 0.30.1
     namespace: vault
     postInstall: true
-    syncWave: 1
+    syncWave: 2
   - chart: vault-config-operator
     name: vault-config-operator
     repo: https://redhat-cop.github.io/vault-config-operator
     revision: v0.8.33
     namespace: vault-config-operator
     postInstall: false
-    syncWave: 1
+    syncWave: 2
   - chart: cert-manager
     name: cert-manager
     repo: https://charts.jetstack.io
@@ -33,21 +33,21 @@ apps:
     revision: 0.7.13
     namespace: atlas
     postInstall: true
-    syncWave: 1
+    syncWave: 2
   - chart: cloudnative-pg
     name: cloudnative-operator
     repo: https://cloudnative-pg.github.io/charts
     revision: 0.26.0
     namespace: cnpg-system
     postInstall: true
-    syncWave: 1
+    syncWave: 2
   - chart: cluster
     name: postgresql-cluster-non
     repo: https://cloudnative-pg.github.io/charts
     revision: 0.3.1
     namespace: database
     postInstall: true
-    syncWave: 2
+    syncWave: 3
 #  - chart: cluster
 #    name: postgresql-cluster-prd
 #    repo: https://cloudnative-pg.github.io/charts
@@ -61,21 +61,21 @@ apps:
     revision: 0.19.2
     namespace: external-secrets
     postInstall: false
-    syncWave: 1
+    syncWave: 2
   - chart: adminer
     name: db-ui
     repo: https://charts.ectobit.com
     revision: 0.1.8
     namespace: database
     postInstall: true
-    syncWave: 2
+    syncWave: 3
   - chart: metrics-server
     name: metrics-server
     repo: https://kubernetes-sigs.github.io/metrics-server/
     revision: 3.13.0
     namespace: metrics-server
     postInstall: false
-    syncWave: 1
+    syncWave: 2
   - chart: ingress-nginx
     name: ingress-nginx
     repo: https://kubernetes.github.io/ingress-nginx
@@ -124,28 +124,28 @@ apps:
     revision: 3.3.2
     namespace: monitoring
     postInstall: true
-    syncWave: 1
+    syncWave: 2
   - chart: grafana
     name: grafana
     repo: https://grafana.github.io/helm-charts
     revision: 9.4.3
     namespace: monitoring
     postInstall: true
-    syncWave: 1
+    syncWave: 2
   - chart: loki
     name: loki
     repo: https://grafana.github.io/helm-charts
     revision: 6.38.0
     namespace: monitoring
     postInstall: true
-    syncWave: 1
+    syncWave: 2
   - chart: prometheus
     name: prometheus
     repo: https://prometheus-community.github.io/helm-charts
     revision: 27.32.0
     namespace: monitoring
     postInstall: true
-    syncWave: 1
+    syncWave: 2
   - chart: metallb
     name: metallb
     repo: https://metallb.github.io/metallb
@@ -153,3 +153,10 @@ apps:
     namespace: metallb-system
     postInstall: true
     syncWave: 0
+  - chart: longhorn
+    name: longhorn
+    repo: https://charts.longhorn.io
+    revision: 4.3.3
+    namespace: longhorn-system
+    postInstall: true
+    syncWave: 1
