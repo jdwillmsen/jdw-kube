@@ -118,4 +118,4 @@ done
 ```
 
 ## Upgrade Node (https://factory.talos.dev/)
-talosctl upgrade --nodes $NODE_1 --image factory.talos.dev/metal-installer/bb69404eed88748ae3cfc1625b9561ff6a74f8e4ea7f8d1e715d999f127c8863:v1.11.5
+talosctl upgrade --nodes $NODE_1 --image factory.talos.dev/metal-installer/9d7d65b2bfb510587239ba5645d4a995726767cf0b149b2ec8a51ede5f05f76c:v1.12.0

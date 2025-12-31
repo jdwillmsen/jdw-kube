@@ -20,6 +20,13 @@ machine:
                 - bind
                 - rshared
                 - rw
+            - destination: /var/lib/longhorn
+              type: bind
+              source: /var/local
+              options:
+                - bind
+                - rshared
+                - rw
         defaultRuntimeSeccompProfileEnabled: true
         disableManifestsDirectory: true
     network:
@@ -28,7 +35,7 @@ machine:
               dhcp: true
     install:
         disk: /dev/nvme0n1
-        image: factory.talos.dev/metal-installer/bb69404eed88748ae3cfc1625b9561ff6a74f8e4ea7f8d1e715d999f127c8863:v1.11.5
+        image: factory.talos.dev/metal-installer/9d7d65b2bfb510587239ba5645d4a995726767cf0b149b2ec8a51ede5f05f76c:v1.12.0
         wipe: false
     sysctls:
         vm.nr_hugepages: "1024"
@@ -43,6 +50,14 @@ machine:
         hostDNS:
             enabled: true
             forwardKubeDNSToHost: true
+    kernel:
+        modules:
+            - name: nbd
+            - name: iscsi_tcp
+            - name: iscsi_generic
+            - name: configfs
+            - name: nvme_tcp
+            - name: vfio_pci
     nodeLabels:
         openebs.io/engine: mayastor
 cluster:

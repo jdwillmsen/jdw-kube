@@ -18,12 +18,19 @@ machine:
                 - bind
                 - rshared
                 - rw
+            - destination: /var/lib/longhorn
+              type: bind
+              source: /var/local
+              options:
+                  - bind
+                  - rshared
+                  - rw
         defaultRuntimeSeccompProfileEnabled: true
         disableManifestsDirectory: true
     network: {}
     install:
-        disk: /dev/sda
-        image: ghcr.io/siderolabs/installer:v1.11.3
+        disk: /dev/nvme0n1
+        image: factory.talos.dev/metal-installer/9d7d65b2bfb510587239ba5645d4a995726767cf0b149b2ec8a51ede5f05f76c:v1.12.0
         wipe: false
     sysctls:
         vm.nr_hugepages: "1024"
