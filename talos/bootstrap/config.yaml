@@ -44,7 +44,7 @@ apps:
   - chart: cluster
     name: postgresql-cluster-non
     repo: https://cloudnative-pg.github.io/charts
-    revision: 0.3.1
+    revision: 0.5.0
     namespace: database
     postInstall: true
     syncWave: 3
