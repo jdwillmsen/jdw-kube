@@ -102,6 +102,7 @@ cluster:
                     namespaces:
                         - kube-system
                         - openebs
+                        - longhorn-system
                     runtimeClasses: []
                     usernames: []
                 kind: PodSecurityConfiguration

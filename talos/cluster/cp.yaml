@@ -8,3 +8,4 @@ cluster:
           exemptions:
             namespaces:
               - openebs
+              - longhorn-system
