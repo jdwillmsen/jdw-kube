@@ -1,0 +1,16 @@
+cluster:
+  allowSchedulingOnControlPlanes: true
+
+machine:
+  network:
+    interfaces:
+      - interface: eno1
+        dhcp: true
+  install:
+    disk: /dev/nvme0n1
+  kubelet:
+    extraArgs:
+      register-with-taints: ""
+  nodeLabels:
+    node.kubernetes.io/exclude-from-external-load-balancers:
+      $patch: delete
