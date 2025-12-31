@@ -156,7 +156,7 @@ apps:
   - chart: longhorn
     name: longhorn
     repo: https://charts.longhorn.io
-    revision: 4.3.3
+    revision: 1.10.1
     namespace: longhorn-system
     postInstall: true
     syncWave: 1
