@@ -7,6 +7,10 @@ data:
   token: token_here
 type: Opaque
 
+# Delete existing secrets
+kubectl delete secret vault-token -n vault
+kubectl delete secret vault-token -n external-secrets
+
 kubectl create secret generic vault-token \
   --from-literal=token=$VAULT_TOKEN \
   -n vault
