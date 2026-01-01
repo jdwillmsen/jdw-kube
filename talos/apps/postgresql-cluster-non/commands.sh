@@ -8,5 +8,7 @@ kubectl get secret -n database postgresql-cluster-non-superuser -o jsonpath='{.d
 # Default username: postgres
 # Default database: * - Can leave empty
 # Service: postgresql-cluster-non-rw.database.svc
-# Create jdw database
-CREATE DATABASE jdw;
+
+# Create databases
+CREATE DATABASE jdw_non;
+CREATE DATABASE dbtech_non;
