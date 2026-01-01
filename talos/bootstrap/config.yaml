@@ -83,13 +83,13 @@ apps:
     namespace: ingress-nginx
     postInstall: false
     syncWave: 1
-  - chart: openebs
-    name: openebs
-    repo: https://openebs.github.io/openebs
-    revision: 4.3.3
-    namespace: openebs
-    postInstall: true
-    syncWave: 1
+#  - chart: openebs
+#    name: openebs
+#    repo: https://openebs.github.io/openebs
+#    revision: 4.3.3
+#    namespace: openebs
+#    postInstall: true
+#    syncWave: 1
 #  - chart: gha-runner-scale-set-controller
 #    name: arc-systems
 #    repo: ghcr.io/actions/actions-runner-controller-charts
