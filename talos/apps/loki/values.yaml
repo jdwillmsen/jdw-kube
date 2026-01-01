@@ -9,8 +9,8 @@ singleBinary:
       memory: 1Gi
   persistence:
     enabled: true
-    storageClassName: "openebs-loki-localpv"
-    storageClass: "openebs-loki-localpv"
+    storageClassName: ""
+    storageClass: ""
 
 chunksCache:
   enabled: true
@@ -47,16 +47,16 @@ minio:
       memory: 512Mi
   persistence:
     enabled: true
-    storageClassName: "openebs-loki-localpv"
-    storageClass: "openebs-loki-localpv"
+    storageClassName: ""
+    storageClass: ""
   enabled: true
 
 # Zero out other deployment modes
 backend:
   persistence:
     enabled: true
-    storageClassName: "openebs-loki-localpv"
-    storageClass: "openebs-loki-localpv"
+    storageClassName: ""
+    storageClass: ""
   replicas: 0
 read:
   replicas: 0

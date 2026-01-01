@@ -3,9 +3,9 @@ ui:
 
 server:
   dataStorage:
-    storageClass: "openebs-loki-localpv"
+    storageClass: ""
   auditStorage:
-    storageClass: "openebs-loki-localpv"
+    storageClass: ""
   ha:
     enabled: false
     raft:

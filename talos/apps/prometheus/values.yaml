@@ -9,7 +9,7 @@ server:
   port: 8200
   persistentVolume:
     enabled: true
-    storageClass: openebs-loki-localpv
+    storageClass:
     accessModes:
       - ReadWriteOnce
     size: 8Gi
@@ -18,7 +18,7 @@ alertmanager:
   enabled: true
   persistence:
     enabled: true
-    storageClass: openebs-loki-localpv
+    storageClass: ""
     accessModes:
       - ReadWriteOnce
     size: 2Gi
