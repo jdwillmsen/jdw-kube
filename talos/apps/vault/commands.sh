@@ -7,7 +7,7 @@ data:
   token: token_here
 type: Opaque
 
-kubectl create secret generic vault \
+kubectl create secret generic vault-token \
   --from-literal=token=$VAULT_TOKEN \
   -n vault
 
