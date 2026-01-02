@@ -10,6 +10,8 @@ type: Opaque
 # Delete existing secrets
 kubectl delete secret vault-token -n vault
 kubectl delete secret vault-token -n external-secrets
+kubectl delete secret vault-token -n non
+kubectl delete secret vault-token -n prd
 
 kubectl create secret generic vault-token \
   --from-literal=token=$VAULT_TOKEN \
@@ -18,6 +20,14 @@ kubectl create secret generic vault-token \
 kubectl create secret generic vault-token \
   -n external-secrets \
   --from-literal=token=$VAULT_TOKEN
+
+kubectl create secret generic vault-token \
+  --from-literal=token=$VAULT_TOKEN \
+  -n non
+
+kubectl create secret generic vault-token \
+  --from-literal=token=$VAULT_TOKEN \
+  -n prd
 
 # cluster-secret-store.yaml
 apiVersion: external-secrets.io/v1beta1
