@@ -49,3 +49,4 @@ data:
         channel_id TEXT NOT NULL
     );
     
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app;
