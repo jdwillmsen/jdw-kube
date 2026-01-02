@@ -14,12 +14,12 @@ spec:
               image: blockloop/vault-unseal
               env:
                 - name: VAULT_ADDR
-                  value: "http://vault.vault-namespace.svc:8200"
+                  value: "http://vault.vault.svc:8200"
                 - name: VAULT_SKIP_VERIFY
                   value: "1"
-                - name: VAULT_UNSEAL_KEY_0
+                - name: VAULT_UNSEAL_KEY_1
                   valueFrom:
                     secretKeyRef:
                       name: vault-unseal-keys
-                      key: unseal_key_0
+                      key: unseal_key_1
           restartPolicy: OnFailure
