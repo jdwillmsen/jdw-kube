@@ -5,8 +5,11 @@ metadata:
   namespace: arc-runners
 rules:
   - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["get", "list", "watch"]
+    resources: ["*"]  # All core resources (secrets, configmaps, pods, etc.)
+    verbs: ["*"]      # All actions (get, list, create, delete, etc.)
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["*"]  # All RBAC resources (roles, rolebindings)
+    verbs: ["*"]
+  - apiGroups: ["actions.github.com"]
+    resources: ["*"]  # All ARC custom resources
+    verbs: ["*"]
