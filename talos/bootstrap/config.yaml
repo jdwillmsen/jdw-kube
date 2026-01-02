@@ -111,13 +111,13 @@ apps:
     namespace: arc-runners
     postInstall: false
     syncWave: 5
-#  - chart: gha-runner-scale-set
-#    name: arc-runner-set-3
-#    repo: ghcr.io/actions/actions-runner-controller-charts
-#    revision: 0.13.1
-#    namespace: arc-runners
-#    postInstall: false
-#    syncWave: 5
+  - chart: gha-runner-scale-set
+    name: arc-runner-set-3
+    repo: ghcr.io/actions/actions-runner-controller-charts
+    revision: 0.13.1
+    namespace: arc-runners
+    postInstall: false
+    syncWave: 5
   - chart: k8s-monitoring
     name: monitoring
     repo: https://grafana.github.io/helm-charts
