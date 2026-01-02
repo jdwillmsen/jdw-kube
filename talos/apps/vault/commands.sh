@@ -33,7 +33,7 @@ kubectl create secret generic vault-token \
 kubectl delete secret vault-unseal-keys -n vault
 
 kubectl create secret generic vault-unseal-keys \
-  --from-literal=unseal_key_0=$VAULT_UNSEAL_KEY_1 \
+  --from-literal=unseal_key_1=$VAULT_UNSEAL_KEY_1 \
   -n vault
 
 # cluster-secret-store.yaml
