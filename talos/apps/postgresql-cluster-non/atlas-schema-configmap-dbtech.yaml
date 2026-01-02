@@ -49,6 +49,14 @@ data:
         channel_id TEXT NOT NULL
     );
     
+    DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app') THEN
+                CREATE ROLE app;
+            END IF;
+        END
+    $$;
+    
     GRANT CONNECT ON DATABASE dbtech_non TO app;
     GRANT USAGE ON SCHEMA public TO app;
     GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app;
