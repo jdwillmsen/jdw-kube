@@ -90,34 +90,34 @@ apps:
 #    namespace: openebs
 #    postInstall: true
 #    syncWave: 1
-#  - chart: gha-runner-scale-set-controller
-#    name: arc-systems
-#    repo: ghcr.io/actions/actions-runner-controller-charts
-#    revision: 0.12.1
-#    namespace: arc-systems
-#    postInstall: true
-#    syncWave: 2
+  - chart: gha-runner-scale-set-controller
+    name: arc-systems
+    repo: ghcr.io/actions/actions-runner-controller-charts
+    revision: 0.13.1
+    namespace: arc-systems
+    postInstall: true
+    syncWave: 3
 #  - chart: gha-runner-scale-set
 #    name: arc-runner-set-1
 #    repo: ghcr.io/actions/actions-runner-controller-charts
 #    revision: 0.12.1
 #    namespace: arc-runners
 #    postInstall: false
-#    syncWave: 4
+#    syncWave: 5
 #  - chart: gha-runner-scale-set
 #    name: arc-runner-set-2
 #    repo: ghcr.io/actions/actions-runner-controller-charts
 #    revision: 0.12.1
 #    namespace: arc-runners
 #    postInstall: false
-#    syncWave: 4
+#    syncWave: 5
 #  - chart: gha-runner-scale-set
 #    name: arc-runner-set-3
 #    repo: ghcr.io/actions/actions-runner-controller-charts
 #    revision: 0.12.1
 #    namespace: arc-runners
 #    postInstall: false
-#    syncWave: 4
+#    syncWave: 5
   - chart: k8s-monitoring
     name: monitoring
     repo: https://grafana.github.io/helm-charts
