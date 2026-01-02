@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: vault-auto-unseal
-  namespace: vault-namespace
+  namespace: vault
 spec:
   schedule: "*/2 * * * *"
   jobTemplate:
