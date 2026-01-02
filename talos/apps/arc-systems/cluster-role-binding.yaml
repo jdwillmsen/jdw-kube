@@ -8,5 +8,5 @@ roleRef:
   name: role-creator
 subjects:
   - kind: ServiceAccount
-    name: actions-runner-scale-set-controller-gha-rs-controller
+    name: arc-systems-gha-rs-controller
     namespace: arc-runners
