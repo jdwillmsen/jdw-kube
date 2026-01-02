@@ -352,6 +352,8 @@ template:
   ##                 requests:
   ##                   storage: 1Gi
   spec:
+    securityContext:
+      fsGroup: 123
     containers:
       - name: runner
         image: ghcr.io/actions/actions-runner:2.330.0
