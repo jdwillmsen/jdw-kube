@@ -33,6 +33,9 @@ machine:
         interfaces:
             - interface: eno1
               dhcp: true
+              routes:
+                  - network: "::/0"
+                    gateway: "fe80::eec3:2ff:fef8:bb1"
     install:
         disk: /dev/nvme0n1
         image: factory.talos.dev/metal-installer/9d7d65b2bfb510587239ba5645d4a995726767cf0b149b2ec8a51ede5f05f76c:v1.12.0
@@ -58,8 +61,6 @@ machine:
             - name: configfs
             - name: nvme_tcp
             - name: vfio_pci
-    nodeLabels:
-        openebs.io/engine: mayastor
 cluster:
     id: PNO7QBAme-0ruxsT5DFD4OZlg_aYxQxbfW-X8vVRAHg=
     secret: XVeZMsSczkLsDDNVYqrv0F83Fap+9EOyON3VfVwNeoo=
@@ -101,7 +102,6 @@ cluster:
                 exemptions:
                     namespaces:
                         - kube-system
-                        - openebs
                         - longhorn-system
                     runtimeClasses: []
                     usernames: []

@@ -6,6 +6,9 @@ machine:
     interfaces:
       - interface: eno1
         dhcp: true
+        routes:
+          - network: "::/0"
+            gateway: "fe80::eec3:2ff:fef8:bb1"
   install:
     disk: /dev/nvme0n1
   kubelet:

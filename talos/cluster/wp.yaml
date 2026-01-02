@@ -10,8 +10,6 @@ machine:
       - name: nvme_tcp
       - name: vfio_pci
 #     - name: uio_pci_generic
-  nodeLabels:
-    openebs.io/engine: "mayastor"
   kubelet:
     extraMounts:
       - destination: /var/local
