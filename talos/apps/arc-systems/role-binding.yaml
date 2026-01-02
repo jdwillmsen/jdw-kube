@@ -5,7 +5,7 @@ metadata:
   namespace: arc-runners
 subjects:
   - kind: ServiceAccount
-    name: gha-runner-scale-set-controller
+    name: arc-systems-gha-rs-controller
     namespace: arc-systems
 roleRef:
   kind: Role
