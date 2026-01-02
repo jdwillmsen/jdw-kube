@@ -48,13 +48,13 @@ apps:
     namespace: database
     postInstall: true
     syncWave: 3
-#  - chart: cluster
-#    name: postgresql-cluster-prd
-#    repo: https://cloudnative-pg.github.io/charts
-#    revision: 0.5.0
-#    namespace: database
-#    postInstall: true
-#    syncWave: 2
+  - chart: cluster
+    name: postgresql-cluster-prd
+    repo: https://cloudnative-pg.github.io/charts
+    revision: 0.4.0
+    namespace: database
+    postInstall: true
+    syncWave: 3
   - chart: external-secrets
     name: external-secrets
     repo: https://charts.external-secrets.io
