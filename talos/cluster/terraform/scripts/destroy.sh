@@ -127,7 +127,7 @@ backup_state
 
 # Show destruction plan
 echo -e "\n${YELLOW}→ Terraform destruction plan:${NC}"
-terraform plan -destroy -out=tfdestroy-plan
+terraform plan -destroy -out=tfdestroy-plan -input=false -lock-timeout=0s
 
 if [ ! -f tfdestroy-plan ]; then
     log_error "Failed to create destruction plan"
