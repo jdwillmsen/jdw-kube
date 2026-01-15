@@ -3,8 +3,8 @@ set -euo pipefail
 
 # ==================== DYNAMIC CONFIGURATION ====================
 # Define nodes as space-separated lists
-CONTROL_PLANE_IPS="192.168.1.180"
-WORKER_IPS="192.168.1.184 192.168.1.182"
+CONTROL_PLANE_IPS="192.168.1.106"
+WORKER_IPS="192.168.1.108 192.168.1.105"
 
 # Cluster Settings
 CLUSTER_NAME="proxmox-talos-prod"
@@ -27,8 +27,8 @@ INSTALLER_IMAGE="factory.talos.dev/installer/9d7d65b2bfb510587239ba5645d4a995726
 # Deployment Settings
 MAX_RETRIES=3
 RETRY_DELAY=5
-NODE_RESTART_WAIT=60     # Wait for node to restart after config apply
-BOOTSTRAP_TIMEOUT=600    # Max time to wait for control plane to be ready
+NODE_RESTART_WAIT=120    # Wait for node to restart after config apply
+BOOTSTRAP_TIMEOUT=900    # Max time to wait for control plane to be ready
 
 # Secrets Vault
 SECRETS_VAULT_DIR="${SCRIPT_DIR:-.}/.talos-secrets-vault"
@@ -44,6 +44,18 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_step() { echo -e "\n${BLUE}[STEP]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# ==================== OS-SPECIFIC SETTINGS ====================
+# Detect OS type for ping compatibility
+if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+  # Windows Git Bash
+  PING_CMD="ping -n 1 -w 1000"  # 1 packet, 1000ms timeout
+  HOSTS_FILE="/c/Windows/System32/drivers/etc/hosts"
+else
+  # Linux/macOS
+  PING_CMD="ping -c 1 -W 1"     # 1 packet, 1s timeout
+  HOSTS_FILE="/etc/hosts"
+fi
 
 # ==================== NODE MANAGEMENT FUNCTIONS ====================
 
@@ -82,10 +94,23 @@ machine:
         dhcp: true
   sysctls:
     vm.nr_hugepages: "1024"
+  kubelet:
+    extraArgs:
+      rotate-server-certificates: true
   kernel:
     modules:
       - name: nvme_tcp
       - name: vfio_pci
+  certSANs:
+    - ${$new_ip}
+    - ${HAPROXY_IP}
+    - ${CONTROL_PLANE_ENDPOINT}
+cluster:
+  apiServer:
+    certSANs:
+      - ${$new_ip}
+      - ${HAPROXY_IP}
+      - ${CONTROL_PLANE_ENDPOINT}
 EOF
 
   cp controlplane.yaml "node-cp-${new_ip}.yaml"
@@ -148,6 +173,8 @@ machine:
       - name: nvme_tcp
       - name: vfio_pci
   kubelet:
+    extraArgs:
+      rotate-server-certificates: true
     extraMounts:
       - destination: /var/local
         type: bind
@@ -156,6 +183,16 @@ machine:
           - bind
           - rshared
           - rw
+  certSANs:
+    - ${$new_ip}
+    - ${HAPROXY_IP}
+    - ${CONTROL_PLANE_ENDPOINT}
+cluster:
+  apiServer:
+    certSANs:
+      - ${$new_ip}
+      - ${HAPROXY_IP}
+      - ${CONTROL_PLANE_ENDPOINT}
 EOF
 
   cp worker.yaml "node-worker-${new_ip}.yaml"
@@ -216,12 +253,12 @@ run_bootstrap() {
   log_step "Pre-Flight Validation"
   if [ "$SKIP_PREFLIGHT" = false ]; then
     log_info "Testing HAProxy connectivity..."
-    timeout 3 bash -c "curl -s http://${HAPROXY_IP}:9000" || { log_error "HAProxy unreachable"; exit 1; }
+    timeout 3 bash -c "curl -su admin:talos-lb-admin http://${HAPROXY_IP}:9000" || { log_error "HAProxy unreachable"; exit 1; }
     log_info "✓ HAProxy reachable"
 
     log_info "Testing node reachability..."
     for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}" "${WORKER_IPS_ARRAY[@]}"; do
-      if timeout 3 ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
+      if timeout 3 $PING_CMD "$ip" >/dev/null 2>&1; then
         log_info "✓ $ip reachable"
       else
         log_error "$ip not reachable (use --skip-preflight to skip)"; exit 1;
@@ -233,14 +270,6 @@ run_bootstrap() {
 
   # Hosts file configuration
   log_step "Configure Hosts File"
-  if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    HOSTS_FILE="/etc/hosts"
-  elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
-    HOSTS_FILE="/c/Windows/System32/drivers/etc/hosts"
-  else
-    HOSTS_FILE="/etc/hosts"
-  fi
-
   if [ -f "$HOSTS_FILE" ]; then
     if ! grep -q "$CONTROL_PLANE_ENDPOINT" "$HOSTS_FILE" 2>/dev/null; then
       log_info "Adding $CONTROL_PLANE_ENDPOINT to $HOSTS_FILE..."
@@ -319,10 +348,23 @@ machine:
         dhcp: true
   sysctls:
     vm.nr_hugepages: "1024"
+  kubelet:
+    extraArgs:
+      rotate-server-certificates: true
   kernel:
     modules:
       - name: nvme_tcp
       - name: vfio_pci
+  certSANs:
+    - ${ip}
+    - ${HAPROXY_IP}
+    - ${CONTROL_PLANE_ENDPOINT}
+cluster:
+  apiServer:
+    certSANs:
+      - ${ip}
+      - ${HAPROXY_IP}
+      - ${CONTROL_PLANE_ENDPOINT}
 EOF
 
     cp controlplane.yaml "node-cp-${ip}.yaml"
@@ -353,6 +395,8 @@ machine:
       - name: nvme_tcp
       - name: vfio_pci
   kubelet:
+    extraArgs:
+      rotate-server-certificates: true
     extraMounts:
       - destination: /var/local
         type: bind
@@ -361,6 +405,16 @@ machine:
           - bind
           - rshared
           - rw
+  certSANs:
+    - ${ip}
+    - ${HAPROXY_IP}
+    - ${CONTROL_PLANE_ENDPOINT}
+cluster:
+  apiServer:
+    certSANs:
+      - ${ip}
+      - ${HAPROXY_IP}
+      - ${CONTROL_PLANE_ENDPOINT}
 EOF
 
     cp worker.yaml "node-worker-${ip}.yaml"
