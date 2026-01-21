@@ -46,6 +46,6 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
   }
 
   scsi_hardware = "virtio-scsi-single"
-  boot_order    = ["ide3", "scsi0"]
+  boot_order    = ["scsi0", "ide3"]
   tags          = ["kubernetes", "controlplane", "talos"]
 }

@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,6 +12,22 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m'
+
+# Parse command line arguments
+FORCE=false
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -f|--force)
+      FORCE=true
+      shift
+      ;;
+    *)
+      echo -e "${RED}[ERROR] Unknown option: $1${NC}"
+      echo "Usage: $0 [-f|--force]"
+      exit 1
+      ;;
+  esac
+done
 
 # Logging functions
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -42,14 +57,8 @@ check_kubernetes_cluster() {
     return 1
 }
 
-get_vm_names() {
-    terraform state list 2>/dev/null | grep -E 'proxmox_virtual_environment_vm\.(controlplane|worker)' || echo ""
-}
-
 show_vm_details() {
     echo -e "\n${YELLOW}→ VMs that will be destroyed:${NC}"
-
-    # Get all VMs
     vms_json=$(terraform show -json 2>/dev/null | jq -c '.values.root_module.resources[] | {name: .values.name, vmid: .values.vm_id, type: .address}' || echo "")
 
     if [ -n "$vms_json" ]; then
@@ -65,158 +74,201 @@ show_vm_details() {
 
 graceful_shutdown() {
     local proxmox_host="$1"
-    local token_id="$2"
-    local token_secret="$3"
-
     log_info "Stopping VMs gracefully..."
 
-    # Extract hostname from URL
     local proxmox_address=$(echo "$proxmox_host" | sed -E 's|https?://([^/]+).*|\1|')
-
-    # Get all VM IDs
     vmids=$(terraform show -json 2>/dev/null | jq -r '.values.root_module.resources[].values.vm_id' 2>/dev/null || true)
 
     for vmid in $vmids; do
         echo "  Stopping VM $vmid..."
-        # Use qm stop command via SSH
         ssh -o ConnectTimeout=5 "root@$proxmox_address" "qm stop $vmid" 2>/dev/null || {
             log_warning "Failed to stop VM $vmid via SSH (will destroy anyway)"
         }
     done
 
-    echo "  Waiting 10 seconds for VMs to stop..."
-    sleep 10
+    if [ "$FORCE" = true ]; then
+        echo "  Force mode: Waiting 2 seconds..."
+        sleep 2
+    else
+        echo "  Waiting 10 seconds for VMs to stop..."
+        sleep 10
+    fi
 }
 
 # Header
-echo -e "${RED}🚨 Talos Cluster DESTRUCTION Script${NC}"
+if [ "$FORCE" = true ]; then
+    echo -e "${RED}🚨 Talos Cluster DESTRUCTION Script [FORCED MODE]${NC}"
+    # Disable strict error checking in force mode
+    set +e
+else
+    echo -e "${RED}🚨 Talos Cluster DESTRUCTION Script${NC}"
+    set -e
+fi
 echo -e "${RED}====================================${NC}"
 
-# Check if Terraform state exists
+# Check Terraform state
 if [ ! -f "$PROJECT_DIR/terraform.tfstate" ] || [ ! -s "$PROJECT_DIR/terraform.tfstate" ]; then
     log_warning "No Terraform state found. Nothing to destroy."
     exit 0
 fi
 
-# Show what will be destroyed
 show_vm_details
 
-# Check for Kubernetes cluster
-echo -e "\n${YELLOW}→ Checking for active Kubernetes cluster...${NC}"
-if check_kubernetes_cluster; then
-    log_warning "Kubernetes cluster detected!"
-    echo -e "\n${RED}⚠️  IMPORTANT - You should manually drain and remove nodes before destruction:${NC}"
-    echo "   1. kubectl get nodes"
-    echo "   2. kubectl drain <node> --ignore-daemonsets --delete-emptydir-data"
-    echo "   3. kubectl delete node <node>"
-    echo "   4. talosctl --nodes <CP-IP> etcd snapshot backup.yaml"
-    echo -e "\n${YELLOW}Have you properly drained and backed up the cluster?${NC}"
-    read -p "Continue anyway? (y/N): " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Destruction cancelled by user"
-        exit 0
+# Skip Kubernetes checks in force mode
+if [ "$FORCE" != true ]; then
+    echo -e "\n${YELLOW}→ Checking for active Kubernetes cluster...${NC}"
+    if check_kubernetes_cluster; then
+        log_warning "Kubernetes cluster detected!"
+        echo -e "\n${RED}⚠️  IMPORTANT - You should manually drain and remove nodes before destruction:${NC}"
+        echo "   1. kubectl get nodes"
+        echo "   2. kubectl drain <node> --ignore-daemonsets --delete-emptydir-data"
+        echo "   3. kubectl delete node <node>"
+        echo "   4. talosctl --nodes <CP-IP> etcd snapshot backup.yaml"
+        echo -e "\n${YELLOW}Have you properly drained and backed up the cluster?${NC}"
+        read -p "Continue anyway? (y/N): " -n 1 -r
+        echo ""
+        [[ ! $REPLY =~ ^[Yy]$ ]] && { log_info "Destruction cancelled by user"; exit 0; }
+    else
+        log_info "No Kubernetes cluster detected in ./config/"
     fi
 else
-    log_info "No Kubernetes cluster detected in ./config/"
+    log_warning "Force mode: Skipping Kubernetes cluster check"
 fi
 
-# Backup state before destruction
+# Backup state
 echo -e "\n${YELLOW}→ Creating state backup...${NC}"
 backup_state
 
 # Show destruction plan
 echo -e "\n${YELLOW}→ Terraform destruction plan:${NC}"
-terraform plan -destroy -out=tfdestroy-plan -input=false -lock-timeout=0s
 
-if [ ! -f tfdestroy-plan ]; then
+# CRITICAL: Add -refresh=false in force mode to skip provider refresh
+if [ "$FORCE" = true ]; then
+    log_warning "Force mode: Skipping Terraform provider refresh (may show stale data)"
+    TERRAFORM_OPTS="-refresh=false -parallelism=1"
+else
+    TERRAFORM_OPTS=""
+fi
+
+# Wrap terraform commands with a timeout to prevent indefinite hanging
+run_terraform_with_timeout() {
+    local cmd="$1"
+    local timeout_seconds=90
+
+    if [ "$FORCE" = true ]; then
+        # In force mode, use timeout to prevent hanging
+        timeout $timeout_seconds bash -c "$cmd" 2>&1
+        local exit_code=$?
+
+        if [ $exit_code -eq 124 ]; then
+            log_error "Terraform command timed out after ${timeout_seconds}s (provider unreachable)"
+            log_info "Try: 1) Check Proxmox connectivity 2) Use -refresh=false 3) Manually remove from state"
+            return 1
+        elif [ $exit_code -ne 0 ]; then
+            log_error "Terraform command failed with exit code $exit_code"
+            return 1
+        fi
+    else
+        # Normal mode: run without timeout
+        bash -c "$cmd"
+        return $?
+    fi
+}
+
+# Create destruction plan
+plan_cmd="terraform plan -destroy -out=tfdestroy-plan -input=false $TERRAFORM_OPTS"
+run_terraform_with_timeout "$plan_cmd"
+
+if [ ! -f tfdestroy-plan ] && [ "$FORCE" != true ]; then
     log_error "Failed to create destruction plan"
     exit 1
+elif [ "$FORCE" = true ] && [ ! -f tfdestroy-plan ]; then
+    log_warning "Force mode: Plan file not created, attempting direct destroy..."
 fi
 
-# Get resource count
-destroy_count=$(terraform show -json tfdestroy-plan | jq '.resource_changes | length')
-echo -e "\n${RED}⚠️  Will destroy $destroy_count resources${NC}"
-
-# Double confirmation
-echo -e "\n${RED}⚠️  FINAL WARNING - THIS CANNOT BE UNDONE${NC}"
-read -p $'\nType "DESTROY" (in all caps) to confirm: ' confirmation
-if [ "$confirmation" != "DESTROY" ]; then
-    log_info "Destruction cancelled"
-    rm -f tfdestroy-plan
-    exit 0
+# Get resource count (only if plan exists)
+if [ -f tfdestroy-plan ]; then
+    destroy_count=$(terraform show -json tfdestroy-plan | jq '.resource_changes | length')
+    echo -e "\n${RED}⚠️  Will destroy $destroy_count resources${NC}"
+else
+    log_warning "Force mode: Plan details unavailable (no refresh)"
 fi
 
-# Option: Graceful shutdown or immediate destroy
-echo -e "\n${YELLOW}→ Choose destruction method:${NC}"
-echo "  1. Graceful shutdown (recommended - attempts safe shutdown)"
-echo "  2. Immediate destroy (forces deletion, may leave orphaned disks)"
-read -p "Enter choice (1 or 2): " -n 1 -r
-echo ""
-
-# Extract Proxmox details for graceful shutdown
-PROXMOX_ENDPOINT=$(extract_tfvar "proxmox_endpoint")
-PROXMOX_API_TOKEN_ID=$(extract_tfvar "proxmox_api_token_id")
-PROXMOX_API_TOKEN_SECRET=$(extract_tfvar "proxmox_api_token_secret")
-
-case $REPLY in
-    1)
-        log_info "Performing graceful shutdown..."
-
-        # Stop VMs first via SSH
-        if [ -n "$PROXMOX_ENDPOINT" ]; then
-            graceful_shutdown "$PROXMOX_ENDPOINT" "$PROXMOX_API_TOKEN_ID" "$PROXMOX_API_TOKEN_SECRET"
-        else
-            log_warning "Could not extract Proxmox endpoint, skipping graceful shutdown"
-        fi
-
-        # Apply the destroy plan
-        terraform apply -auto-approve tfdestroy-plan
-        ;;
-    2)
-        log_warning "Performing immediate DESTROY..."
-        terraform apply -auto-approve tfdestroy-plan
-        ;;
-    *)
-        log_error "Invalid choice"
+# Skip manual confirmation in force mode
+if [ "$FORCE" != true ]; then
+    echo -e "\n${RED}⚠️  FINAL WARNING - THIS CANNOT BE UNDONE${NC}"
+    read -p $'\nType "DESTROY" (in all caps) to confirm: ' confirmation
+    if [ "$confirmation" != "DESTROY" ]; then
+        log_info "Destruction cancelled"
         rm -f tfdestroy-plan
-        exit 1
-        ;;
-esac
+        exit 0
+    fi
+else
+    log_warning "Force mode: Skipping manual confirmation"
+fi
+
+# Extract Proxmox details
+PROXMOX_ENDPOINT=$(extract_tfvar "proxmox_endpoint")
+
+# Force mode: Always immediate destroy, skip graceful shutdown
+if [ "$FORCE" = true ]; then
+    log_warning "Force mode: Performing immediate DESTROY..."
+    destroy_cmd="terraform apply -auto-approve $TERRAFORM_OPTS tfdestroy-plan"
+    run_terraform_with_timeout "$destroy_cmd"
+
+    # If plan file doesn't exist, try direct destroy without plan
+    if [ ! -f tfdestroy-plan ]; then
+        log_warning "Attempting direct destroy without plan..."
+        destroy_cmd="terraform destroy -auto-approve $TERRAFORM_OPTS"
+        run_terraform_with_timeout "$destroy_cmd"
+    fi
+else
+    echo -e "\n${YELLOW}→ Choose destruction method:${NC}"
+    echo "  1. Graceful shutdown (recommended)"
+    echo "  2. Immediate destroy"
+    read -p "Enter choice (1 or 2): " -n 1 -r
+    echo ""
+
+    case $REPLY in
+        1)
+            log_info "Performing graceful shutdown..."
+            [ -n "$PROXMOX_ENDPOINT" ] && graceful_shutdown "$PROXMOX_ENDPOINT"
+            terraform apply -auto-approve tfdestroy-plan
+            ;;
+        2)
+            log_warning "Performing immediate DESTROY..."
+            terraform apply -auto-approve tfdestroy-plan
+            ;;
+        *)
+            log_error "Invalid choice"
+            rm -f tfdestroy-plan
+            exit 1
+            ;;
+    esac
+fi
 
 # Verify destruction
 echo -e "\n${YELLOW}→ Verifying destruction...${NC}"
 if [ -f "$PROJECT_DIR/terraform.tfstate" ]; then
     remaining=$(terraform state list 2>/dev/null | wc -l)
-    if [ "$remaining" -eq 0 ]; then
-        log_success "All resources destroyed successfully"
-    else
-        log_warning "$remaining resources still exist"
-        terraform state list
-    fi
+    [ "$remaining" -eq 0 ] && log_success "All resources destroyed successfully" || log_warning "$remaining resources still exist"
 else
     log_success "State file removed - destruction complete"
 fi
 
-# Cleanup Proxmox leftovers (optional)
-echo -e "\n${YELLOW}→ Cleanup (optional):${NC}"
-read -p "Remove orphaned disks from Proxmox storage? (y/N): " -n 1 -r
-echo ""
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    log_info "You may want to manually check Proxmox Storage → 'Orphaned Disks'"
-    echo "  Location: Datacenter → Storage → local-lvm → Content → Disks"
+# Skip cleanup prompt in force mode
+if [ "$FORCE" != true ]; then
+    echo -e "\n${YELLOW}→ Cleanup (optional):${NC}"
+    read -p "Remove orphaned disks from Proxmox storage? (y/N): " -n 1 -r
+    echo ""
+    [[ $REPLY =~ ^[Yy]$ ]] && log_info "Check: Datacenter → Storage → local-lvm → Content → Disks"
+else
+    log_warning "Force mode: Skipping optional cleanup prompt"
 fi
 
 # Final status
 echo -e "\n${GREEN}✅ Cluster destruction complete!${NC}"
-echo -e "\n${YELLOW}What was backed up:${NC}"
 ls -lh "$BACKUP_DIR"/destroy-state-backup* 2>/dev/null || echo "  No backups found"
-echo -e "\n${YELLOW}Next steps:${NC}"
-echo "  - Verify in Proxmox UI that VMs are gone"
-echo "  - Clean up any orphaned disks (if you chose to)"
-echo "  - Remove or archive ./config/ directory if no longer needed"
-echo "  - Keep backups for a few days in case of accidental destruction"
 
-# Cleanup
 rm -f tfdestroy-plan tfplan
 log_success "Destroy script complete"
