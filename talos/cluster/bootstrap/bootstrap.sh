@@ -3,15 +3,15 @@ set -euo pipefail
 
 # ==================== DYNAMIC CONFIGURATION ====================
 # Define nodes as space-separated lists
-CONTROL_PLANE_IPS="192.168.1.106"
-WORKER_IPS="192.168.1.108 192.168.1.105"
+CONTROL_PLANE_IPS="192.168.1.185"
+WORKER_IPS="192.168.1.183 192.168.1.175"
 
 # Cluster Settings
-CLUSTER_NAME="proxmox-talos-prod"
+CLUSTER_NAME="proxmox-talos-test"
 KUBERNETES_VERSION="v1.34.0"
-TALOS_VERSION="v1.12.0"
+TALOS_VERSION="v1.12.1"
 HAPROXY_IP="192.168.1.237"
-CONTROL_PLANE_ENDPOINT="kube.$CLUSTER_NAME.jdwkube.com"
+CONTROL_PLANE_ENDPOINT="$CLUSTER_NAME.jdwkube.com"
 
 # Hardware Settings
 DEFAULT_NETWORK_INTERFACE="eth0"
@@ -22,16 +22,16 @@ declare -A NODE_INTERFACES=()  # e.g., (["192.168.1.250"]="eth1")
 declare -A NODE_DISKS=()       # e.g., (["192.168.1.250"]="nvme0n1")
 
 # Talos Factory Image
-INSTALLER_IMAGE="factory.talos.dev/installer/9d7d65b2bfb510587239ba5645d4a995726767cf0b149b2ec8a51ede5f05f76c:${TALOS_VERSION}"
+INSTALLER_IMAGE="factory.talos.dev/nocloud-installer/b553b4a25d76e938fd7a9aaa7f887c06ea4ef75275e64f4630e6f8f739cf07df::${TALOS_VERSION}"
 
 # Deployment Settings
-MAX_RETRIES=3
+MAX_RETRIES=5
 RETRY_DELAY=5
-NODE_RESTART_WAIT=120    # Wait for node to restart after config apply
-BOOTSTRAP_TIMEOUT=900    # Max time to wait for control plane to be ready
+NODE_RESTART_WAIT=105    # Wait for node to restart after config apply
+BOOTSTRAP_TIMEOUT=1800   # Max time to wait for control plane to be ready
 
 # Secrets Vault
-SECRETS_VAULT_DIR="${SCRIPT_DIR:-.}/.talos-secrets-vault"
+SECRETS_VAULT_DIR="${SCRIPT_DIR:-.}/.secrets"
 
 # ==================== SCRIPT SETUP ====================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -102,13 +102,13 @@ machine:
       - name: nvme_tcp
       - name: vfio_pci
   certSANs:
-    - ${$new_ip}
+    - ${new_ip}
     - ${HAPROXY_IP}
     - ${CONTROL_PLANE_ENDPOINT}
 cluster:
   apiServer:
     certSANs:
-      - ${$new_ip}
+      - ${new_ip}
       - ${HAPROXY_IP}
       - ${CONTROL_PLANE_ENDPOINT}
 EOF
@@ -119,7 +119,7 @@ EOF
     --output "node-cp-${new_ip}.yaml"
 
   log_info "Applying configuration to node $new_ip..."
-  talosctl apply-config --insecure --nodes "$new_ip" --file "node-cp-${new_ip}.yaml"
+  deploy_config_with_retry "control plane" "$new_ip" "node-cp-${new_ip}.yaml"
 
   log_info "Waiting 45 seconds for node to initialize..."
   sleep 45
@@ -184,13 +184,13 @@ machine:
           - rshared
           - rw
   certSANs:
-    - ${$new_ip}
+    - ${new_ip}
     - ${HAPROXY_IP}
     - ${CONTROL_PLANE_ENDPOINT}
 cluster:
   apiServer:
     certSANs:
-      - ${$new_ip}
+      - ${new_ip}
       - ${HAPROXY_IP}
       - ${CONTROL_PLANE_ENDPOINT}
 EOF
@@ -201,10 +201,36 @@ EOF
     --output "node-worker-${new_ip}.yaml"
 
   log_info "Applying configuration to node $new_ip..."
-  talosctl apply-config --insecure --nodes "$new_ip" --file "node-worker-${new_ip}.yaml"
+  deploy_config_with_retry "worker" "$new_ip" "node-worker-${new_ip}.yaml"
 
   log_info "✓ Worker node $new_ip added"
   rm -f "patch-worker-${new_ip}.yaml"
+}
+
+deploy_config_with_retry() {
+  local node_type="$1"
+  local ip="$2"
+  local config_file="$3"
+  local attempt=0
+  local max_retries=$MAX_RETRIES
+  local delay=$RETRY_DELAY
+
+  while [ $attempt -lt $max_retries ]; do
+    attempt=$((attempt + 1))
+    log_info "Deploy attempt $attempt/$max_retries to $node_type $ip..."
+
+    if talosctl apply-config --insecure --nodes "$ip" --file "$config_file"; then
+      log_info "✓ $node_type $ip deployed successfully"
+      return 0
+    else
+      log_warn "Attempt $attempt failed, retrying in $delay seconds..."
+      sleep $delay
+      delay=$((delay * 2))  # Exponential backoff
+    fi
+  done
+
+  log_error "Failed to deploy to $node_type $ip after $max_retries attempts"
+  return 1
 }
 
 # ==================== BOOTSTRAP FUNCTION ====================
@@ -253,7 +279,10 @@ run_bootstrap() {
   log_step "Pre-Flight Validation"
   if [ "$SKIP_PREFLIGHT" = false ]; then
     log_info "Testing HAProxy connectivity..."
-    timeout 3 bash -c "curl -su admin:talos-lb-admin http://${HAPROXY_IP}:9000" || { log_error "HAProxy unreachable"; exit 1; }
+    if ! timeout 3 bash -c "curl -su admin:talos-lb-admin http://${HAPROXY_IP}:9000" &> /dev/null; then
+      log_error "HAProxy unreachable"
+      exit 1
+    fi
     log_info "✓ HAProxy reachable"
 
     log_info "Testing node reachability..."
@@ -305,9 +334,12 @@ run_bootstrap() {
   log_info "✓ secrets.yaml ready"
 
   # Backup existing configs
-  if [ -f "controlplane.yaml" ]; then
-    BACKUP_DIR="talos-backup-$(date +%Y%m%d_%H%M%S)"
+  BACKUP_DIR="backup/run-$(date +%Y%m%d_%H%M%S)"
+  if [ ! -d "$BACKUP_DIR" ]; then
     mkdir -p "$BACKUP_DIR"
+  fi
+
+  if [ -f "controlplane.yaml" ]; then
     cp secrets.yaml controlplane.yaml worker.yaml talosconfig "$BACKUP_DIR/" 2>/dev/null || true
     log_info "Backed up existing configs to $BACKUP_DIR"
   fi
@@ -321,7 +353,7 @@ run_bootstrap() {
     --kubernetes-version "${KUBERNETES_VERSION}" \
     --talos-version "${TALOS_VERSION}" \
     --install-image "${INSTALLER_IMAGE}" \
-    "${CLUSTER_NAME}" "https://${CONTROL_PLANE_ENDPOINT}:6443" || {
+    "${CLUSTER_NAME}" "https://${CONTROL_PLANE_ENDPOINT}:6443" &> /dev/null || {
       log_error "Config generation failed"; exit 1; }
 
   for file in controlplane.yaml worker.yaml talosconfig; do
@@ -371,6 +403,8 @@ EOF
     talosctl machineconfig patch "node-cp-${ip}.yaml" \
       --patch "@patch-cp-${ip}.yaml" \
       --output "node-cp-${ip}.yaml" || exit 1
+
+    log_info "Generated configuration for control plane node $ip"
   done
 
   for ip in "${WORKER_IPS_ARRAY[@]}"; do
@@ -421,12 +455,16 @@ EOF
     talosctl machineconfig patch "node-worker-${ip}.yaml" \
       --patch "@patch-worker-${ip}.yaml" \
       --output "node-worker-${ip}.yaml" || exit 1
+    log_info "Generated configuration for worker node $ip"
   done
 
   # Apply cluster patch
   log_step "Apply Cluster Configuration"
   cat > "cluster-patch.yaml" <<'EOF'
 cluster:
+  extraManifests:
+    - https://raw.githubusercontent.com/alex1989hu/kubelet-serving-cert-approver/main/deploy/standalone-install.yaml
+    - https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
   allowSchedulingOnControlPlanes: false
   apiServer:
     admissionControl:
@@ -443,9 +481,21 @@ EOF
     talosctl machineconfig patch "node-cp-${ip}.yaml" \
       --patch "@cluster-patch.yaml" \
       --output "node-cp-${ip}.yaml" || exit 1
+    log_info "Applied cluster configuration to control plane node $ip"
   done
 
   rm -f cluster-patch.yaml patch-*.yaml
+
+  # Create StaticHostConfig for endpoint resolution
+  log_step "Creating StaticHostConfig"
+  cat > "statichost-config.yaml" <<EOF
+apiVersion: v1alpha1
+kind: StaticHostConfig
+name: ${HAPROXY_IP}
+hostnames:
+  - ${CONTROL_PLANE_ENDPOINT}
+EOF
+  log_info "✓ Created StaticHostConfig for ${CONTROL_PLANE_ENDPOINT} -> ${HAPROXY_IP}"
 
   # Verify configurations
   log_step "Verify Generated Configuration Files"
@@ -455,6 +505,8 @@ EOF
   for ip in "${WORKER_IPS_ARRAY[@]}"; do
     [ -f "node-worker-${ip}.yaml" ] && log_info "✓ node-worker-${ip}.yaml" || log_warn "Missing node-worker-${ip}.yaml"
   done
+
+  [ -f "statichost-config.yaml" ] && log_info "✓ statichost-config.yaml" || { log_error "statichost-config.yaml missing"; exit 1; }
 
   if [ "$DRY_RUN" = true ]; then
     log_info "DRY-RUN complete - Configuration files generated"
@@ -508,6 +560,17 @@ EOF
     return 1
   }
 
+  log_step "Applying StaticHostConfig for endpoint resolution"
+  for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}" "${WORKER_IPS_ARRAY[@]}"; do
+    log_info "Applying StaticHostConfig to $ip..."
+    talosctl apply-config --insecure --nodes "$ip" --file "statichost-config.yaml" || {
+      log_warn "Failed to apply StaticHostConfig to $ip, continuing anyway..."
+    }
+  done
+  log_info "✓ StaticHostConfig applied to all nodes"
+
+  rm -f statichost-config.yaml
+
   for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}"; do
     deploy_config "control plane" "$ip" "node-cp-${ip}.yaml" || exit 1
   done
@@ -532,25 +595,25 @@ EOF
 
   # Bootstrap the cluster
   if [ "${#CONTROL_PLANE_IPS_ARRAY[@]}" -gt 0 ]; then
-    log_info "Bootstrapping cluster using ${CONTROL_PLANE_IPS_ARRAY[0]}..."
-    talosctl bootstrap --nodes "${CONTROL_PLANE_IPS_ARRAY[0]}"  || {
+    CP_NODE="${CONTROL_PLANE_IPS_ARRAY[0]}"
+    log_info "Bootstrapping cluster using $CP_NODE..."
+    talosctl bootstrap --nodes "$CP_NODE" || {
       log_error "Bootstrap failed";
       exit 1;
     }
     log_info "✓ Bootstrap command sent successfully"
+
+    # Wait for the specific node to be ready
+    log_info "Waiting for control plane node to initialize (this may take several minutes)..."
+    if ! talosctl --endpoints "$CP_NODE" --nodes "$CP_NODE" health --wait-timeout="${BOOTSTRAP_TIMEOUT}s"; then
+      log_error "Control plane node failed to become ready within $BOOTSTRAP_TIMEOUT seconds"
+      exit 1
+    fi
+    log_info "✓ Control plane node is ready"
   fi
 
-  # NOW set the endpoint to HAProxy for ongoing operations
   log_info "Reconfiguring endpoint to HAProxy ($HAPROXY_IP) for client access..."
   talosctl config endpoint "$HAPROXY_IP"
-
-  # Wait for control plane using secure connection (with proper timeout)
-  log_info "Waiting for control plane to initialize (this may take several minutes)..."
-  if ! talosctl --nodes "${CONTROL_PLANE_IPS_ARRAY[0]}" health --wait-timeout="${BOOTSTRAP_TIMEOUT}s"; then
-    log_error "Control plane failed to become ready within $BOOTSTRAP_TIMEOUT seconds"
-    exit 1
-  fi
-  log_info "✓ Control plane is ready"
 
   # Retrieve kubeconfig
   KUBECONFIG_PATH="$HOME/.kube/config-${CLUSTER_NAME}"
