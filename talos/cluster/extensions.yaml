@@ -1,7 +1,7 @@
 customization:
   systemExtensions:
     officialExtensions:
-      - siderolabs/gvisor
       - siderolabs/zfs
       - siderolabs/iscsi-tools
       - siderolabs/util-linux-tools
+      - siderolabs/qemu-guest-agent

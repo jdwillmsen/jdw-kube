@@ -2,7 +2,7 @@
 export NODE_1=192.168.1.221
 export NODE_2=192.168.1.222
 export NODE_3=192.168.1.223
-export NODE_4=192.168.1.220
+export NODE_4=192.168.1.233
 
 # Single Control Plane Setup
 export CONTROL_PLANE_IP=${NODE_1}
@@ -16,17 +16,23 @@ export CONTROL_PLANE_IP=("${NODE_1}" "${NODE_2}" "${NODE_3}")
 export WORKER_IP=("${NODE_4}")
 export CLUSTER_NAME=cluster1
 export YOUR_ENDPOINT=kube.cluster1.jdwkube.com
+
+talosctl gen secrets -o secrets.yaml
+
 talosctl gen config --with-secrets secrets.yaml $CLUSTER_NAME https://$YOUR_ENDPOINT:6443
+talosctl gen config --with-secrets secrets.yaml talos-proxmox-cluster https://$CONTROL_PLANE_IP:6443 --install-image factory.talos.dev/nocloud-installer/f99b729bbfdfceb34111ee8ccdfb5fb1b26443d5a3c3670e9d97c218524f8d53:v1.12.0
 
 ### Check network interfaces - Run this command to view all network interfaces on any node, whether control plane or worker.
 talosctl --nodes <node-ip-address> get links --insecure
 talosctl --nodes $NODE_1 get links --insecure
 export NETWORK_ID=eno1
+export NETWORK_ID=eth0
 
 ### Check available disks - Run this command to check all available disks on any node.
 talosctl get disks --insecure --nodes <node-ip-address>
 talosctl get disks -n $NODE_1
 export DISK_NAME=nvme0n1
+export DISK_NAME=sda
 
 ### Patch machine configuration - You can patch your worker and control plane machine configuration to reflect the correct network interface and disk of your control plane nodes.
 touch controlplane-patch-1.yaml # For patching the control plane nodes configuration
@@ -119,3 +125,12 @@ done
 
 ## Upgrade Node (https://factory.talos.dev/)
 talosctl upgrade --nodes $NODE_1 --image factory.talos.dev/metal-installer/9d7d65b2bfb510587239ba5645d4a995726767cf0b149b2ec8a51ede5f05f76c:v1.12.0
+
+## Create worker node
+talosctl apply-config --insecure --nodes $WORKER_IP --file _out/worker.yaml
+
+## Setup configs
+### Apply the patch for control plane node
+talosctl machineconfig patch controlplane.yaml --patch @controlplane-patch.yaml --output controlplane.yaml
+### Apply the patch for the work node
+talosctl machineconfig patch worker.yaml --patch @worker-patch.yaml --output worker.yaml

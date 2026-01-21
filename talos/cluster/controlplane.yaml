@@ -38,7 +38,7 @@ machine:
                     gateway: "fe80::eec3:2ff:fef8:bb1"
     install:
         disk: /dev/nvme0n1
-        image: factory.talos.dev/metal-installer/9d7d65b2bfb510587239ba5645d4a995726767cf0b149b2ec8a51ede5f05f76c:v1.12.0
+        image: factory.talos.dev/nocloud-installer/f99b729bbfdfceb34111ee8ccdfb5fb1b26443d5a3c3670e9d97c218524f8d53:v1.12.0
         wipe: false
     sysctls:
         vm.nr_hugepages: "1024"
