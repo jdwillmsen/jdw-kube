@@ -3,8 +3,8 @@ set -euo pipefail
 
 # ==================== DYNAMIC CONFIGURATION ====================
 # Define nodes as space-separated lists
-CONTROL_PLANE_IPS="192.168.1.185"
-WORKER_IPS="192.168.1.183 192.168.1.175"
+CONTROL_PLANE_IPS="192.168.1.110"
+WORKER_IPS="192.168.1.111 192.168.1.105"
 
 # Cluster Settings
 CLUSTER_NAME="proxmox-talos-test"
@@ -22,12 +22,12 @@ declare -A NODE_INTERFACES=()  # e.g., (["192.168.1.250"]="eth1")
 declare -A NODE_DISKS=()       # e.g., (["192.168.1.250"]="nvme0n1")
 
 # Talos Factory Image
-INSTALLER_IMAGE="factory.talos.dev/nocloud-installer/b553b4a25d76e938fd7a9aaa7f887c06ea4ef75275e64f4630e6f8f739cf07df::${TALOS_VERSION}"
+INSTALLER_IMAGE="factory.talos.dev/nocloud-installer/b553b4a25d76e938fd7a9aaa7f887c06ea4ef75275e64f4630e6f8f739cf07df:${TALOS_VERSION}"
 
 # Deployment Settings
 MAX_RETRIES=5
 RETRY_DELAY=5
-NODE_RESTART_WAIT=105    # Wait for node to restart after config apply
+NODE_RESTART_WAIT=120    # Wait for node to restart after config apply
 BOOTSTRAP_TIMEOUT=1800   # Max time to wait for control plane to be ready
 
 # Secrets Vault
@@ -591,6 +591,7 @@ EOF
 
   # For bootstrap, use the first control plane node directly (not HAProxy)
   log_info "Setting endpoint to first control plane node..."
+#  talosctl config endpoint "${CONTROL_PLANE_IPS_ARRAY[0]}"
   talosctl config endpoint "${CONTROL_PLANE_IPS_ARRAY[0]}"
 
   # Bootstrap the cluster
@@ -659,6 +660,11 @@ case "$MODE" in
     log_step "Cleanup"
     rm -f node-*.yaml patch-*.yaml controlplane.yaml worker.yaml talosconfig
     log_info "Temporary files removed"
+    ;;
+  reset)
+    log_step "Reset"
+    rm -frv node-*.yaml patch-*.yaml controlplane.yaml worker.yaml talosconfig backup/ .secrets/ secrets.yaml
+    log_info "State returned to initial state"
     ;;
   help|--help|-h)
     echo "Usage: $0 [MODE] [OPTIONS]"
