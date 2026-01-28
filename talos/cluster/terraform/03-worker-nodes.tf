@@ -47,6 +47,6 @@ resource "proxmox_virtual_environment_vm" "worker" {
 
   stop_on_destroy = true
   scsi_hardware   = "virtio-scsi-single"
-  boot_order      = ["scsi0"]
+  boot_order      = ["scsi0", "ide3"]
   tags            = ["kubernetes", "worker", "talos"]
 }

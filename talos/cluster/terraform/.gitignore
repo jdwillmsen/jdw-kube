@@ -1,22 +1,27 @@
-# Terraform
+# Terraform State & Lock Files
 *.tfstate
+*.tfstate.*
 *.tfstate.backup
 *.tfstate.lock.info
 .terraform/
 .terraform.lock.hcl
+.tf-deploy-state/
+
+# Terraform Plan Files (including timestamped ones from cluster.sh)
+tfplan
+tfplan-*
+tfdestroy-plan
+
+# Secrets & Sensitive Config
 *.tfvars
 !terraform.tfvars.example
-tfplan
-terraform.tfstate
-terraform.tfstate.backup
-backups/
-
-# Secrets
 *.pem
 *.key
 *.secret
-terraform.tfvars
 
-# OS
+# Auto-generated Backups
+backups/
+
+# OS Files
 .DS_Store
 Thumbs.db
