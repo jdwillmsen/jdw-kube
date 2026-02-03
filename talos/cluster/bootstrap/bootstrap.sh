@@ -1,24 +1,50 @@
 #!/bin/bash
 set -euo pipefail
 
-# ==================== SCRIPT METADATA ====================
+# ==================== IMPROVED DIRECTORY STRUCTURE ====================
+# Directory layout:
+# bootstrap/
+# ├── bootstrap.sh
+# ├── lib/                    # (optional future: modular functions)
+# ├── clusters/
+# │   └── proxmox-talos-test/ # $CLUSTER_NAME
+# │       ├── nodes/          # Generated node configs (gitignored)
+# │       ├── secrets/        # Sensitive files (gitignored)
+# │       ├── state/          # Runtime state (gitignored)
+# │       └── patches/        # Your custom patches (optional, tracked)
+# └── logs/                   # Global logs (gitignored)
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_DIR="$SCRIPT_DIR/logs"
+CLUSTER_NAME="proxmox-talos-test"
+
+# Base directories - organized by cluster
+CLUSTER_DIR="${SCRIPT_DIR}/clusters/${CLUSTER_NAME}"
+NODES_DIR="${CLUSTER_DIR}/nodes"
+SECRETS_DIR="${CLUSTER_DIR}/secrets"
+STATE_DIR="${CLUSTER_DIR}/state"
+PATCH_DIR="${CLUSTER_DIR}/patches"
+LOG_DIR="${SCRIPT_DIR}/logs"
+
+# Specific files
+STATE_FILE="${STATE_DIR}/cluster-state.json"
+SECRETS_FILE="${SECRETS_DIR}/secrets.yaml"
+TALOSCONFIG="${SECRETS_DIR}/talosconfig"
+
+# ==================== SCRIPT METADATA ====================
 LOG_TIMESTAMP_FORMAT="+%Y-%m-%d %H:%M:%S"
 LOG_FILE=""
-VERSION="1.0"
+VERSION="1.1.0"
 
 # Discovery Settings
 CONTROL_PLANE_IPS=""
 WORKER_IPS=""
 PROXMOX_SSH_HOST="${PROXMOX_SSH_HOST:-pve1}"
-DISCOVER_VM_IDS="${DISCOVER_VM_IDS:-200 300 301}"
+DISCOVER_VM_IDS="${DISCOVER_VM_IDS:-201 302}"
 USE_DISCOVERY="${USE_DISCOVERY:-false}"
 ARP_WAIT_TIME="${ARP_WAIT_TIME:-5}"
 POST_DEPLOY_WAIT="${POST_DEPLOY_WAIT:-90}"
 
 # Cluster Settings
-CLUSTER_NAME="proxmox-talos-test"
 KUBERNETES_VERSION="v1.34.0"
 TALOS_VERSION="v1.12.1"
 HAPROXY_IP="192.168.1.237"
@@ -44,8 +70,6 @@ DEPLOY_JOBS=3
 API_READY_WAIT=180
 
 # State Management
-STATE_DIR="${SCRIPT_DIR}/.cluster-state"
-STATE_FILE="$STATE_DIR/cluster-state.json"
 declare -A DISC_VM_MACS=()
 declare -A DISC_VM_NAMES=()
 declare -A DISC_VM_IPS=()
@@ -89,7 +113,6 @@ print_banner() {
     echo -e "$border"
     echo ""
 
-    # Also write plain version to log file if it's ready
     if [[ -n "${LOG_FILE:-}" && -f "$LOG_FILE" ]]; then
         {
             echo "========================================================="
@@ -98,6 +121,25 @@ print_banner() {
             echo "========================================================="
         } >> "$LOG_FILE"
     fi
+}
+
+# ==================== INITIALIZATION ====================
+init_directories() {
+    # Create all required directories
+    mkdir -p "$NODES_DIR" "$SECRETS_DIR" "$STATE_DIR" "$PATCH_DIR" "$LOG_DIR"
+
+    # Create .gitignore for sensitive directories
+    if [[ ! -f "${CLUSTER_DIR}/.gitignore" ]]; then
+        cat > "${CLUSTER_DIR}/.gitignore" <<'EOF'
+# Generated configs - sensitive or ephemeral
+/nodes/
+/secrets/
+/state/
+/*.log
+EOF
+    fi
+
+    _log_file "INIT" "Directories initialized: nodes=${NODES_DIR}, secrets=${SECRETS_DIR}, state=${STATE_DIR}"
 }
 
 # ==================== LOGGING CORE ====================
@@ -220,40 +262,48 @@ get_ssh_output() {
     echo "$output"
 }
 
+# ==================== IMPROVED STATE MANAGEMENT ====================
 save_state() {
     mkdir -p "$STATE_DIR"
-    local cp_ips=""
-    local worker_ips=""
-    local first=true
 
-    local cp_count=${#CONTROL_PLANE_IPS_ARRAY[@]}
-    local worker_count=${#WORKER_IPS_ARRAY[@]}
+    # Use jq for proper JSON construction (handles escaping, valid JSON)
+    local timestamp
+    timestamp=$(date -Iseconds)
 
-    _log_file "STATE" "Saving state: $cp_count CPs, $worker_count workers"
-
-    for ip in "${CONTROL_PLANE_IPS_ARRAY[@]:-}"; do
-        [[ "$first" == "true" ]] && first=false || cp_ips+=","
+    # Build control planes array using jq
+    local cp_json='[]'
+    for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}"; do
         local vmid="${NODE_VMIDS[$ip]:-unknown}"
-        cp_ips+="{\"ip\":\"$ip\",\"vmid\":\"$vmid\"}"
+        cp_json=$(echo "$cp_json" | jq \
+            --arg ip "$ip" \
+            --arg vmid "$vmid" \
+            '. += [{"ip": $ip, "vmid": $vmid}]')
     done
 
-    first=true
-    for ip in "${WORKER_IPS_ARRAY[@]:-}"; do
-        [[ "$first" == "true" ]] && first=false || worker_ips+=","
+    # Build workers array using jq
+    local worker_json='[]'
+    for ip in "${WORKER_IPS_ARRAY[@]}"; do
         local vmid="${NODE_VMIDS[$ip]:-unknown}"
-        worker_ips+="{\"ip\":\"$ip\",\"vmid\":\"$vmid\"}"
+        worker_json=$(echo "$worker_json" | jq \
+            --arg ip "$ip" \
+            --arg vmid "$vmid" \
+            '. += [{"ip": $ip, "vmid": $vmid}]')
     done
 
-    {
-        echo "{"
-        echo "  \"cluster_name\": \"$CLUSTER_NAME\","
-        echo "  \"timestamp\": \"$(date -Iseconds)\","
-        echo "  \"control_planes\": [$cp_ips],"
-        echo "  \"workers\": [$worker_ips]"
-        echo "}"
-    } > "$STATE_FILE"
+    # Construct final JSON
+    jq -n \
+        --arg name "$CLUSTER_NAME" \
+        --arg ts "$timestamp" \
+        --argjson cp "$cp_json" \
+        --argjson wk "$worker_json" \
+        '{
+            cluster_name: $name,
+            timestamp: $ts,
+            control_planes: $cp,
+            workers: $wk
+        }' > "$STATE_FILE"
 
-    log_detail "State saved to $STATE_FILE"
+    log_detail "State saved to $STATE_FILE ($(echo "$cp_json" | jq 'length') CPs, $(echo "$worker_json" | jq 'length') workers)"
 }
 
 load_state() {
@@ -264,6 +314,10 @@ load_state() {
             cp_count=$(jq '.control_planes | length' "$STATE_FILE")
             worker_count=$(jq '.workers | length' "$STATE_FILE")
             log_info "Previous state: $cp_count control planes, $worker_count workers"
+
+            # Populate arrays from state
+            readarray -t CONTROL_PLANE_IPS_ARRAY < <(jq -r '.control_planes[].ip' "$STATE_FILE")
+            readarray -t WORKER_IPS_ARRAY < <(jq -r '.workers[].ip' "$STATE_FILE")
             return 0
         fi
     fi
@@ -491,11 +545,11 @@ discover_proxmox_nodes() {
     fi
 
     if [[ "$mode" == "initial" ]]; then
-        CONTROL_PLANE_IPS="${DISC_CONTROL_PLANE_IPS[*]:-}"
-        WORKER_IPS="${DISC_WORKER_IPS[*]:-}"
+        CONTROL_PLANE_IPS="${DISC_CONTROL_PLANE_IPS[*]}"
+        WORKER_IPS="${DISC_WORKER_IPS[*]}"
     else
-        WORKER_IPS="${DISC_WORKER_IPS[*]:-}"
-        CONTROL_PLANE_IPS="${DISC_CONTROL_PLANE_IPS[*]:-}"
+        WORKER_IPS="${DISC_WORKER_IPS[*]}"
+        CONTROL_PLANE_IPS="${DISC_CONTROL_PLANE_IPS[*]}"
     fi
 
     log_info "Discovery complete: ${#DISC_CONTROL_PLANE_IPS[@]} control planes, ${#DISC_WORKER_IPS[@]} workers"
@@ -521,20 +575,16 @@ prompt_user() {
     echo -en "$prompt_text"
 
     if [[ "$is_secret" == "true" ]]; then
-        # Handle secret input with color restoration
         local input
         read -rs input
-        echo "" # Newline after hidden input
-        # Log to file only, not console
+        echo ""
         _log_file "PROMPT" "${var_name}=<redacted>"
     else
         local input
         read -r input
-        # Log to file for audit trail
         _log_file "PROMPT" "${var_name}=${input:-$default_value}"
     fi
 
-    # Export to variable name provided
     if [[ -z "$input" && -n "$default_value" ]]; then
         printf -v "$var_name" '%s' "$default_value"
     else
@@ -548,14 +598,14 @@ confirm_proceed() {
 
     echo -en "${C_WARN}${msg} ${C_DETAIL}(y/N)${C_RESET} ${C_WHITE}"
     read -n 1 -r response
-    echo -e "${C_RESET}" # Clear formatting and newline
+    echo -e "${C_RESET}"
 
     _log_file "CONFIRM" "User responded: ${response}"
 
     [[ "$response" =~ ^[Yy]$ ]]
 }
 
-# ==================== DEPLOYMENT FUNCTIONS ====================
+# ==================== IMPROVED DEPLOYMENT ====================
 deploy_node() {
     local node_type=$1
     local ip=$2
@@ -572,7 +622,9 @@ deploy_node() {
         if talosctl apply-config --insecure --nodes "$ip" --file "$config_file" >> "$LOG_FILE" 2>&1; then
             log_info "[$ip] Configuration applied successfully"
             _log_file "DEPLOY" "Success: $ip on attempt $attempt"
-            echo "SUCCESS:$ip:$(date +%s)" >> "$STATE_DIR/deploy-results.log"
+
+            # Use separate result files per node to avoid race conditions
+            echo "SUCCESS:$ip:$(date +%s)" >> "$STATE_DIR/deploy-${ip}.result"
             return 0
         else
             local delay=$((RETRY_DELAY * attempt))
@@ -585,7 +637,7 @@ deploy_node() {
 
     log_error "[$ip] Failed after $MAX_RETRIES attempts"
     _log_file "DEPLOY" "Final failure: $ip after $MAX_RETRIES attempts"
-    echo "FAILED:$ip:$(date +%s)" >> "$STATE_DIR/deploy-results.log"
+    echo "FAILED:$ip:$(date +%s)" >> "$STATE_DIR/deploy-${ip}.result"
     return 1
 }
 
@@ -594,7 +646,7 @@ deploy_control_planes() {
     log_step "Deploying Control Planes (${#cp_ips[@]} nodes)"
 
     for ip in "${cp_ips[@]}"; do
-        deploy_node "control-plane" "$ip" "node-cp-${ip}.yaml" || return 1
+        deploy_node "control-plane" "$ip" "${NODES_DIR}/node-cp-${ip}.yaml" || return 1
     done
 
     log_info "Control plane deployment complete"
@@ -605,19 +657,18 @@ deploy_workers_parallel() {
     local total=${#worker_ips[@]}
     log_step "Deploying Workers ($total nodes, max $DEPLOY_JOBS parallel)"
 
-    > "$STATE_DIR/deploy-results.log"
     mkdir -p "$STATE_DIR/pids"
 
     local pids=()
     for ip in "${worker_ips[@]}"; do
-        deploy_node "worker" "$ip" "node-worker-${ip}.yaml" &
+        deploy_node "worker" "$ip" "${NODES_DIR}/node-worker-${ip}.yaml" &
         local pid=$!
         pids+=("$pid")
         echo "$pid:$ip" >> "$STATE_DIR/pids/workers.pids"
         _log_file "DEPLOY" "Spawned $ip as PID $pid"
 
         if [[ ${#pids[@]} -ge $DEPLOY_JOBS ]]; then
-            wait -n ${pids[@]} 2>/dev/null || true
+            wait -n "${pids[@]}" 2>/dev/null || true
             local new_pids=()
             for p in "${pids[@]}"; do
                 kill -0 "$p" 2>/dev/null && new_pids+=("$p")
@@ -626,18 +677,19 @@ deploy_workers_parallel() {
         fi
     done
 
-    [[ ${#pids[@]} -gt 0 ]] && wait ${pids[@]} 2>/dev/null || true
+    [[ ${#pids[@]} -gt 0 ]] && wait "${pids[@]}" 2>/dev/null || true
 
+    # Aggregate results from individual result files
     local success_count=0
     local failed_count=0
-    if [[ -f "$STATE_DIR/deploy-results.log" ]]; then
-        success_count=$(grep -c "^SUCCESS:" "$STATE_DIR/deploy-results.log" 2>/dev/null || true)
-        failed_count=$(grep -c "^FAILED:" "$STATE_DIR/deploy-results.log" 2>/dev/null || true)
-        success_count=$(echo "$success_count" | tr -d '\n\r ')
-        failed_count=$(echo "$failed_count" | tr -d '\n\r ')
-        [[ -z "$success_count" ]] && success_count=0
-        [[ -z "$failed_count" ]] && failed_count=0
-    fi
+    for f in "$STATE_DIR"/deploy-*.result; do
+        [[ -f "$f" ]] || continue
+        if grep -q "^SUCCESS:" "$f" 2>/dev/null; then
+            ((success_count++))
+        elif grep -q "^FAILED:" "$f" 2>/dev/null; then
+            ((failed_count++))
+        fi
+    done
 
     log_info "Worker results: $success_count succeeded, $failed_count failed (total: $total)"
     [[ "$failed_count" -gt 0 ]] && return 1
@@ -671,7 +723,7 @@ wait_for_talos_api() {
     done
 }
 
-# ==================== CONFIGURATION ====================
+# ==================== IMPROVED CONFIG GENERATION ====================
 generate_patches() {
     log_step "Generating Configuration Patches"
 
@@ -680,7 +732,11 @@ generate_patches() {
         local nic="${NODE_INTERFACES[$ip]:-$DEFAULT_NETWORK_INTERFACE}"
         local disk="${NODE_DISKS[$ip]:-$DEFAULT_DISK}"
 
-        cat > "patch-cp-${ip}.yaml" <<EOF
+        # Patch file in nodes dir (temporary, cleaned up later)
+        local patch_file="${NODES_DIR}/patch-cp-${ip}.yaml"
+        local node_config="${NODES_DIR}/node-cp-${ip}.yaml"
+
+        cat > "$patch_file" <<EOF
 machine:
   install:
     disk: /dev/${disk}
@@ -691,6 +747,10 @@ machine:
     interfaces:
       - interface: ${nic}
         dhcp: true
+    extraHostEntries:
+      - ip: ${HAPROXY_IP}
+        aliases:
+          - ${CONTROL_PLANE_ENDPOINT}
   sysctls:
     vm.nr_hugepages: "1024"
   kubelet:
@@ -713,14 +773,15 @@ cluster:
       - ${CONTROL_PLANE_ENDPOINT}
       - 127.0.0.1
 EOF
-        cp controlplane.yaml "node-cp-${ip}.yaml"
+        # Copy base config from script dir or generate location
+        cp "${SCRIPT_DIR}/controlplane.yaml" "$node_config"
 
         run_cmd "Patch control plane config for $ip" \
-            talosctl machineconfig patch "node-cp-${ip}.yaml" \
-            --patch "@patch-cp-${ip}.yaml" \
-            --output "node-cp-${ip}.yaml"
+            talosctl machineconfig patch "$node_config" \
+            --patch "@$patch_file" \
+            --output "$node_config"
 
-        log_detail "Generated control plane config for $ip (VM $vmid)"
+        log_detail "Generated control plane config: $node_config"
     done
 
     for ip in "${WORKER_IPS_ARRAY[@]}"; do
@@ -728,7 +789,10 @@ EOF
         local nic="${NODE_INTERFACES[$ip]:-$DEFAULT_NETWORK_INTERFACE}"
         local disk="${NODE_DISKS[$ip]:-$DEFAULT_DISK}"
 
-        cat > "patch-worker-${ip}.yaml" <<EOF
+        local patch_file="${NODES_DIR}/patch-worker-${ip}.yaml"
+        local node_config="${NODES_DIR}/node-worker-${ip}.yaml"
+
+        cat > "$patch_file" <<EOF
 machine:
   install:
     disk: /dev/${disk}
@@ -739,6 +803,10 @@ machine:
     interfaces:
       - interface: ${nic}
         dhcp: true
+    extraHostEntries:
+      - ip: ${HAPROXY_IP}
+        aliases:
+          - ${CONTROL_PLANE_ENDPOINT}
   sysctls:
     vm.nr_hugepages: "1024"
   kernel:
@@ -767,21 +835,24 @@ cluster:
       - ${ip}
       - ${HAPROXY_IP}
       - ${CONTROL_PLANE_ENDPOINT}
+      - 127.0.0.1
 EOF
-        cp worker.yaml "node-worker-${ip}.yaml"
+        cp "${SCRIPT_DIR}/worker.yaml" "$node_config"
 
         run_cmd "Patch worker config for $ip" \
-            talosctl machineconfig patch "node-worker-${ip}.yaml" \
-            --patch "@patch-worker-${ip}.yaml" \
-            --output "node-worker-${ip}.yaml"
+            talosctl machineconfig patch "$node_config" \
+            --patch "@$patch_file" \
+            --output "$node_config"
 
-        log_detail "Generated worker config for $ip (VM $vmid)"
+        log_detail "Generated worker config: $node_config"
     done
 
-    rm -f patch-*.yaml
+    # Clean up patch files, keep only final node configs
+    rm -f "${NODES_DIR}"/patch-*.yaml
+    log_info "Node configurations generated in ${NODES_DIR}"
 }
 
-# ==================== MAIN BOOTSTRAP ====================
+# ==================== IMPROVED MAIN BOOTSTRAP ====================
 run_bootstrap() {
     local SKIP_PREFLIGHT=false
     local DISCOVER_MODE=false
@@ -794,6 +865,9 @@ run_bootstrap() {
             --dry-run) DRY_RUN=true ;;
         esac
     done
+
+    # Initialize directory structure first
+    init_directories
 
     if [[ "$DISCOVER_MODE" == "true" ]] || [[ "$USE_DISCOVERY" == "true" && -z "$CONTROL_PLANE_IPS" ]]; then
         log_step "Auto-Discovery Mode (Initial)"
@@ -815,13 +889,14 @@ run_bootstrap() {
     log_info "Workers: ${WORKER_IPS_ARRAY[*]:-<none>}"
     log_info "HAProxy: $HAPROXY_IP"
     log_info "Platform: $([[ "$IS_WINDOWS" == "true" ]] && echo "Windows/Git Bash" || echo "Unix/Linux")"
+    log_info "Cluster Dir: $CLUSTER_DIR"
 
     if [[ "$SKIP_PREFLIGHT" == "false" ]]; then
         log_step "Pre-flight Checks"
 
-        for cmd in talosctl kubectl curl ssh; do
+        for cmd in talosctl kubectl curl ssh jq; do  # Added jq check
             if ! command -v "$cmd" &>/dev/null; then
-                log_error "$cmd not found in PATH"
+                log_error "$cmd not found in PATH (jq is required for state management)"
                 exit 1
             fi
         done
@@ -840,23 +915,26 @@ run_bootstrap() {
     fi
 
     log_step "Secrets Management"
-    mkdir -p "$STATE_DIR"
 
-    if [[ ! -f "secrets.yaml" ]]; then
+    # Use secrets directory
+    if [[ ! -f "$SECRETS_FILE" ]]; then
         log_info "Generating new secrets..."
-        run_cmd "Generate Talos secrets" talosctl gen secrets -o secrets.yaml && \
-            chmod 600 secrets.yaml && \
-            cp secrets.yaml "$STATE_DIR/secrets-$(date +%Y%m%d_%H%M%S).yaml"
+        run_cmd "Generate Talos secrets" talosctl gen secrets -o "$SECRETS_FILE" && \
+            chmod 600 "$SECRETS_FILE" && \
+            cp "$SECRETS_FILE" "${SECRETS_DIR}/secrets-$(date +%Y%m%d_%H%M%S).yaml"
     else
-        log_info "Using existing secrets.yaml"
+        log_info "Using existing secrets: $SECRETS_FILE"
     fi
 
     log_step "Generating Talos Configurations"
-    rm -f node-*.yaml controlplane.yaml worker.yaml talosconfig 2>/dev/null || true
+    # Clean only nodes dir, keep secrets
+    rm -rf "${NODES_DIR:?}/"*
+    rm -f "${SCRIPT_DIR}"/controlplane.yaml "${SCRIPT_DIR}"/worker.yaml 2>/dev/null || true
 
+    # Generate configs to script dir first (talosctl limitation), then we'll copy if needed
     run_cmd "Generate Talos configurations" \
         talosctl gen config \
-        --with-secrets secrets.yaml \
+        --with-secrets "$SECRETS_FILE" \
         --kubernetes-version "$KUBERNETES_VERSION" \
         --talos-version "$TALOS_VERSION" \
         --install-image "$INSTALLER_IMAGE" \
@@ -866,7 +944,7 @@ run_bootstrap() {
     generate_patches
 
     log_step "Applying Common Cluster Settings"
-    cat > "cluster-patch.yaml" <<'EOF'
+    cat > "${NODES_DIR}/cluster-patch.yaml" <<'EOF'
 cluster:
   extraManifests:
     - https://raw.githubusercontent.com/alex1989hu/kubelet-serving-cert-approver/main/deploy/standalone-install.yaml
@@ -885,14 +963,14 @@ EOF
 
     for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}"; do
         run_cmd "Apply cluster patch to $ip" \
-            talosctl machineconfig patch "node-cp-${ip}.yaml" \
-            --patch "@cluster-patch.yaml" \
-            --output "node-cp-${ip}.yaml"
+            talosctl machineconfig patch "${NODES_DIR}/node-cp-${ip}.yaml" \
+            --patch "@${NODES_DIR}/cluster-patch.yaml" \
+            --output "${NODES_DIR}/node-cp-${ip}.yaml"
     done
-    rm -f cluster-patch.yaml
+    rm -f "${NODES_DIR}/cluster-patch.yaml"
 
     log_step "Preparing StaticHostConfig"
-    cat > "statichost-config.yaml" <<EOF
+    cat > "${NODES_DIR}/statichost-config.yaml" <<EOF
 apiVersion: v1alpha1
 kind: StaticHostConfig
 name: ${HAPROXY_IP}
@@ -900,8 +978,15 @@ hostnames:
   - ${CONTROL_PLANE_ENDPOINT}
 EOF
 
+    # Move talosconfig to secrets dir
+    if [[ -f "${SCRIPT_DIR}/talosconfig" ]]; then
+        mv "${SCRIPT_DIR}/talosconfig" "$TALOSCONFIG"
+        chmod 600 "$TALOSCONFIG"
+    fi
+
     if [[ "$DRY_RUN" == "true" ]]; then
-        log_info "DRY-RUN: Configuration files generated"
+        log_info "DRY-RUN: Configuration files generated in ${NODES_DIR}"
+        ls -la "${NODES_DIR}/" | _log_file "DRY-RUN" "$(cat)"
         save_state
         exit 0
     fi
@@ -917,7 +1002,8 @@ EOF
         exit 0
     fi
 
-    > "$STATE_DIR/deploy-results.log"
+    # Clean up old result files
+    rm -f "$STATE_DIR"/deploy-*.result "$STATE_DIR"/pids/*.pids 2>/dev/null || true
 
     deploy_control_planes CONTROL_PLANE_IPS_ARRAY || { log_error "Control plane deployment failed"; exit 1; }
 
@@ -926,20 +1012,13 @@ EOF
             deploy_workers_parallel WORKER_IPS_ARRAY || log_warn "Some workers may have failed"
         else
             for ip in "${WORKER_IPS_ARRAY[@]}"; do
-                deploy_node "worker" "$ip" "node-worker-${ip}.yaml" || log_warn "Worker $ip failed"
+                deploy_node "worker" "$ip" "${NODES_DIR}/node-worker-${ip}.yaml" || log_warn "Worker $ip failed"
             done
         fi
     fi
 
     log_step "Waiting for nodes to restart (${POST_DEPLOY_WAIT}s)..."
     sleep "$POST_DEPLOY_WAIT"
-
-    log_step "Applying StaticHostConfig"
-    for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}" "${WORKER_IPS_ARRAY[@]}"; do
-        talosctl patch machineconfig --nodes "$ip" --patch-file "statichost-config.yaml" >> "$LOG_FILE" 2>&1 || \
-            log_warn "StaticHostConfig failed for $ip (may already exist)"
-    done
-    rm -f statichost-config.yaml
 
     log_step "Re-discovering nodes after reboot..."
     local rediscovery_attempts=3
@@ -1002,8 +1081,21 @@ EOF
     }
 
     log_step "Configuring Talos Client"
-    run_cmd "Merge talosconfig" talosctl config merge talosconfig
+    # Use talosconfig from secrets dir
+    if [[ -f "$TALOSCONFIG" ]]; then
+        run_cmd "Merge talosconfig" talosctl config merge "$TALOSCONFIG"
+    else
+        log_warn "talosconfig not found in $SECRETS_DIR, checking script dir..."
+        run_cmd "Merge talosconfig" talosctl config merge talosconfig
+    fi
     run_cmd "Set talosctl endpoint" talosctl config endpoint "$bootstrap_node"
+
+    log_step "Applying StaticHostConfig"
+    for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}" "${WORKER_IPS_ARRAY[@]}"; do
+        talosctl patch machineconfig --nodes "$ip" --patch-file "${NODES_DIR}/statichost-config.yaml" >> "$LOG_FILE" 2>&1 || \
+            log_warn "StaticHostConfig failed for $ip (may already exist)"
+    done
+    rm -f "${NODES_DIR}/statichost-config.yaml"
 
     log_step "Bootstrapping Cluster (etcd)"
     run_cmd "Bootstrap etcd" talosctl bootstrap --nodes "$bootstrap_node"
@@ -1076,6 +1168,52 @@ cmd_logs() {
     check_haproxy_status
 }
 
+# ==================== IMPROVED CLEANUP ====================
+cmd_cleanup() {
+    log_step "Cleaning up generated files"
+
+    # Be more surgical - only remove generated node configs, keep secrets
+    local removed_count=0
+    if [[ -d "$NODES_DIR" ]]; then
+        removed_count=$(find "$NODES_DIR" -type f 2>/dev/null | wc -l)
+        rm -rf "${NODES_DIR:?}/"*
+    fi
+
+    # Remove base generated files from script dir (backward compat)
+    rm -f "${SCRIPT_DIR}"/node-*.yaml \
+          "${SCRIPT_DIR}"/patch-*.yaml \
+          "${SCRIPT_DIR}"/controlplane.yaml \
+          "${SCRIPT_DIR}"/worker.yaml \
+          "${SCRIPT_DIR}"/talosconfig \
+          "${SCRIPT_DIR}"/statichost-config.yaml \
+          "${SCRIPT_DIR}"/cluster-patch.yaml 2>/dev/null || true
+
+    log_info "Cleanup complete (removed ${removed_count} files from nodes/)"
+}
+
+cmd_reset() {
+    log_step "Full reset"
+    if ! confirm_proceed "Permanently delete all configs, state, and secrets for cluster ${CLUSTER_NAME}?"; then
+        log_info "Reset cancelled"
+        exit 0
+    fi
+
+    # Safer reset - remove entire cluster directory
+    if [[ -d "$CLUSTER_DIR" ]]; then
+        rm -rf "${CLUSTER_DIR:?}"
+        log_info "Removed cluster directory: $CLUSTER_DIR"
+    fi
+
+    # Also clean script dir for backward compatibility
+    rm -f "${SCRIPT_DIR}"/node-*.yaml \
+          "${SCRIPT_DIR}"/patch-*.yaml \
+          "${SCRIPT_DIR}"/controlplane.yaml \
+          "${SCRIPT_DIR}"/worker.yaml \
+          "${SCRIPT_DIR}"/talosconfig 2>/dev/null || true
+
+    log_info "Reset complete for cluster ${CLUSTER_NAME}"
+}
+
 cd "$SCRIPT_DIR"
 init_logging
 detect_environment
@@ -1096,20 +1234,10 @@ case "$MODE" in
         cmd_logs
         ;;
     cleanup)
-        log_step "Cleaning up generated files"
-        rm -frv node-*.yaml patch-*.yaml controlplane.yaml worker.yaml talosconfig statichost-config.yaml secrets.yaml .cluster-state 2>&1 | \
-            while read line; do _log_file "CLEANUP" "$line"; done
-        log_info "Cleanup complete"
+        cmd_cleanup
         ;;
     reset)
-        log_step "Full reset"
-        if ! confirm_proceed  "Permanently delete all configs, state, and secrets?"; then
-            log_info "Reset cancelled"
-            exit 0
-        fi
-        rm -rf .cluster-state/ backup/ secrets.yaml node-*.yaml *.yaml talosconfig 2>&1 | \
-            while read line; do _log_file "RESET" "$line"; done
-        log_info "Reset complete"
+        cmd_reset
         ;;
     help|--help|-h|*)
         echo "Usage: $0 {bootstrap|discover|status|logs|cleanup|reset} [--discover|--dry-run|--skip-preflight]"
@@ -1121,5 +1249,12 @@ case "$MODE" in
         echo "  logs         Collect diagnostic logs from all nodes"
         echo "  cleanup      Remove generated configuration files"
         echo "  reset        Full reset (delete secrets and state)"
+        echo ""
+        echo "Directory Structure:"
+        echo "  clusters/${CLUSTER_NAME}/"
+        echo "    ├── nodes/     # Generated node configs (ephemeral)"
+        echo "    ├── secrets/   # Sensitive files (secrets.yaml, talosconfig)"
+        echo "    ├── state/     # Runtime state and deployment results"
+        echo "    └── patches/   # Custom patches (optional)"
         ;;
 esac
