@@ -33,16 +33,28 @@ TALOSCONFIG="${SECRETS_DIR}/talosconfig"
 # ==================== SCRIPT METADATA ====================
 LOG_TIMESTAMP_FORMAT="+%Y-%m-%d %H:%M:%S"
 LOG_FILE=""
-VERSION="1.1.0"
+VERSION="2.0.0"
 
 # Discovery Settings
 CONTROL_PLANE_IPS=""
 WORKER_IPS=""
-PROXMOX_SSH_HOST="${PROXMOX_SSH_HOST:-pve1}"
-DISCOVER_VM_IDS="${DISCOVER_VM_IDS:-201 302}"
+PROXMOX_SSH_HOSTS="${PROXMOX_SSH_HOSTS:-pve1}"
+PROXMOX_SSH_USER="${PROXMOX_SSH_USER:-root}"
+IFS=' ' read -r -a PROXMOX_HOST_ARRAY <<< "$PROXMOX_SSH_HOSTS"
+DISCOVER_VM_IDS="${DISCOVER_VM_IDS:-202}"
+CONTROL_PLANE_VM_IDS="${CONTROL_PLANE_VM_IDS:-202}"
 USE_DISCOVERY="${USE_DISCOVERY:-false}"
 ARP_WAIT_TIME="${ARP_WAIT_TIME:-5}"
 POST_DEPLOY_WAIT="${POST_DEPLOY_WAIT:-90}"
+TERRAFORM_TFVARS="${SCRIPT_DIR}/terraform.tfvars"
+
+# Arrays to store parsed VM configurations
+declare -a TF_CONTROL_PLANE_VMIDS=()
+declare -a TF_WORKER_VMIDS=()
+declare -a TF_CONTROL_PLANE_NAMES=()
+declare -a TF_WORKER_NAMES=()
+TF_PROXMOX_ENDPOINT=""
+TF_PROXMOX_NODE=""
 
 # Cluster Settings
 KUBERNETES_VERSION="v1.34.0"
@@ -97,6 +109,207 @@ IS_WINDOWS=false
 SSH_OPTS=""
 PING_CMD=""
 HOSTS_FILE=""
+
+# ==================== TERRAFORM.TFVARS PARSING ====================
+parse_terraform_tfvars() {
+    local tfvars_file="${1:-$TERRAFORM_TFVARS}"
+
+    if [[ ! -f "$tfvars_file" ]]; then
+        log_warn "terraform.tfvars not found at $tfvars_file"
+        log_info "Falling back to environment variables / defaults"
+        return 1
+    fi
+
+    log_info "Parsing terraform.tfvars for VM configuration..."
+    _log_file "TERRAFORM" "Parsing file: $tfvars_file"
+
+    # Extract Proxmox endpoint
+    TF_PROXMOX_ENDPOINT=$(grep -E '^proxmox_endpoint[[:space:]]*=' "$tfvars_file" | head -1 | cut -d'"' -f2)
+    if [[ -n "$TF_PROXMOX_ENDPOINT" ]]; then
+        log_detail "Found Proxmox endpoint: $TF_PROXMOX_ENDPOINT"
+        # Extract hostname from endpoint URL
+        local proxmox_host
+        proxmox_host=$(echo "$TF_PROXMOX_ENDPOINT" | sed -E 's|https?://||' | cut -d':' -f1)
+        if [[ -n "$proxmox_host" ]]; then
+            PROXMOX_SSH_HOST="$proxmox_host"
+            log_detail "Set PROXMOX_SSH_HOST to: $PROXMOX_SSH_HOST"
+        fi
+    fi
+
+    # Parse control plane configurations
+    local in_cp_config=false
+    local current_name=""
+    local current_vmid=""
+
+    while IFS= read -r line; do
+        # Skip comments
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+        if [[ "$line" =~ talos_control_configuration[[:space:]]*=[[:space:]]*\[ ]]; then
+            in_cp_config=true
+            continue
+        fi
+
+        if [[ "$in_cp_config" == true && "$line" =~ ^\][[:space:]]*$ ]]; then
+            in_cp_config=false
+            if [[ -n "$current_vmid" ]]; then
+                TF_CONTROL_PLANE_VMIDS+=("$current_vmid")
+                TF_CONTROL_PLANE_NAMES+=("${current_name:-unnamed}")
+            fi
+            current_name=""
+            current_vmid=""
+            continue
+        fi
+
+        if [[ "$in_cp_config" == true ]]; then
+            if [[ "$line" =~ \{ ]]; then
+                current_name=""
+                current_vmid=""
+            fi
+
+            if [[ "$line" =~ vmid[[:space:]]*=[[:space:]]*([0-9]+) ]]; then
+                current_vmid="${BASH_REMATCH[1]}"
+            fi
+            if [[ "$line" =~ vm_name[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
+                current_name="${BASH_REMATCH[1]}"
+            fi
+            if [[ "$line" =~ node_name[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
+                local node="${BASH_REMATCH[1]}"
+                [[ -z "$TF_PROXMOX_NODE" ]] && TF_PROXMOX_NODE="$node"
+            fi
+
+            if [[ "$line" =~ \} ]]; then
+                if [[ -n "$current_vmid" ]]; then
+                    TF_CONTROL_PLANE_VMIDS+=("$current_vmid")
+                    TF_CONTROL_PLANE_NAMES+=("${current_name:-unnamed}")
+                fi
+                current_name=""
+                current_vmid=""
+            fi
+        fi
+    done < "$tfvars_file"
+
+    # Parse worker configurations
+    local in_worker_config=false
+    current_name=""
+    current_vmid=""
+
+    while IFS= read -r line; do
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+        if [[ "$line" =~ talos_worker_configuration[[:space:]]*=[[:space:]]*\[ ]]; then
+            in_worker_config=true
+            continue
+        fi
+
+        if [[ "$in_worker_config" == true && "$line" =~ ^\][[:space:]]*$ ]]; then
+            in_worker_config=false
+            if [[ -n "$current_vmid" ]]; then
+                TF_WORKER_VMIDS+=("$current_vmid")
+                TF_WORKER_NAMES+=("${current_name:-unnamed}")
+            fi
+            current_name=""
+            current_vmid=""
+            continue
+        fi
+
+        if [[ "$in_worker_config" == true ]]; then
+            if [[ "$line" =~ \{ ]]; then
+                current_name=""
+                current_vmid=""
+            fi
+
+            if [[ "$line" =~ vmid[[:space:]]*=[[:space:]]*([0-9]+) ]]; then
+                current_vmid="${BASH_REMATCH[1]}"
+            fi
+            if [[ "$line" =~ vm_name[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
+                current_name="${BASH_REMATCH[1]}"
+            fi
+
+            if [[ "$line" =~ \} ]]; then
+                if [[ -n "$current_vmid" ]]; then
+                    TF_WORKER_VMIDS+=("$current_vmid")
+                    TF_WORKER_NAMES+=("${current_name:-unnamed}")
+                fi
+                current_name=""
+                current_vmid=""
+            fi
+        fi
+    done < "$tfvars_file"
+
+    # Build VM ID strings
+    if [[ ${#TF_CONTROL_PLANE_VMIDS[@]} -gt 0 || ${#TF_WORKER_VMIDS[@]} -gt 0 ]]; then
+        local all_vmids=()
+        [[ ${#TF_CONTROL_PLANE_VMIDS[@]} -gt 0 ]] && all_vmids+=("${TF_CONTROL_PLANE_VMIDS[@]}")
+        [[ ${#TF_WORKER_VMIDS[@]} -gt 0 ]] && all_vmids+=("${TF_WORKER_VMIDS[@]}")
+
+        DISCOVER_VM_IDS=""
+        local first=true
+        for vmid in "${all_vmids[@]}"; do
+            if [[ "$first" == true ]]; then
+                DISCOVER_VM_IDS="$vmid"
+                first=false
+            else
+                DISCOVER_VM_IDS="$DISCOVER_VM_IDS $vmid"
+            fi
+        done
+
+        CONTROL_PLANE_VM_IDS=""
+        first=true
+        for vmid in "${TF_CONTROL_PLANE_VMIDS[@]}"; do
+            if [[ "$first" == true ]]; then
+                CONTROL_PLANE_VM_IDS="$vmid"
+                first=false
+            else
+                CONTROL_PLANE_VM_IDS="$CONTROL_PLANE_VM_IDS $vmid"
+            fi
+        done
+
+        log_info "Parsed ${#TF_CONTROL_PLANE_VMIDS[@]} control plane VM(s): ${TF_CONTROL_PLANE_VMIDS[*]:-<none>}"
+        log_info "Parsed ${#TF_WORKER_VMIDS[@]} worker VM(s): ${TF_WORKER_VMIDS[*]:-<none>}"
+        log_detail "DISCOVER_VM_IDS set to: $DISCOVER_VM_IDS"
+        log_detail "CONTROL_PLANE_VM_IDS set to: $CONTROL_PLANE_VM_IDS"
+
+        if [[ -n "$DISCOVER_VM_IDS" ]]; then
+            USE_DISCOVERY="true"
+            log_info "Auto-enabled discovery mode based on terraform.tfvars"
+        fi
+
+        return 0
+    else
+        log_warn "No VM IDs found in terraform.tfvars"
+        return 1
+    fi
+}
+
+show_terraform_config() {
+    log_step "Terraform Configuration Summary"
+
+    if [[ -n "$TF_PROXMOX_ENDPOINT" ]]; then
+        log_info "Proxmox Endpoint: $TF_PROXMOX_ENDPOINT"
+    fi
+    if [[ -n "$TF_PROXMOX_NODE" ]]; then
+        log_info "Proxmox Node:     $TF_PROXMOX_NODE"
+    fi
+    log_info "SSH User:         ${PROXMOX_SSH_USER}@${PROXMOX_SSH_HOST}"
+
+    log_info "Control Plane VMs:"
+    for i in "${!TF_CONTROL_PLANE_VMIDS[@]}"; do
+        local name="${TF_CONTROL_PLANE_NAMES[$i]:-unnamed}"
+        local vmid="${TF_CONTROL_PLANE_VMIDS[$i]}"
+        log_detail "$name (VM ID: $vmid)"
+    done
+
+    log_info "Worker VMs:"
+    for i in "${!TF_WORKER_VMIDS[@]}"; do
+        local name="${TF_WORKER_NAMES[$i]:-unnamed}"
+        local vmid="${TF_WORKER_VMIDS[$i]}"
+        log_detail "$name (VM ID: $vmid)"
+    done
+
+    log_info "Discovery Enabled:  $USE_DISCOVERY"
+    log_info "VM IDs to Discover: $DISCOVER_VM_IDS"
+}
 
 # ==================== BANNER ====================
 print_banner() {
@@ -175,16 +388,22 @@ _log() {
     local msg="$3"
     local time_str=$(date '+%H:%M:%S')
 
-    echo -e "${C_TIMESTAMP}[${time_str}]${C_RESET} ${color}[${level}]${C_RESET} ${msg}${C_RESET}"
+    # Only show DEBUG on console if DEBUG=1
+    if [[ "$level" == "DEBUG" && "${DEBUG:-0}" != "1" ]]; then
+        echo "[$(date "$LOG_TIMESTAMP_FORMAT")] [$level] $msg" >> "$LOG_FILE"
+        return
+    fi
 
+    echo -e "${C_TIMESTAMP}[${time_str}]${C_RESET} ${color}[${level}]${C_RESET} ${msg}${C_RESET}"
     echo "[$(date "$LOG_TIMESTAMP_FORMAT")] [$level] $msg" >> "$LOG_FILE"
 }
 
-log_info()  { _log "INFO"  "$C_INFO"  "$1"; }
 log_error() { _log "ERROR" "$C_ERROR" "$1" >&2; }
 log_warn()  { _log "WARN"  "$C_WARN"  "$1"; }
-log_step()  { _log "STEP"  "$C_STEP"  "$1"; }
-log_detail(){ _log "DETAIL" "$C_DETAIL" "$1"; }
+log_info()  { _log "INFO"  "$C_INFO"  "$1"; }
+log_step()  { _log "STEP"  "$C_STEP"  "▶ $1"; }
+log_debug() { _log "DEBUG" "$C_DEBUG" "$1"; }
+log_detail(){ _log "DETAIL" "$C_DETAIL" "  ↳ $1"; }
 
 log_debug() {
     local msg="$1"
@@ -246,12 +465,13 @@ test_port() {
 
 get_ssh_output() {
     local cmd="$1"
+    local host="${2:-$PROXMOX_SSH_HOST}"
     local output
     local exit_code=0
 
     _log_file "SSH" "Executing on ${PROXMOX_SSH_HOST}: $cmd"
 
-    output=$(ssh ${SSH_OPTS} "${PROXMOX_SSH_HOST}" "$cmd" 2>> "$LOG_FILE") || exit_code=$?
+    output=$(ssh ${SSH_OPTS} "${PROXMOX_SSH_USER}@${host}" "$cmd" 2>> "$LOG_FILE") || exit_code=$?
 
     if [[ $exit_code -ne 0 ]]; then
         log_debug "SSH command failed with exit code $exit_code"
@@ -355,11 +575,17 @@ update_haproxy() {
         log_detail "HAProxy IPs: ${ips[*]}"
         _log_file "HAPROXY" "Updating with IPs: ${ips[*]}"
 
-        if bash "$haproxy_script" "${ips[@]}" >> "$LOG_FILE" 2>&1; then
+        # Add timeout to prevent hanging
+        if timeout 60 bash "$haproxy_script" "${ips[@]}" >> "$LOG_FILE" 2>&1; then
             log_info "HAProxy updated successfully"
             sleep 3
         else
-            log_error "Failed to update HAProxy"
+            local exit_code=$?
+            if [[ $exit_code -eq 124 ]]; then
+                log_error "HAProxy update timed out after 60s"
+            else
+                log_error "Failed to update HAProxy (exit $exit_code)"
+            fi
             log_info "Manual fix: ./update-haproxy.sh ${ips[*]}"
             return 1
         fi
@@ -395,19 +621,33 @@ check_haproxy_status() {
         log_warn "✗ HAProxy port 50000 not reachable"
     fi
 
-    _log_file "HAPROXY" "Querying stats socket..."
-    ssh ${SSH_OPTS} "jake@${HAPROXY_IP}" "echo 'show stat' | sudo nc -U /run/haproxy/admin.sock | grep -E '(k8s-controlplane|talos-controlplane)'" >> "$LOG_FILE" 2>&1 || \
-        log_warn "Could not retrieve HAProxy stats"
+    # Only try SSH to HAProxy if it's one of our known Proxmox hosts
+    local is_proxmox_host=false
+    for host in "${PROXMOX_HOST_ARRAY[@]}"; do
+        if [[ "$host" == "$HAPROXY_IP" || "$HAPROXY_IP" == *"$host"* ]]; then
+            is_proxmox_host=true
+            break
+        fi
+    done
+
+    if [[ "$is_proxmox_host" == "true" ]]; then
+        _log_file "HAPROXY" "Querying stats socket on $HAPROXY_IP..."
+        timeout 10 ssh ${SSH_OPTS} "${PROXMOX_SSH_USER}@${HAPROXY_IP}" \
+            "echo 'show stat' | sudo nc -U /run/haproxy/admin.sock | grep -E '(k8s-controlplane|talos-controlplane)'" \
+            >> "$LOG_FILE" 2>&1 || log_warn "Could not retrieve HAProxy stats via SSH"
+    else
+        log_detail "Skipping HAProxy SSH stats check (HAProxy not on Proxmox host)"
+    fi
 }
 
 # ==================== DISCOVERY ENGINE ====================
 discover_proxmox_nodes() {
     local mode="${1:-initial}"
     log_step "Discovering nodes from Proxmox (VMs: $DISCOVER_VM_IDS) [mode: $mode]"
-    _log_file "DISCOVERY" "Mode: $mode, VMs: $DISCOVER_VM_IDS"
+    _log_file "DISCOVERY" "Mode: $mode, VMs: $DISCOVER_VM_IDS, Hosts: ${PROXMOX_HOST_ARRAY[*]}"
 
     local vmid_array=($DISCOVER_VM_IDS)
-    local cp_vms=" 200 201 "
+    local cp_vms=" ${CONTROL_PLANE_VM_IDS} "
 
     if [[ "$mode" == "post-deploy" ]]; then
         DISC_VM_MACS=()
@@ -420,37 +660,62 @@ discover_proxmox_nodes() {
         _log_file "DISCOVERY" "Cleared previous data"
     fi
 
-    log_info "Fetching VM configurations from $PROXMOX_SSH_HOST..."
-    for vmid in "${vmid_array[@]}"; do
-        local config
-        config=$(get_ssh_output "qm config $vmid") || {
-            log_warn "VM $vmid not found or not accessible"
-            continue
-        }
+    # Try each Proxmox host until one works for VM discovery
+    local connected_host=""
+    local host_vms_found=0
 
-        local name=$(echo "$config" | grep '^name:' | cut -d' ' -f2-)
-        local macs=$(echo "$config" | grep -E '^net[0-9]+:' | grep -oE '[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}' | head -1 | tr '[:upper:]' '[:lower:]')
+    for host in "${PROXMOX_HOST_ARRAY[@]}"; do
+        log_info "Attempting to discover VMs from Proxmox host: ${PROXMOX_SSH_USER}@${host}"
+        host_vms_found=0
 
-        if [[ -n "$macs" ]]; then
-            DISC_VM_MACS[$vmid]="$macs"
-            DISC_VM_NAMES[$vmid]="$name"
-            if [[ "$cp_vms" == *" $vmid "* ]]; then
-                DISC_VM_ROLES[$vmid]="control-plane"
-            else
-                DISC_VM_ROLES[$vmid]="worker"
-            fi
-            log_detail "VM $vmid ($name): MAC=$macs, Role=${DISC_VM_ROLES[$vmid]}"
-            _log_file "DISCOVERY" "VM $vmid: name=$name, mac=$macs, role=${DISC_VM_ROLES[$vmid]}"
+        # Try to fetch VM configs from this host
+        for vmid in "${vmid_array[@]}"; do
+            local config
+            config=$(get_ssh_output "qm config $vmid" "$host" 2>/dev/null) && {
+                local name=$(echo "$config" | grep '^name:' | cut -d' ' -f2-)
+                local macs=$(echo "$config" | grep -E '^net[0-9]+:' | grep -oE '[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}' | head -1 | tr '[:upper:]' '[:lower:]')
+
+                if [[ -n "$macs" ]]; then
+                    DISC_VM_MACS[$vmid]="$macs"
+                    DISC_VM_NAMES[$vmid]="$name"
+                    if [[ "$cp_vms" == *" $vmid "* ]]; then
+                        DISC_VM_ROLES[$vmid]="control-plane"
+                    else
+                        DISC_VM_ROLES[$vmid]="worker"
+                    fi
+                    log_detail "VM $vmid ($name): MAC=$macs, Role=${DISC_VM_ROLES[$vmid]}, Host=$host"
+                    _log_file "DISCOVERY" "VM $vmid: name=$name, mac=$macs, role=${DISC_VM_ROLES[$vmid]}, host=$host"
+                    ((host_vms_found++))
+
+                    # Mark this host as connected if we found VMs
+                    if [[ -z "$connected_host" ]]; then
+                        connected_host="$host"
+                        PROXMOX_SSH_HOST="$host"  # Update global for subsequent operations
+                    fi
+                fi
+            } || {
+                log_debug "VM $vmid not found on host $host"
+            }
+        done
+
+        if [[ $host_vms_found -gt 0 ]]; then
+            log_info "Found $host_vms_found VMs on host $host"
+            # Continue to check other hosts - VMs might be distributed across the cluster
         fi
     done
 
     if [[ ${#DISC_VM_MACS[@]} -eq 0 ]]; then
-        log_error "No VMs discovered"
+        log_error "No VMs discovered on any Proxmox host"
         return 1
     fi
 
-    log_info "Populating ARP table..."
-    _log_file "DISCOVERY" "Pinging subnet 192.168.1.0/24"
+    log_info "Total VMs discovered across all hosts: ${#DISC_VM_MACS[@]}"
+    log_info "Using primary connection host: $connected_host"
+
+    # Use the first successful host for ARP table operations
+    # (ARP is network-wide, so any host in the same subnet should see the same MACs)
+    log_info "Populating ARP table via ${PROXMOX_SSH_USER}@${PROXMOX_SSH_HOST}..."
+    _log_file "DISCOVERY" "Pinging subnet 192.168.1.0/24 via host ${PROXMOX_SSH_HOST}"
 
     get_ssh_output "
         for i in {1..254}; do
@@ -458,7 +723,7 @@ discover_proxmox_nodes() {
             if (( i % 30 == 0 )); then wait; fi
         done
         wait
-    " >> "$LOG_FILE" 2>&1 || true
+    " "$PROXMOX_SSH_HOST" >> "$LOG_FILE" 2>&1 || true
 
     log_detail "Waiting ${ARP_WAIT_TIME}s for ARP table to settle..."
     sleep "$ARP_WAIT_TIME"
@@ -466,13 +731,13 @@ discover_proxmox_nodes() {
     local arp_output=""
     local arp_retries=3
     while [[ $arp_retries -gt 0 ]]; do
-        arp_output=$(get_ssh_output "cat /proc/net/arp") && break
+        arp_output=$(get_ssh_output "cat /proc/net/arp" "$PROXMOX_SSH_HOST") && break
         ((arp_retries--))
         sleep 2
     done
 
     if [[ -z "$arp_output" ]]; then
-        log_error "Failed to get ARP table after retries"
+        log_error "Failed to get ARP table after retries from host $PROXMOX_SSH_HOST"
         return 1
     fi
 
@@ -522,7 +787,8 @@ discover_proxmox_nodes() {
         log_info "Retrying discovery for ${#missing_vms[@]} missing VMs in 10s..."
         sleep 10
 
-        get_ssh_output "cat /proc/net/arp" > /tmp/arp_new.txt 2>>"$LOG_FILE" || true
+        # Retry ARP table fetch from the same host
+        get_ssh_output "cat /proc/net/arp" "$PROXMOX_SSH_HOST" > /tmp/arp_new.txt 2>>"$LOG_FILE" || true
         while read -r ip_addr _ _ mac_addr _ _; do
             [[ -z "$ip_addr" || "$ip_addr" == "IP" ]] && continue
             mac_addr=$(echo "$mac_addr" | tr '[:upper:]' '[:lower:]')
@@ -701,24 +967,27 @@ wait_for_talos_api() {
     local timeout=${2:-300}
     local start_time=$(date +%s)
 
-    log_info "[$ip] Waiting for Talos API (timeout: ${timeout}s)..."
+    log_step "Waiting for Talos API on $ip (timeout: ${timeout}s)"
     _log_file "WAIT-API" "$ip timeout=${timeout}s"
 
     while true; do
         local elapsed=$(($(date +%s) - start_time))
         if [[ $elapsed -gt $timeout ]]; then
-            log_error "[$ip] Timeout waiting for Talos API (${elapsed}s)"
+            log_error "Timeout waiting for Talos API on $ip (${elapsed}s elapsed)"
             _log_file "WAIT-API" "$ip TIMEOUT after ${elapsed}s"
             return 1
         fi
 
         if [[ "$(test_port "$ip" 50000)" == "open" ]]; then
-            log_info "[$ip] Talos API ready (${elapsed}s)"
+            log_info "Talos API ready on $ip (${elapsed}s elapsed)"
             _log_file "WAIT-API" "$ip ready after ${elapsed}s"
             return 0
         fi
 
-        [[ $((elapsed % 10)) -eq 0 ]] && log_detail "[$ip] Still waiting... (${elapsed}s)"
+        # Log progress every 15 seconds
+        if [[ $((elapsed % 15)) -eq 0 && $elapsed -gt 0 ]]; then
+            log_info "Still waiting for $ip... (${elapsed}s elapsed, ${ips_checked:-0}/${ips_total:-?} nodes ready)"
+        fi
         sleep 2
     done
 }
@@ -726,6 +995,32 @@ wait_for_talos_api() {
 # ==================== IMPROVED CONFIG GENERATION ====================
 generate_patches() {
     log_step "Generating Configuration Patches"
+
+    # Define base config locations (in secrets dir, not script dir)
+    local base_cp="${SECRETS_DIR}/controlplane.yaml"
+    local base_worker="${SECRETS_DIR}/worker.yaml"
+
+    # Move base configs from script dir to secrets if they exist there
+    if [[ -f "${SCRIPT_DIR}/controlplane.yaml" ]]; then
+        mv "${SCRIPT_DIR}/controlplane.yaml" "$base_cp"
+        chmod 600 "$base_cp"
+        log_detail "Moved controlplane.yaml to secrets dir"
+    fi
+    if [[ -f "${SCRIPT_DIR}/worker.yaml" ]]; then
+        mv "${SCRIPT_DIR}/worker.yaml" "$base_worker"
+        chmod 600 "$base_worker"
+        log_detail "Moved worker.yaml to secrets dir"
+    fi
+
+    # Verify base configs exist in secrets dir
+    if [[ ! -f "$base_cp" ]]; then
+        log_error "Base controlplane.yaml not found in ${SECRETS_DIR}"
+        exit 1
+    fi
+    if [[ ! -f "$base_worker" ]]; then
+        log_error "Base worker.yaml not found in ${SECRETS_DIR}"
+        exit 1
+    fi
 
     for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}"; do
         local vmid="${NODE_VMIDS[$ip]:-}"
@@ -773,8 +1068,8 @@ cluster:
       - ${CONTROL_PLANE_ENDPOINT}
       - 127.0.0.1
 EOF
-        # Copy base config from script dir or generate location
-        cp "${SCRIPT_DIR}/controlplane.yaml" "$node_config"
+        # Copy from secrets dir base config
+        cp "$base_cp" "$node_config"
 
         run_cmd "Patch control plane config for $ip" \
             talosctl machineconfig patch "$node_config" \
@@ -837,7 +1132,8 @@ cluster:
       - ${CONTROL_PLANE_ENDPOINT}
       - 127.0.0.1
 EOF
-        cp "${SCRIPT_DIR}/worker.yaml" "$node_config"
+        # Copy from secrets dir base config
+        cp "$base_worker" "$node_config"
 
         run_cmd "Patch worker config for $ip" \
             talosctl machineconfig patch "$node_config" \
@@ -850,6 +1146,7 @@ EOF
     # Clean up patch files, keep only final node configs
     rm -f "${NODES_DIR}"/patch-*.yaml
     log_info "Node configurations generated in ${NODES_DIR}"
+    log_info "Base configs secured in ${SECRETS_DIR}"
 }
 
 # ==================== IMPROVED MAIN BOOTSTRAP ====================
@@ -868,6 +1165,10 @@ run_bootstrap() {
 
     # Initialize directory structure first
     init_directories
+
+    # Parse terraform.tfvars for VM configuration
+    parse_terraform_tfvars
+    show_terraform_config
 
     if [[ "$DISCOVER_MODE" == "true" ]] || [[ "$USE_DISCOVERY" == "true" && -z "$CONTROL_PLANE_IPS" ]]; then
         log_step "Auto-Discovery Mode (Initial)"
@@ -929,7 +1230,6 @@ run_bootstrap() {
     log_step "Generating Talos Configurations"
     # Clean only nodes dir, keep secrets
     rm -rf "${NODES_DIR:?}/"*
-    rm -f "${SCRIPT_DIR}"/controlplane.yaml "${SCRIPT_DIR}"/worker.yaml 2>/dev/null || true
 
     # Generate configs to script dir first (talosctl limitation), then we'll copy if needed
     run_cmd "Generate Talos configurations" \
@@ -1179,7 +1479,7 @@ cmd_cleanup() {
         rm -rf "${NODES_DIR:?}/"*
     fi
 
-    # Remove base generated files from script dir (backward compat)
+    # Remove any stray base configs from script dir (backward compat)
     rm -f "${SCRIPT_DIR}"/node-*.yaml \
           "${SCRIPT_DIR}"/patch-*.yaml \
           "${SCRIPT_DIR}"/controlplane.yaml \
@@ -1189,6 +1489,7 @@ cmd_cleanup() {
           "${SCRIPT_DIR}"/cluster-patch.yaml 2>/dev/null || true
 
     log_info "Cleanup complete (removed ${removed_count} files from nodes/)"
+    log_info "Secrets preserved in ${SECRETS_DIR}"
 }
 
 cmd_reset() {
@@ -1198,7 +1499,7 @@ cmd_reset() {
         exit 0
     fi
 
-    # Safer reset - remove entire cluster directory
+    # Safer reset - remove entire cluster directory (includes secrets, nodes, state)
     if [[ -d "$CLUSTER_DIR" ]]; then
         rm -rf "${CLUSTER_DIR:?}"
         log_info "Removed cluster directory: $CLUSTER_DIR"
