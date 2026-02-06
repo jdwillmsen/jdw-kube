@@ -3,7 +3,8 @@
 *.tfstate.*
 *.tfstate.backup
 *.tfstate.lock.info
-.terraform/
+terraform/.terraform/
+terraform/terraform.tfvars.*
 .terraform.lock.hcl
 .tf-deploy-state/
 
@@ -25,3 +26,7 @@ backups/
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Bootstrap Files
+logs/
+clusters/
