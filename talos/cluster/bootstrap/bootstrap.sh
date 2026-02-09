@@ -1,23 +1,15 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Talos Bootstrap Script - Hierarchical Logging Refactor
+# Hierarchy: PLAN > STAGE > JOB > STEP > DETAIL
+
 set -euo pipefail
 
-# ==================== IMPROVED DIRECTORY STRUCTURE ====================
-# Directory layout:
-# bootstrap/
-# ├── bootstrap.sh
-# ├── lib/                    # (optional future: modular functions)
-# ├── clusters/
-# │   └── proxmox-talos-test/ # $CLUSTER_NAME
-# │       ├── nodes/          # Generated node configs (gitignored)
-# │       ├── secrets/        # Sensitive files (gitignored)
-# │       ├── state/          # Runtime state (gitignored)
-# │       └── patches/        # Your custom patches (optional, tracked)
-# └── logs/                   # Global logs (gitignored)
-
+# ==================== CONFIGURATION ====================
+VERSION="2.5.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLUSTER_NAME="proxmox-talos-test"
+readonly SCRIPT_DIR
 
-# Base directories - organized by cluster
+CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
 CLUSTER_DIR="${SCRIPT_DIR}/clusters/${CLUSTER_NAME}"
 NODES_DIR="${CLUSTER_DIR}/nodes"
 SECRETS_DIR="${CLUSTER_DIR}/secrets"
@@ -25,124 +17,560 @@ STATE_DIR="${CLUSTER_DIR}/state"
 PATCH_DIR="${CLUSTER_DIR}/patches"
 LOG_DIR="${SCRIPT_DIR}/logs"
 
-# Specific files
-STATE_FILE="${STATE_DIR}/cluster-state.json"
-SECRETS_FILE="${SECRETS_DIR}/secrets.yaml"
-TALOSCONFIG="${SECRETS_DIR}/talosconfig"
+TERRAFORM_TFVARS="${TERRAFORM_TFVARS:-${SCRIPT_DIR}/../terraform.tfvars}"
+SECRETS_FILE="${SECRETS_FILE:-${SECRETS_DIR}/secrets.yaml}"
+STATE_FILE="${STATE_FILE:-${STATE_DIR}/bootstrap-state.json}"
+TALOSCONFIG="${TALOSCONFIG:-${SECRETS_DIR}/talosconfig}"
+KUBECONFIG_PATH="${HOME}/.kube/config-${CLUSTER_NAME}"
 
-# ==================== SCRIPT METADATA ====================
-LOG_TIMESTAMP_FORMAT="+%Y-%m-%d %H:%M:%S"
-LOG_FILE=""
-VERSION="2.0.0"
-
-# Discovery Settings
-CONTROL_PLANE_IPS=""
-WORKER_IPS=""
-PROXMOX_SSH_HOSTS="${PROXMOX_SSH_HOSTS:-pve1}"
-PROXMOX_SSH_USER="${PROXMOX_SSH_USER:-root}"
-IFS=' ' read -r -a PROXMOX_HOST_ARRAY <<< "$PROXMOX_SSH_HOSTS"
-DISCOVER_VM_IDS="${DISCOVER_VM_IDS:-202}"
-CONTROL_PLANE_VM_IDS="${CONTROL_PLANE_VM_IDS:-202}"
-USE_DISCOVERY="${USE_DISCOVERY:-false}"
-ARP_WAIT_TIME="${ARP_WAIT_TIME:-5}"
-POST_DEPLOY_WAIT="${POST_DEPLOY_WAIT:-90}"
-TERRAFORM_TFVARS="${SCRIPT_DIR}/terraform.tfvars"
-
-# Arrays to store parsed VM configurations
-declare -a TF_CONTROL_PLANE_VMIDS=()
-declare -a TF_WORKER_VMIDS=()
-declare -a TF_CONTROL_PLANE_NAMES=()
-declare -a TF_WORKER_NAMES=()
-TF_PROXMOX_ENDPOINT=""
-TF_PROXMOX_NODE=""
-
-# Cluster Settings
-KUBERNETES_VERSION="v1.34.0"
-TALOS_VERSION="v1.12.1"
-HAPROXY_IP="192.168.1.237"
-CONTROL_PLANE_ENDPOINT="$CLUSTER_NAME.jdwkube.com"
-
-# Hardware Settings
-DEFAULT_NETWORK_INTERFACE="eth0"
-DEFAULT_DISK="sda"
-declare -A NODE_INTERFACES=()
-declare -A NODE_DISKS=()
-declare -A NODE_VMIDS=()
-
-# Talos Factory Image
-INSTALLER_IMAGE="factory.talos.dev/nocloud-installer/b553b4a25d76e938fd7a9aaa7f887c06ea4ef75275e64f4630e6f8f739cf07df:${TALOS_VERSION}"
-
-# Performance Settings
-MAX_RETRIES=5
-RETRY_DELAY=5
-PARALLEL_WORKERS=true
-NODE_RESTART_WAIT=120
-BOOTSTRAP_TIMEOUT=1800
-DEPLOY_JOBS=3
-API_READY_WAIT=180
-
-# State Management
-declare -A DISC_VM_MACS=()
-declare -A DISC_VM_NAMES=()
-declare -A DISC_VM_IPS=()
-declare -A DISC_MAC_TO_IP=()
-declare -A DISC_VM_ROLES=()
-DISC_CONTROL_PLANE_IPS=()
-DISC_WORKER_IPS=()
+# Node Configuration
+CONTROL_PLANE_ENDPOINT="${CONTROL_PLANE_ENDPOINT:-$CLUSTER_NAME.jdwkube.com}"
+HAPROXY_IP="${HAPROXY_IP:-192.168.1.237}"
+HAPROXY_LOGIN_USERNAME="${HAPROXY_LOGIN_USERNAME:-jake}"
+HAPROXY_STATS_USERNAME="${HAPROXY_STATS_USERNAME:-admin}"
+HAPROXY_STATS_PASSWORD="${HAPROXY_STATS_PASSWORD:-admin}"
+CONTROL_PLANE_IPS="${CONTROL_PLANE_IPS:-}"
+WORKER_IPS="${WORKER_IPS:-}"
 ORIGINAL_CONTROL_PLANE_IPS=""
 ORIGINAL_WORKER_IPS=""
 
-# Color codes
-C_RESET='\033[0m'
-C_TIMESTAMP='\033[0;90m'     # Gray
-C_INFO='\033[0;32m'          # Green
-C_ERROR='\033[0;31m'         # Red
-C_WARN='\033[1;33m'          # Yellow bold
-C_STEP='\033[0;34m'          # Blue
-C_DETAIL='\033[0;36m'        # Cyan
-C_DEBUG='\033[0;35m'         # Magenta
-C_WHITE='\033[0;97m'         # Bright white (for messages)
-C_BOLD='\033[1m'             # Bold modifier
+# Kubernetes/Talos Versions
+KUBERNETES_VERSION="${KUBERNETES_VERSION:-v1.35.0}"
+TALOS_VERSION="${TALOS_VERSION:-v1.12.3}"
+INSTALLER_IMAGE="${INSTALLER_IMAGE:-factory.talos.dev/nocloud-installer/b553b4a25d76e938fd7a9aaa7f887c06ea4ef75275e64f4630e6f8f739cf07df:${TALOS_VERSION}}"
 
-# platform detection
+# Hardware Defaults
+DEFAULT_NETWORK_INTERFACE="${DEFAULT_NETWORK_INTERFACE:-eth0}"
+DEFAULT_DISK="${DEFAULT_DISK:-sda}"
+
+# Parallelism
+MAX_PARALLEL_CONTROL_PLANES=3
+MAX_PARALLEL_WORKERS=3
+
+# Timeouts
+BOOTSTRAP_TIMEOUT=300
+REBOOT_WAIT_TIME=180
+API_READY_WAIT=180
+
+# State
+declare -A NODE_DISKS
+declare -A NODE_INTERFACES
+declare -A VMID_BY_IP
+declare -A IP_BY_MAC
+declare -A MAC_BY_VMDATA
+declare -A NODE_ROLES
+
+# Terraform parsed values
+TF_PROXMOX_ENDPOINT=""
+TF_PROXMOX_NODE=""
+TF_PROXMOX_SSH_USER="root"
+TF_PROXMOX_SSH_HOST=""
+TF_CONTROL_PLANE_VMIDS=()
+TF_CONTROL_PLANE_NAMES=()
+TF_WORKER_VMIDS=()
+TF_WORKER_NAMES=()
+DISCOVER_VM_IDS=""
+CONTROL_PLANE_VM_IDS=""
+
+# Platform detection
 IS_WINDOWS=false
 SSH_OPTS=""
 PING_CMD=""
 HOSTS_FILE=""
 
-# ==================== TERRAFORM.TFVARS PARSING ====================
-parse_terraform_tfvars() {
-    local tfvars_file="${1:-$TERRAFORM_TFVARS}"
+# ==================== HIERARCHICAL LOGGING SYSTEM ====================
 
-    if [[ ! -f "$tfvars_file" ]]; then
-        log_warn "terraform.tfvars not found at $tfvars_file"
-        log_info "Falling back to environment variables / defaults"
-        return 1
+# Configuration
+LOG_LEVEL="${LOG_LEVEL:-INFO}"
+LOG_DEPTH="${LOG_DEPTH:-4}"
+LOG_TIMESTAMPS="${LOG_TIMESTAMPS:-1}"
+LOG_ICONS="${LOG_ICONS:-0}"
+LOG_FILE=""
+CONSOLE_LOG_FILE=""
+
+# Severity Levels
+declare -A SEV_LEVELS=([FATAL]=0 [ERROR]=1 [WARN]=2 [INFO]=3 [DEBUG]=4 [TRACE]=5)
+
+# Severity Icons (inside brackets)
+declare -A SEV_ICONS=(
+    [FATAL]='🚫'
+    [ERROR]='❌'
+    [WARN]='⚠️'
+    [INFO]='ℹ️'
+    [DEBUG]='🔧'
+    [TRACE]='🔬'
+)
+
+# Severity Labels (text mode - default)
+declare -A SEV_LABELS=(
+    [FATAL]='FATAL'
+    [ERROR]='ERROR'
+    [WARN]='WARN'
+    [INFO]='INFO'
+    [DEBUG]='DEBUG'
+    [TRACE]='TRACE'
+)
+
+# Severity Colors (for severity bracket)
+declare -A SEV_COLORS=(
+    [FATAL]='\033[1;97;41m'  # White on red background
+    [ERROR]='\033[0;91m'     # Bright red
+    [WARN]='\033[0;93m'      # Bright yellow
+    [INFO]='\033[0;97m'      # White
+    [DEBUG]='\033[0;94m'     # Bright blue
+    [TRACE]='\033[0;90m'     # Gray
+)
+
+# Hierarchy Icons (inside brackets)
+declare -A HIER_ICONS=(
+    [PLAN]='▶'
+    [STAGE]='◆'
+    [JOB]='▸'
+    [STEP]='→'
+    [DETAIL]='·'
+)
+
+# Hierarchy Labels (text mode - default)
+declare -A HIER_LABELS=(
+    [PLAN]='PLAN'
+    [STAGE]='STAGE'
+    [JOB]='JOB'
+    [STEP]='STEP'
+    [DETAIL]='DETAIL'
+)
+
+# Hierarchy Colors (for hierarchy bracket)
+declare -A HIER_COLORS=(
+    [PLAN]='\033[1;95m'      # Bright magenta
+    [STAGE]='\033[1;94m'     # Bright blue
+    [JOB]='\033[1;96m'       # Bright cyan
+    [STEP]='\033[0;92m'      # Green
+    [DETAIL]='\033[0;37m'    # Light gray
+)
+
+C_RESET='\033[0m'
+C_TIMESTAMP='\033[0;90m'
+
+# Timestamp format
+LOG_TIMESTAMP_FORMAT="+%Y-%m-%d %H:%M:%S"
+
+# ==================== CORE LOGGING FUNCTION ====================
+
+log() {
+    local hierarchy="${1:-STEP}"
+    local severity="${2:-INFO}"
+    local message="$3"
+
+    [[ -z "${SEV_LEVELS[$severity]:-}" ]] && severity="INFO"
+
+    local hier_num=0
+    case "$hierarchy" in
+        PLAN) hier_num=0 ;;
+        STAGE) hier_num=1 ;;
+        JOB) hier_num=2 ;;
+        STEP) hier_num=3 ;;
+        DETAIL) hier_num=4 ;;
+    esac
+
+    [[ ${SEV_LEVELS[$severity]} -gt ${SEV_LEVELS[$LOG_LEVEL]} ]] && return
+    [[ $hier_num -gt $LOG_DEPTH ]] && return
+
+    # Build output
+    local output=""
+
+    # Timestamp: [14:32:10]
+    if [[ "$LOG_TIMESTAMPS" == "1" ]]; then
+        output+="${C_TIMESTAMP}[$(date '+%H:%M:%S')]${C_RESET} "
     fi
 
-    log_info "Parsing terraform.tfvars for VM configuration..."
-    _log_file "TERRAFORM" "Parsing file: $tfvars_file"
+    # Severity: [INFO] or [ℹ️] depending on LOG_ICONS setting
+    if [[ "$LOG_ICONS" == "1" ]]; then
+        # Icon mode
+        local sev_display="${SEV_ICONS[$severity]}"
+        output+="${SEV_COLORS[$severity]}[${sev_display}]${C_RESET} "
+    else
+        # Text mode (default) - padded to 5 chars for alignment
+        local sev_label="${SEV_LABELS[$severity]}"
+        printf -v sev_padded "%-5s" "$sev_label"
+        output+="${SEV_COLORS[$severity]}[${sev_padded}]${C_RESET} "
+    fi
 
-    # Extract Proxmox endpoint
+    # Hierarchy: [STEP] or [▶] depending on LOG_ICONS setting
+    if [[ "$LOG_ICONS" == "1" ]]; then
+        # Icon mode
+        local hier_display="${HIER_ICONS[$hierarchy]}"
+        output+="${HIER_COLORS[$hierarchy]}[${hier_display}]${C_RESET} "
+    else
+        # Text mode (default) - padded to 6 chars for alignment
+        local hier_label="${HIER_LABELS[$hierarchy]}"
+        printf -v hier_padded "%-6s" "$hier_label"
+        output+="${HIER_COLORS[$hierarchy]}[${hier_padded}]${C_RESET} "
+    fi
+
+    # Message (no indentation - clean alignment)
+    output+="${message}"
+
+    # Print to console
+    echo -e "$output"
+
+    # Write to console log file (with ANSI codes)
+    if [[ -n "${CONSOLE_LOG_FILE:-}" ]]; then
+        echo -e "$output" >> "$CONSOLE_LOG_FILE"
+    fi
+
+    [[ "$severity" == "FATAL" ]] && exit 1
+
+    # Write to regular log file (text labels for grep-ability)
+    if [[ -n "${LOG_FILE:-}" ]]; then
+        local timestamp=$(date "$LOG_TIMESTAMP_FORMAT")
+        echo "[$timestamp] [$severity] [$hierarchy] $message" >> "$LOG_FILE"
+    fi
+}
+
+# ==================== HIERARCHY LOGGING WRAPPERS ====================
+
+plan_fatal_log() { log "PLAN" "FATAL" "$1"; }
+plan_error_log() { log "PLAN" "ERROR" "$1"; }
+plan_warn_log()  { log "PLAN" "WARN" "$1"; }
+plan_info_log()  { log "PLAN" "INFO" "$1"; }
+plan_debug_log() { log "PLAN" "DEBUG" "$1"; }
+
+stage_fatal_log() { log "STAGE" "FATAL" "$1"; }
+stage_error_log() { log "STAGE" "ERROR" "$1"; }
+stage_warn_log()  { log "STAGE" "WARN" "$1"; }
+stage_info_log()  { log "STAGE" "INFO" "$1"; }
+stage_debug_log() { log "STAGE" "DEBUG" "$1"; }
+
+job_fatal_log() { log "JOB" "FATAL" "$1"; }
+job_error_log() { log "JOB" "ERROR" "$1"; }
+job_warn_log()  { log "JOB" "WARN" "$1"; }
+job_info_log()  { log "JOB" "INFO" "$1"; }
+job_debug_log() { log "JOB" "DEBUG" "$1"; }
+
+step_fatal_log() { log "STEP" "FATAL" "$1"; }
+step_error_log() { log "STEP" "ERROR" "$1"; }
+step_warn_log()  { log "STEP" "WARN" "$1"; }
+step_info_log()  { log "STEP" "INFO" "$1"; }
+step_debug_log() { log "STEP" "DEBUG" "$1"; }
+
+detail_fatal_log() { log "DETAIL" "FATAL" "$1"; }
+detail_error_log() { log "DETAIL" "ERROR" "$1"; }
+detail_warn_log()  { log "DETAIL" "WARN" "$1"; }
+detail_info_log()  { log "DETAIL" "INFO" "$1"; }
+detail_debug_log() { log "DETAIL" "DEBUG" "$1"; }
+detail_trace_log() { log "DETAIL" "TRACE" "$1"; }
+
+# ==================== UTILITY LOGGERS ====================
+
+log_file_only() {
+    if [[ -n "${LOG_FILE:-}" ]]; then
+        echo "[$(date "$LOG_TIMESTAMP_FORMAT")] [$1] $2" >> "$LOG_FILE"
+    fi
+}
+
+init_logging() {
+    mkdir -p "$LOG_DIR"
+
+    # Timestamped log file (keeps history)
+    LOG_FILE="$LOG_DIR/bootstrap-$(date +%Y%m%d_%H%M%S).log"
+    touch "$LOG_FILE"
+
+    local args_str=""
+    if [[ $# -gt 0 ]]; then
+        args_str="Arguments: $*"
+    else
+        args_str="Arguments: (none)"
+    fi
+
+    # Console log file (overwritten each run, keeps colors/formatting)
+    CONSOLE_LOG_FILE="$LOG_DIR/console-logs.log"
+    # Clear previous console log and add header
+    {
+        echo "========================================"
+        echo "Console Log Started: $(date)"
+        echo "Version: $VERSION"
+        echo "Script: $0"
+        echo "User: $(whoami)"
+        echo "Working Directory: $SCRIPT_DIR"
+        echo "Hostname: ${HOSTNAME:-$(hostname)}"
+        echo "Platform: $OSTYPE"
+        echo "Cluster: $CLUSTER_NAME"
+        echo "Control Plane Endpoint: $CONTROL_PLANE_ENDPOINT"
+        echo "HAProxy IP: $HAPROXY_IP"
+        echo "$args_str"
+        echo "Environment:"
+        echo "  KUBERNETES_VERSION=$KUBERNETES_VERSION"
+        echo "  TALOS_VERSION=$TALOS_VERSION"
+        echo "  INSTALLER_IMAGE=$INSTALLER_IMAGE"
+        echo "  DEFAULT_NETWORK_INTERFACE=$DEFAULT_NETWORK_INTERFACE"
+        echo "  DEFAULT_DISK=$DEFAULT_DISK"
+        echo "========================================"
+    } > "$CONSOLE_LOG_FILE"
+
+    {
+        echo "========================================"
+        echo "Talos Bootstrap Log Started: $(date)"
+        echo "Version: $VERSION"
+        echo "Script: $0"
+        echo "User: $(whoami)"
+        echo "Working Directory: $SCRIPT_DIR"
+        echo "Hostname: ${HOSTNAME:-$(hostname)}"
+        echo "Platform: $OSTYPE"
+        echo "Cluster: $CLUSTER_NAME"
+        echo "Control Plane Endpoint: $CONTROL_PLANE_ENDPOINT"
+        echo "HAProxy IP: $HAPROXY_IP"
+        echo "$args_str"
+        echo "Environment:"
+        echo "  KUBERNETES_VERSION=$KUBERNETES_VERSION"
+        echo "  TALOS_VERSION=$TALOS_VERSION"
+        echo "  INSTALLER_IMAGE=$INSTALLER_IMAGE"
+        echo "  DEFAULT_NETWORK_INTERFACE=$DEFAULT_NETWORK_INTERFACE"
+        echo "  DEFAULT_DISK=$DEFAULT_DISK"
+        echo "========================================"
+    } >> "$LOG_FILE"
+
+    print_banner
+
+    trap 'cleanup_on_exit' EXIT INT TERM
+}
+
+cleanup_on_exit() {
+    local exit_code=$?
+
+    rm -f /tmp/haproxy.cfg.* 2>/dev/null || true
+
+    if [[ $exit_code -ne 0 && -n "${LOG_FILE:-}" ]]; then
+        log_file_only "EXIT" "Script exited with code $exit_code"
+    fi
+
+    # Add footer to console log
+    if [[ -n "${CONSOLE_LOG_FILE:-}" ]]; then
+        {
+            echo ""
+            echo "========================================"
+            echo "Console Log Ended: $(date)"
+            echo "Exit Code: $exit_code"
+            echo "========================================"
+        } >> "$CONSOLE_LOG_FILE"
+    fi
+
+    exit $exit_code
+}
+
+print_banner() {
+    local color_reset='\033[0m'
+    local color_blue='\033[1;34m'
+    local color_cyan='\033[1;36m'
+    local color_white='\033[1;37m'
+    echo -e "$color_blue━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$color_reset"
+    echo -e "$color_white  ▄▄▄█████▓ ▄▄▄       ██▓      ▒█████    ██████ $color_reset"
+    echo -e "$color_white  ▓  ██▒ ▓▒▒████▄    ▓██▒     ▒██▓  ██▒▒██    ▒ $color_reset"
+    echo -e "$color_white  ▒ ▓██░ ▒░▒██  ▀█▄  ▒██░     ▒██▒  ██░░ ▓██▄   $color_reset"
+    echo -e "$color_white  ░ ▓██▓ ░ ░██▄▄▄▄██ ▒██░     ░██  █▀ ░  ▒   ██▒$color_reset"
+    echo -e "$color_white    ▒██▒ ░  ▓█   ▓██▒░██████▒░▒███▒█▄ ▒██████▒▒$color_reset"
+    echo -e "$color_white    ▒ ░░    ▒▒   ▓▒█░░ ▒░▓  ░░░ ▒▒░ ▒ ▒ ▒▓▒ ▒ ░$color_reset"
+    echo -e "$color_cyan             BOOTSTRAP UTILITY v$VERSION$color_reset"
+    echo -e "$color_blue━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$color_reset"
+    echo
+}
+
+# ==================== STEP LEVEL FUNCTIONS ====================
+
+step_run_command() {
+    local description="$1"
+    local verbose="${VERBOSE:-false}"
+    shift
+    local cmd=("$@")
+
+    step_info_log "$description"
+    log_file_only "EXEC" "${cmd[*]}"
+
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        step_info_log "[DRY RUN] Would execute: ${cmd[*]}"
+        return 0
+    fi
+
+    local output
+    local exit_code=0
+
+    if output=$("${cmd[@]}" 2>&1); then
+        log_file_only "OUTPUT" "$output"
+        [[ "$verbose" == "true" && -n "$output" ]] && detail_info_log "$output"
+        log_file_only "SUCCESS" "$description"
+        return 0
+    else
+        exit_code=$?
+        step_error_log "$description failed (exit $exit_code)"
+        log_file_only "FAIL" "$output"
+        if [[ -n "$output" ]]; then
+            local truncated="${output:0:500}"
+            if [[ ${#output} -gt 500 ]]; then
+                truncated="${truncated}... [truncated, see log file for full output]"
+            fi
+            step_error_log "Command output: $truncated"
+        fi
+        return $exit_code
+    fi
+}
+
+step_test_port() {
+    local ip="$1"
+    local port="${2:-50000}"
+    local timeout="${3:-2}"
+
+    step_info_log "Testing $ip:$port"
+
+    if timeout "$timeout" bash -c "echo >/dev/tcp/$ip/$port" 2>/dev/null; then
+        detail_info_log "$ip:$port is OPEN"
+        return 0
+    else
+        detail_warn_log "$ip:$port is CLOSED"
+        return 1
+    fi
+}
+
+step_apply_config() {
+    local ip="$1"
+    local config_file="$2"
+    local vmid="$3"
+    local max_attempts="${4:-5}"
+
+    step_info_log "Apply config to $ip (VM $vmid)"
+
+    local attempt=1
+    while [[ $attempt -le $max_attempts ]]; do
+        detail_info_log "Attempt $attempt/$max_attempts"
+
+        if talosctl apply-config --nodes "$ip" --file "$config_file" --insecure 2>>"$LOG_FILE"; then
+            step_info_log "Configuration applied successfully"
+            return 0
+        fi
+
+        attempt=$(($attempt + 1))
+        [[ $attempt -le $max_attempts ]] && sleep 5
+    done
+
+    step_error_log "Failed to apply config after $max_attempts attempts"
+    return 1
+}
+
+step_wait_for_api() {
+    local ip="$1"
+    local timeout="${2:-180}"
+    local mode="${3:-secure}"  # 'insecure' for initial, 'secure' for post-reboot
+
+    step_info_log "Wait for Talos API on $ip (mode: $mode)"
+    detail_info_log "Timeout: ${timeout}s"
+
+    local -i start_time
+    start_time=$(date +%s)
+    local -i elapsed=0
+
+    export TALOSCONFIG="$TALOSCONFIG"
+
+    while (( elapsed < timeout )); do
+        elapsed=$(($(date +%s) - start_time))
+
+        if [[ "$mode" == "insecure" ]]; then
+            if talosctl version --nodes "$ip" --insecure &>/dev/null; then
+                step_info_log "API ready (insecure) (${elapsed}s)"
+                return 0
+            fi
+        else
+            if talosctl version --nodes "$ip" --endpoints "$ip" &>/dev/null; then
+                step_info_log "API ready (secure) (${elapsed}s)"
+                return 0
+            fi
+        fi
+
+        detail_info_log "Waiting... (${elapsed}s elapsed)"
+        sleep 5
+        elapsed=$(($(date +%s) - start_time))
+    done
+
+    step_error_log "Timeout waiting for API on $ip (${timeout}s)"
+    return 1
+}
+
+# ==================== JOB LEVEL FUNCTIONS ====================
+
+job_init_directories() {
+    job_info_log "Initialize Directories"
+
+    step_info_log "Create directory structure"
+    mkdir -p "$NODES_DIR" "$SECRETS_DIR" "$STATE_DIR" "$PATCH_DIR" "$LOG_DIR"
+
+    step_info_log "Setup .gitignore"
+    if [[ ! -f "${CLUSTER_DIR}/.gitignore" ]]; then
+        cat > "${CLUSTER_DIR}/.gitignore" <<'EOF'
+/nodes/
+/secrets/
+/state/
+/*.log
+EOF
+        detail_info_log "Created .gitignore"
+    else
+        detail_info_log ".gitignore already exists"
+    fi
+
+    log_file_only "INIT" "Directories: nodes=${NODES_DIR}, secrets=${SECRETS_DIR}, state=${STATE_DIR}"
+}
+
+job_detect_environment() {
+    job_info_log "Detect Platform"
+
+    step_info_log "Check operating system"
+    if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$MSYSTEM" == "MINGW"* ]] \
+    || [[ -n "${WINDIR:-}" ]] || [[ -n "${MINGW_PREFIX:-}" ]] || [[ "$TERM" == "xterm-256color" \
+    && -n "${MSYSTEM:-}" ]]; then
+        IS_WINDOWS=true
+        SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        PING_CMD="ping -n 1 -w 2000"
+        HOSTS_FILE="/c/Windows/System32/drivers/etc/hosts"
+        step_info_log "Detected Windows/Git Bash environment"
+    else
+        IS_WINDOWS=false
+        SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=no -o ControlMaster=auto -o ControlPath=~/.ssh/proxmox_mux_%h_%p_%r -o ControlPersist=600"
+        PING_CMD="ping -c 1 -W 2"
+        HOSTS_FILE="/etc/hosts"
+        step_info_log "Detected Unix/Linux environment"
+    fi
+
+    detail_info_log "SSH options configured"
+}
+
+job_parse_terraform() {
+    local tfvars_file="${1:-$TERRAFORM_TFVARS}"
+
+    job_info_log "Parse Terraform Configuration"
+
+    step_info_log "Locate terraform.tfvars"
+    if [[ ! -f "$tfvars_file" ]]; then
+        step_warn_log "File not found: $tfvars_file"
+        step_info_log "Falling back to environment variables / defaults"
+        return 1
+    fi
+    step_info_log "Found: $tfvars_file"
+
+    step_info_log "Parse Proxmox endpoint"
     TF_PROXMOX_ENDPOINT=$(grep -E '^proxmox_endpoint[[:space:]]*=' "$tfvars_file" | head -1 | cut -d'"' -f2)
     if [[ -n "$TF_PROXMOX_ENDPOINT" ]]; then
-        log_detail "Found Proxmox endpoint: $TF_PROXMOX_ENDPOINT"
-        # Extract hostname from endpoint URL
         local proxmox_host
         proxmox_host=$(echo "$TF_PROXMOX_ENDPOINT" | sed -E 's|https?://||' | cut -d':' -f1)
         if [[ -n "$proxmox_host" ]]; then
             PROXMOX_SSH_HOST="$proxmox_host"
-            log_detail "Set PROXMOX_SSH_HOST to: $PROXMOX_SSH_HOST"
+            detail_info_log "Endpoint: $TF_PROXMOX_ENDPOINT"
+            detail_info_log "SSH host: $PROXMOX_SSH_HOST"
         fi
     fi
 
-    # Parse control plane configurations
+    step_info_log "Parse control plane VMs"
     local in_cp_config=false
     local current_name=""
     local current_vmid=""
+    local cp_count=0
 
     while IFS= read -r line; do
-        # Skip comments
         [[ "$line" =~ ^[[:space:]]*# ]] && continue
 
         if [[ "$line" =~ talos_control_configuration[[:space:]]*=[[:space:]]*\[ ]]; then
@@ -155,6 +583,8 @@ parse_terraform_tfvars() {
             if [[ -n "$current_vmid" ]]; then
                 TF_CONTROL_PLANE_VMIDS+=("$current_vmid")
                 TF_CONTROL_PLANE_NAMES+=("${current_name:-unnamed}")
+                cp_count=$(($cp_count + 1))
+                detail_info_log "Control plane: ${current_name:-unnamed} (VM $current_vmid)"
             fi
             current_name=""
             current_vmid=""
@@ -166,7 +596,6 @@ parse_terraform_tfvars() {
                 current_name=""
                 current_vmid=""
             fi
-
             if [[ "$line" =~ vmid[[:space:]]*=[[:space:]]*([0-9]+) ]]; then
                 current_vmid="${BASH_REMATCH[1]}"
             fi
@@ -177,11 +606,12 @@ parse_terraform_tfvars() {
                 local node="${BASH_REMATCH[1]}"
                 [[ -z "$TF_PROXMOX_NODE" ]] && TF_PROXMOX_NODE="$node"
             fi
-
             if [[ "$line" =~ \} ]]; then
                 if [[ -n "$current_vmid" ]]; then
                     TF_CONTROL_PLANE_VMIDS+=("$current_vmid")
                     TF_CONTROL_PLANE_NAMES+=("${current_name:-unnamed}")
+                    cp_count=$(($cp_count + 1))
+                    detail_info_log "Control plane: ${current_name:-unnamed} (VM $current_vmid)"
                 fi
                 current_name=""
                 current_vmid=""
@@ -189,10 +619,11 @@ parse_terraform_tfvars() {
         fi
     done < "$tfvars_file"
 
-    # Parse worker configurations
+    step_info_log "Parse worker VMs"
     local in_worker_config=false
     current_name=""
     current_vmid=""
+    local worker_count=0
 
     while IFS= read -r line; do
         [[ "$line" =~ ^[[:space:]]*# ]] && continue
@@ -207,6 +638,8 @@ parse_terraform_tfvars() {
             if [[ -n "$current_vmid" ]]; then
                 TF_WORKER_VMIDS+=("$current_vmid")
                 TF_WORKER_NAMES+=("${current_name:-unnamed}")
+                worker_count=$(($worker_count + 1))
+                detail_info_log "Worker: ${current_name:-unnamed} (VM $current_vmid)"
             fi
             current_name=""
             current_vmid=""
@@ -218,18 +651,18 @@ parse_terraform_tfvars() {
                 current_name=""
                 current_vmid=""
             fi
-
             if [[ "$line" =~ vmid[[:space:]]*=[[:space:]]*([0-9]+) ]]; then
                 current_vmid="${BASH_REMATCH[1]}"
             fi
             if [[ "$line" =~ vm_name[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
                 current_name="${BASH_REMATCH[1]}"
             fi
-
             if [[ "$line" =~ \} ]]; then
                 if [[ -n "$current_vmid" ]]; then
                     TF_WORKER_VMIDS+=("$current_vmid")
                     TF_WORKER_NAMES+=("${current_name:-unnamed}")
+                    worker_count=$(($worker_count + 1))
+                    detail_info_log "Worker: ${current_name:-unnamed} (VM $current_vmid)"
                 fi
                 current_name=""
                 current_vmid=""
@@ -237,801 +670,1015 @@ parse_terraform_tfvars() {
         fi
     done < "$tfvars_file"
 
-    # Build VM ID strings
     if [[ ${#TF_CONTROL_PLANE_VMIDS[@]} -gt 0 || ${#TF_WORKER_VMIDS[@]} -gt 0 ]]; then
         local all_vmids=()
         [[ ${#TF_CONTROL_PLANE_VMIDS[@]} -gt 0 ]] && all_vmids+=("${TF_CONTROL_PLANE_VMIDS[@]}")
         [[ ${#TF_WORKER_VMIDS[@]} -gt 0 ]] && all_vmids+=("${TF_WORKER_VMIDS[@]}")
 
-        DISCOVER_VM_IDS=""
-        local first=true
-        for vmid in "${all_vmids[@]}"; do
-            if [[ "$first" == true ]]; then
-                DISCOVER_VM_IDS="$vmid"
-                first=false
-            else
-                DISCOVER_VM_IDS="$DISCOVER_VM_IDS $vmid"
-            fi
-        done
+        DISCOVER_VM_IDS=$(IFS=' '; echo "${all_vmids[*]}")
+        CONTROL_PLANE_VM_IDS=$(IFS=' '; echo "${TF_CONTROL_PLANE_VMIDS[*]}")
 
-        CONTROL_PLANE_VM_IDS=""
-        first=true
-        for vmid in "${TF_CONTROL_PLANE_VMIDS[@]}"; do
-            if [[ "$first" == true ]]; then
-                CONTROL_PLANE_VM_IDS="$vmid"
-                first=false
-            else
-                CONTROL_PLANE_VM_IDS="$CONTROL_PLANE_VM_IDS $vmid"
-            fi
-        done
-
-        log_info "Parsed ${#TF_CONTROL_PLANE_VMIDS[@]} control plane VM(s): ${TF_CONTROL_PLANE_VMIDS[*]:-<none>}"
-        log_info "Parsed ${#TF_WORKER_VMIDS[@]} worker VM(s): ${TF_WORKER_VMIDS[*]:-<none>}"
-        log_detail "DISCOVER_VM_IDS set to: $DISCOVER_VM_IDS"
-        log_detail "CONTROL_PLANE_VM_IDS set to: $CONTROL_PLANE_VM_IDS"
+        step_info_log "Results: $cp_count control planes, $worker_count workers"
+        detail_info_log "DISCOVER_VM_IDS: $DISCOVER_VM_IDS"
+        detail_info_log "CONTROL_PLANE_VM_IDS: $CONTROL_PLANE_VM_IDS"
 
         if [[ -n "$DISCOVER_VM_IDS" ]]; then
             USE_DISCOVERY="true"
-            log_info "Auto-enabled discovery mode based on terraform.tfvars"
+            step_info_log "Auto-enabled discovery mode"
         fi
 
         return 0
     else
-        log_warn "No VM IDs found in terraform.tfvars"
+        step_warn_log "No VM IDs found in terraform.tfvars"
         return 1
     fi
 }
 
-show_terraform_config() {
-    log_step "Terraform Configuration Summary"
+job_display_config() {
+    job_info_log "Display Configuration"
 
-    if [[ -n "$TF_PROXMOX_ENDPOINT" ]]; then
-        log_info "Proxmox Endpoint: $TF_PROXMOX_ENDPOINT"
-    fi
-    if [[ -n "$TF_PROXMOX_NODE" ]]; then
-        log_info "Proxmox Node:     $TF_PROXMOX_NODE"
-    fi
-    log_info "SSH User:         ${PROXMOX_SSH_USER}@${PROXMOX_SSH_HOST}"
+    step_info_log "Proxmox Endpoint: $TF_PROXMOX_ENDPOINT"
+    step_info_log "Proxmox Node: $TF_PROXMOX_NODE"
+    step_info_log "SSH User: $TF_PROXMOX_SSH_USER@${TF_PROXMOX_SSH_HOST:-pve1}"
 
-    log_info "Control Plane VMs:"
-    for i in "${!TF_CONTROL_PLANE_VMIDS[@]}"; do
-        local name="${TF_CONTROL_PLANE_NAMES[$i]:-unnamed}"
-        local vmid="${TF_CONTROL_PLANE_VMIDS[$i]}"
-        log_detail "$name (VM ID: $vmid)"
+    step_info_log "Control Plane VMs:"
+    for i in "${!TF_CONTROL_PLANE_NAMES[@]}"; do
+        detail_info_log "${TF_CONTROL_PLANE_NAMES[$i]} (VM ${TF_CONTROL_PLANE_VMIDS[$i]})"
     done
 
-    log_info "Worker VMs:"
-    for i in "${!TF_WORKER_VMIDS[@]}"; do
-        local name="${TF_WORKER_NAMES[$i]:-unnamed}"
-        local vmid="${TF_WORKER_VMIDS[$i]}"
-        log_detail "$name (VM ID: $vmid)"
+    step_info_log "Worker VMs:"
+    for i in "${!TF_WORKER_NAMES[@]}"; do
+        detail_info_log "${TF_WORKER_NAMES[$i]} (VM ${TF_WORKER_VMIDS[$i]})"
     done
-
-    log_info "Discovery Enabled:  $USE_DISCOVERY"
-    log_info "VM IDs to Discover: $DISCOVER_VM_IDS"
 }
 
-# ==================== BANNER ====================
-print_banner() {
-    local border="${C_STEP}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
+job_discover_vms() {
+    local mode="${1:-initial}"
 
-    echo -e "$border"
-    echo -e "${C_WHITE}  ▄▄▄█████▓ ▄▄▄       ██▓      ▒█████    ██████ ${C_RESET}"
-    echo -e "${C_WHITE}  ▓  ██▒ ▓▒▒████▄    ▓██▒     ▒██▓  ██▒▒██    ▒ ${C_RESET}"
-    echo -e "${C_WHITE}  ▒ ▓██░ ▒░▒██  ▀█▄  ▒██░     ▒██▒  ██░░ ▓██▄   ${C_RESET}"
-    echo -e "${C_WHITE}  ░ ▓██▓ ░ ░██▄▄▄▄██ ▒██░     ░██  █▀ ░  ▒   ██▒${C_RESET}"
-    echo -e "${C_WHITE}    ▒██▒ ░  ▓█   ▓██▒░██████▒░▒███▒█▄ ▒██████▒▒${C_RESET}"
-    echo -e "${C_WHITE}    ▒ ░░    ▒▒   ▓▒█░░ ▒░▓  ░░░ ▒▒░ ▒ ▒ ▒▓▒ ▒ ░${C_RESET}"
-    echo -e "${C_DETAIL}         BOOTSTRAP UTILITY v${VERSION}${C_RESET}"
-    echo -e "$border"
-    echo ""
+    job_info_log "Discover Proxmox VMs"
 
-    if [[ -n "${LOG_FILE:-}" && -f "$LOG_FILE" ]]; then
-        {
-            echo "========================================================="
-            echo "   TALOS BOOTSTRAP UTILITY v${VERSION}"
-            echo "   Cluster: ${CLUSTER_NAME:-unknown}"
-            echo "========================================================="
-        } >> "$LOG_FILE"
-    fi
-}
+    local discovered_count=0
+    local discovered_host=""
 
-# ==================== INITIALIZATION ====================
-init_directories() {
-    # Create all required directories
-    mkdir -p "$NODES_DIR" "$SECRETS_DIR" "$STATE_DIR" "$PATCH_DIR" "$LOG_DIR"
-
-    # Create .gitignore for sensitive directories
-    if [[ ! -f "${CLUSTER_DIR}/.gitignore" ]]; then
-        cat > "${CLUSTER_DIR}/.gitignore" <<'EOF'
-# Generated configs - sensitive or ephemeral
-/nodes/
-/secrets/
-/state/
-/*.log
-EOF
-    fi
-
-    _log_file "INIT" "Directories initialized: nodes=${NODES_DIR}, secrets=${SECRETS_DIR}, state=${STATE_DIR}"
-}
-
-# ==================== LOGGING CORE ====================
-init_logging() {
-    mkdir -p "$LOG_DIR"
-    LOG_FILE="$LOG_DIR/bootstrap-$(date +%Y%m%d_%H%M%S).log"
-    touch "$LOG_FILE"
-
-    {
-        echo "========================================"
-        echo "Talos Bootstrap Log Started: $(date)"
-        echo "Script: $0"
-        echo "User: $(whoami)"
-        echo "Working Directory: $SCRIPT_DIR"
-        echo "Hostname: ${HOSTNAME:-$(hostname)}"
-        echo "========================================"
-    } >> "$LOG_FILE"
-
-    print_banner
-
-    log_info "Logging initialized: $LOG_FILE"
-}
-
-_log_file() {
-    local level="$1"
-    local message="$2"
-    echo "[$(date "$LOG_TIMESTAMP_FORMAT")] [$level] $message" >> "$LOG_FILE"
-}
-
-_log() {
-    local level="$1"
-    local color="$2"
-    local msg="$3"
-    local time_str=$(date '+%H:%M:%S')
-
-    # Only show DEBUG on console if DEBUG=1
-    if [[ "$level" == "DEBUG" && "${DEBUG:-0}" != "1" ]]; then
-        echo "[$(date "$LOG_TIMESTAMP_FORMAT")] [$level] $msg" >> "$LOG_FILE"
-        return
-    fi
-
-    echo -e "${C_TIMESTAMP}[${time_str}]${C_RESET} ${color}[${level}]${C_RESET} ${msg}${C_RESET}"
-    echo "[$(date "$LOG_TIMESTAMP_FORMAT")] [$level] $msg" >> "$LOG_FILE"
-}
-
-log_error() { _log "ERROR" "$C_ERROR" "$1" >&2; }
-log_warn()  { _log "WARN"  "$C_WARN"  "$1"; }
-log_info()  { _log "INFO"  "$C_INFO"  "$1"; }
-log_step()  { _log "STEP"  "$C_STEP"  "▶ $1"; }
-log_debug() { _log "DEBUG" "$C_DEBUG" "$1"; }
-log_detail(){ _log "DETAIL" "$C_DETAIL" "  ↳ $1"; }
-
-log_debug() {
-    local msg="$1"
-    if [[ "${DEBUG:-0}" == "1" ]]; then
-        _log "DEBUG" "$C_DEBUG" "$msg"
-    else
-        _log_file "DEBUG" "$msg"
-    fi
-}
-
-run_cmd() {
-    local description="$1"
-    shift
-    local cmd_display="$*"
-
-    log_detail "Executing: $description"
-    _log_file "EXEC" "$cmd_display"
-
-    local stdout_file=$(mktemp)
-    local stderr_file=$(mktemp)
-    local exit_code=0
-
-    if ! "$@" > "$stdout_file" 2> "$stderr_file"; then
-        exit_code=$?
-    fi
-
-    if [[ -s "$stdout_file" ]]; then
-        _log_file "STDOUT" "--- Output: $description ---"
-        cat "$stdout_file" >> "$LOG_FILE"
-    fi
-    if [[ -s "$stderr_file" ]]; then
-        _log_file "STDERR" "--- Errors: $description ---"
-        cat "$stderr_file" >> "$LOG_FILE"
-    fi
-
-    rm -f "$stdout_file" "$stderr_file"
-
-    if [[ $exit_code -eq 0 ]]; then
-        _log_file "SUCCESS" "$description completed"
-        return 0
-    else
-        _log_file "FAILED" "$description exited with code $exit_code"
-        log_error "$description failed (exit $exit_code)"
-        return $exit_code
-    fi
-}
-
-# ==================== UTILITY FUNCTIONS ====================
-test_port() {
-    local ip=$1
-    local port=$2
-    local result="closed"
-    if timeout 2 bash -c "echo >/dev/tcp/$ip/$port" 2>/dev/null; then
-        result="open"
-    fi
-    _log_file "PORT-CHECK" "$ip:$port is $result"
-    echo "$result"
-}
-
-get_ssh_output() {
-    local cmd="$1"
-    local host="${2:-$PROXMOX_SSH_HOST}"
-    local output
-    local exit_code=0
-
-    _log_file "SSH" "Executing on ${PROXMOX_SSH_HOST}: $cmd"
-
-    output=$(ssh ${SSH_OPTS} "${PROXMOX_SSH_USER}@${host}" "$cmd" 2>> "$LOG_FILE") || exit_code=$?
-
-    if [[ $exit_code -ne 0 ]]; then
-        log_debug "SSH command failed with exit code $exit_code"
-        return $exit_code
-    fi
-
-    _log_file "SSH-OUTPUT" "Received ${#output} bytes"
-    echo "$output"
-}
-
-# ==================== IMPROVED STATE MANAGEMENT ====================
-save_state() {
-    mkdir -p "$STATE_DIR"
-
-    # Use jq for proper JSON construction (handles escaping, valid JSON)
-    local timestamp
-    timestamp=$(date -Iseconds)
-
-    # Build control planes array using jq
-    local cp_json='[]'
-    for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}"; do
-        local vmid="${NODE_VMIDS[$ip]:-unknown}"
-        cp_json=$(echo "$cp_json" | jq \
-            --arg ip "$ip" \
-            --arg vmid "$vmid" \
-            '. += [{"ip": $ip, "vmid": $vmid}]')
-    done
-
-    # Build workers array using jq
-    local worker_json='[]'
-    for ip in "${WORKER_IPS_ARRAY[@]}"; do
-        local vmid="${NODE_VMIDS[$ip]:-unknown}"
-        worker_json=$(echo "$worker_json" | jq \
-            --arg ip "$ip" \
-            --arg vmid "$vmid" \
-            '. += [{"ip": $ip, "vmid": $vmid}]')
-    done
-
-    # Construct final JSON
-    jq -n \
-        --arg name "$CLUSTER_NAME" \
-        --arg ts "$timestamp" \
-        --argjson cp "$cp_json" \
-        --argjson wk "$worker_json" \
-        '{
-            cluster_name: $name,
-            timestamp: $ts,
-            control_planes: $cp,
-            workers: $wk
-        }' > "$STATE_FILE"
-
-    log_detail "State saved to $STATE_FILE ($(echo "$cp_json" | jq 'length') CPs, $(echo "$worker_json" | jq 'length') workers)"
-}
-
-load_state() {
-    if [[ -f "$STATE_FILE" ]]; then
-        log_info "Loading cluster state from $STATE_FILE"
-        if command -v jq &>/dev/null; then
-            local cp_count worker_count
-            cp_count=$(jq '.control_planes | length' "$STATE_FILE")
-            worker_count=$(jq '.workers | length' "$STATE_FILE")
-            log_info "Previous state: $cp_count control planes, $worker_count workers"
-
-            # Populate arrays from state
-            readarray -t CONTROL_PLANE_IPS_ARRAY < <(jq -r '.control_planes[].ip' "$STATE_FILE")
-            readarray -t WORKER_IPS_ARRAY < <(jq -r '.workers[].ip' "$STATE_FILE")
-            return 0
-        fi
-    fi
-    return 1
-}
-
-detect_environment() {
-    if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$MSYSTEM" == "MINGW"* ]] || [[ -n "${WINDIR:-}" ]]; then
-        IS_WINDOWS=true
-        SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        PING_CMD="ping -n 1 -w 2000"
-        HOSTS_FILE="/c/Windows/System32/drivers/etc/hosts"
-        log_info "Detected Windows/Git Bash environment"
-    else
-        IS_WINDOWS=false
-        SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=no -o ControlMaster=auto -o ControlPath=~/.ssh/proxmox_mux_%h_%p_%r -o ControlPersist=600"
-        PING_CMD="ping -c 1 -W 2"
-        HOSTS_FILE="/etc/hosts"
-        log_info "Detected Unix/Linux environment"
-    fi
-}
-
-# ==================== HAPROXY INTEGRATION ====================
-update_haproxy() {
-    local ips=("$@")
-    if [[ ${#ips[@]} -eq 0 ]]; then
-        log_warn "No IPs provided to update_haproxy"
+    # Validate we have VM IDs to discover
+    if [[ -z "${DISCOVER_VM_IDS:-}" ]]; then
+        job_error_log "No VM IDs configured for discovery"
         return 1
     fi
 
-    local haproxy_script="${SCRIPT_DIR}/update-haproxy.sh"
+    for host in "${TF_PROXMOX_NODE:-pve1}"; do
+        local qm_output
+        qm_output=$(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+            "${TF_PROXMOX_SSH_USER}@$host" \
+            "for vmid in $DISCOVER_VM_IDS; do echo \"===VMID:\$vmid===\"; qm config \$vmid 2>/dev/null || echo 'NOT_FOUND'; done" 2>/dev/null) || {
+            job_warn_log "Failed to connect to $host"
+            continue
+        }
 
-    if [[ -f "$haproxy_script" ]]; then
-        log_step "Updating HAProxy configuration"
-        log_detail "HAProxy IPs: ${ips[*]}"
-        _log_file "HAPROXY" "Updating with IPs: ${ips[*]}"
+        local current_vmid=""
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^===VMID:([0-9]+)===$ ]]; then
+                current_vmid="${BASH_REMATCH[1]}"
+            elif [[ "$line" == "NOT_FOUND" ]]; then
+                job_warn_log "VM $current_vmid not found on $host"
+                current_vmid=""
+            elif [[ -n "$current_vmid" && "$line" =~ ^name:[[:space:]]*(.+)$ ]]; then
+                local vmname="${BASH_REMATCH[1]}"
+                local role="worker"
+                [[ " ${TF_CONTROL_PLANE_VMIDS[*]:-} " =~ " $current_vmid " ]] && role="control-plane"
 
-        # Add timeout to prevent hanging
-        if timeout 60 bash "$haproxy_script" "${ips[@]}" >> "$LOG_FILE" 2>&1; then
-            log_info "HAProxy updated successfully"
-            sleep 3
-        else
-            local exit_code=$?
-            if [[ $exit_code -eq 124 ]]; then
-                log_error "HAProxy update timed out after 60s"
-            else
-                log_error "Failed to update HAProxy (exit $exit_code)"
+                NODE_ROLES["$current_vmid"]="$role"
+                job_debug_log "VM $current_vmid ($vmname): Role=$role, Host=$host"
+                discovered_count=$(($discovered_count + 1))
+            elif [[ -n "$current_vmid" && "$line" =~ ^net[0-9]+:[[:space:]]*virtio=([0-9A-Fa-f:]+) ]]; then
+                local mac="${BASH_REMATCH[1]}"
+                MAC_BY_VMDATA["$current_vmid"]="$mac"
+                job_debug_log "MAC: $mac"
             fi
-            log_info "Manual fix: ./update-haproxy.sh ${ips[*]}"
-            return 1
-        fi
-    else
-        log_warn "HAProxy update script not found at $haproxy_script"
-        return 1
-    fi
-}
+        done <<< "$qm_output"
 
-# ==================== DIAGNOSTIC FUNCTIONS ====================
-collect_node_logs() {
-    local ip=$1
-    log_step "Collecting diagnostic logs from $ip"
-    _log_file "DIAGNOSTIC" "Node: $ip"
-
-    talosctl dmesg --nodes "$ip" >> "$LOG_FILE" 2>&1 || log_warn "Failed to get dmesg from $ip"
-    talosctl logs apid --nodes "$ip" >> "$LOG_FILE" 2>&1 || log_warn "Failed to get logs from $ip"
-}
-
-check_haproxy_status() {
-    log_step "Checking HAProxy backend status"
-    _log_file "HAPROXY-CHECK" "Testing $HAPROXY_IP"
-
-    if timeout 3 bash -c "echo >/dev/tcp/${HAPROXY_IP}/6443" 2>>"$LOG_FILE"; then
-        log_info "✓ HAProxy port 6443 (K8s API) reachable"
-    else
-        log_warn "✗ HAProxy port 6443 not reachable"
-    fi
-
-    if timeout 3 bash -c "echo >/dev/tcp/${HAPROXY_IP}/50000" 2>>"$LOG_FILE"; then
-        log_info "✓ HAProxy port 50000 (Talos API) reachable"
-    else
-        log_warn "✗ HAProxy port 50000 not reachable"
-    fi
-
-    # Only try SSH to HAProxy if it's one of our known Proxmox hosts
-    local is_proxmox_host=false
-    for host in "${PROXMOX_HOST_ARRAY[@]}"; do
-        if [[ "$host" == "$HAPROXY_IP" || "$HAPROXY_IP" == *"$host"* ]]; then
-            is_proxmox_host=true
+        if [[ $discovered_count -gt 0 ]]; then
+            discovered_host="$host"
             break
         fi
     done
 
-    if [[ "$is_proxmox_host" == "true" ]]; then
-        _log_file "HAPROXY" "Querying stats socket on $HAPROXY_IP..."
-        timeout 10 ssh ${SSH_OPTS} "${PROXMOX_SSH_USER}@${HAPROXY_IP}" \
-            "echo 'show stat' | sudo nc -U /run/haproxy/admin.sock | grep -E '(k8s-controlplane|talos-controlplane)'" \
-            >> "$LOG_FILE" 2>&1 || log_warn "Could not retrieve HAProxy stats via SSH"
-    else
-        log_detail "Skipping HAProxy SSH stats check (HAProxy not on Proxmox host)"
-    fi
-}
-
-# ==================== DISCOVERY ENGINE ====================
-discover_proxmox_nodes() {
-    local mode="${1:-initial}"
-    log_step "Discovering nodes from Proxmox (VMs: $DISCOVER_VM_IDS) [mode: $mode]"
-    _log_file "DISCOVERY" "Mode: $mode, VMs: $DISCOVER_VM_IDS, Hosts: ${PROXMOX_HOST_ARRAY[*]}"
-
-    local vmid_array=($DISCOVER_VM_IDS)
-    local cp_vms=" ${CONTROL_PLANE_VM_IDS} "
-
-    if [[ "$mode" == "post-deploy" ]]; then
-        DISC_VM_MACS=()
-        DISC_VM_NAMES=()
-        DISC_VM_IPS=()
-        DISC_MAC_TO_IP=()
-        DISC_VM_ROLES=()
-        DISC_CONTROL_PLANE_IPS=()
-        DISC_WORKER_IPS=()
-        _log_file "DISCOVERY" "Cleared previous data"
+    if [[ $discovered_count -eq 0 ]]; then
+        job_error_log "No VMs discovered"
+        return 1
     fi
 
-    # Try each Proxmox host until one works for VM discovery
-    local connected_host=""
-    local host_vms_found=0
+    job_info_log "Found $discovered_count VMs on host $discovered_host"
 
-    for host in "${PROXMOX_HOST_ARRAY[@]}"; do
-        log_info "Attempting to discover VMs from Proxmox host: ${PROXMOX_SSH_USER}@${host}"
-        host_vms_found=0
+    if ! populate_arp_table "$discovered_host"; then
+        job_error_log "ARP population failed - cannot determine IP addresses"
+        return 1
+    fi
 
-        # Try to fetch VM configs from this host
-        for vmid in "${vmid_array[@]}"; do
-            local config
-            config=$(get_ssh_output "qm config $vmid" "$host" 2>/dev/null) && {
-                local name=$(echo "$config" | grep '^name:' | cut -d' ' -f2-)
-                local macs=$(echo "$config" | grep -E '^net[0-9]+:' | grep -oE '[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}' | head -1 | tr '[:upper:]' '[:lower:]')
-
-                if [[ -n "$macs" ]]; then
-                    DISC_VM_MACS[$vmid]="$macs"
-                    DISC_VM_NAMES[$vmid]="$name"
-                    if [[ "$cp_vms" == *" $vmid "* ]]; then
-                        DISC_VM_ROLES[$vmid]="control-plane"
-                    else
-                        DISC_VM_ROLES[$vmid]="worker"
-                    fi
-                    log_detail "VM $vmid ($name): MAC=$macs, Role=${DISC_VM_ROLES[$vmid]}, Host=$host"
-                    _log_file "DISCOVERY" "VM $vmid: name=$name, mac=$macs, role=${DISC_VM_ROLES[$vmid]}, host=$host"
-                    ((host_vms_found++))
-
-                    # Mark this host as connected if we found VMs
-                    if [[ -z "$connected_host" ]]; then
-                        connected_host="$host"
-                        PROXMOX_SSH_HOST="$host"  # Update global for subsequent operations
-                    fi
-                fi
-            } || {
-                log_debug "VM $vmid not found on host $host"
-            }
-        done
-
-        if [[ $host_vms_found -gt 0 ]]; then
-            log_info "Found $host_vms_found VMs on host $host"
-            # Continue to check other hosts - VMs might be distributed across the cluster
+    # Validate we found IPs for all VMs
+    local missing_ips=()
+    for vmid in "${!MAC_BY_VMDATA[@]}"; do
+        if [[ -z "${IP_BY_MAC[$vmid]:-}" ]]; then
+            missing_ips+=("$vmid")
         fi
     done
 
-    if [[ ${#DISC_VM_MACS[@]} -eq 0 ]]; then
-        log_error "No VMs discovered on any Proxmox host"
+    if [[ ${#missing_ips[@]} -gt 0 ]]; then
+        job_error_log "Could not find IPs for VMs: ${missing_ips[*]}"
         return 1
     fi
 
-    log_info "Total VMs discovered across all hosts: ${#DISC_VM_MACS[@]}"
-    log_info "Using primary connection host: $connected_host"
+    local cp_ips=()
+    local worker_ips=()
 
-    # Use the first successful host for ARP table operations
-    # (ARP is network-wide, so any host in the same subnet should see the same MACs)
-    log_info "Populating ARP table via ${PROXMOX_SSH_USER}@${PROXMOX_SSH_HOST}..."
-    _log_file "DISCOVERY" "Pinging subnet 192.168.1.0/24 via host ${PROXMOX_SSH_HOST}"
+    # Sort VMIDs to ensure consistent ordering
+    local sorted_vmids
+    sorted_vmids=$(echo "${!IP_BY_MAC[@]}" | tr ' ' '\n' | sort -n)
 
-    get_ssh_output "
-        for i in {1..254}; do
-            ping -c 1 -W 1 192.168.1.\$i >/dev/null 2>&1 &
-            if (( i % 30 == 0 )); then wait; fi
-        done
-        wait
-    " "$PROXMOX_SSH_HOST" >> "$LOG_FILE" 2>&1 || true
-
-    log_detail "Waiting ${ARP_WAIT_TIME}s for ARP table to settle..."
-    sleep "$ARP_WAIT_TIME"
-
-    local arp_output=""
-    local arp_retries=3
-    while [[ $arp_retries -gt 0 ]]; do
-        arp_output=$(get_ssh_output "cat /proc/net/arp" "$PROXMOX_SSH_HOST") && break
-        ((arp_retries--))
-        sleep 2
-    done
-
-    if [[ -z "$arp_output" ]]; then
-        log_error "Failed to get ARP table after retries from host $PROXMOX_SSH_HOST"
-        return 1
-    fi
-
-    _log_file "DISCOVERY" "ARP table: ${#arp_output} bytes"
-
-    DISC_MAC_TO_IP=()
-    while read -r ip_addr _ _ mac_addr _ _; do
-        [[ -z "$ip_addr" || "$ip_addr" == "IP" ]] && continue
-        mac_addr=$(echo "$mac_addr" | tr '[:upper:]' '[:lower:]')
-        [[ "$mac_addr" == "00:00:00:00:00:00" ]] && continue
-        [[ -n "$mac_addr" ]] && DISC_MAC_TO_IP[$mac_addr]="$ip_addr"
-    done <<< "$arp_output"
-
-    log_info "ARP table has ${#DISC_MAC_TO_IP[@]} entries"
-
-    local missing_vms=()
-    for vmid in "${!DISC_VM_MACS[@]}"; do
-        local mac="${DISC_VM_MACS[$vmid]}"
-        local ip="${DISC_MAC_TO_IP[$mac]:-}"
-        local role="${DISC_VM_ROLES[$vmid]}"
-        local name="${DISC_VM_NAMES[$vmid]}"
-
-        if [[ -n "$ip" ]]; then
-            if [[ "$(test_port "$ip" 50000)" == "open" ]]; then
-                DISC_VM_IPS[$vmid]="$ip"
-                NODE_VMIDS[$ip]="$vmid"
-                if [[ "$role" == "control-plane" ]]; then
-                    DISC_CONTROL_PLANE_IPS+=("$ip")
-                else
-                    DISC_WORKER_IPS+=("$ip")
-                fi
-                log_info "Discovered $role: $name (VM $vmid) -> $ip"
-                _log_file "DISCOVERY" "Ready: $role $name ($vmid) at $ip"
-            else
-                log_detail "$name ($vmid) at $ip: API not ready yet"
-                missing_vms+=("$vmid")
-                _log_file "DISCOVERY" "Not ready: $name ($vmid) at $ip"
-            fi
+    for vmid in $sorted_vmids; do
+        local ip="${IP_BY_MAC[$vmid]}"
+        if [[ "${NODE_ROLES[$vmid]}" == "control-plane" ]]; then
+            cp_ips+=("$ip")
+            step_info_log "Control plane VM $vmid -> $ip"
         else
-            log_detail "$name ($vmid): MAC not in ARP table yet"
-            missing_vms+=("$vmid")
-            _log_file "DISCOVERY" "Missing ARP: $name ($vmid), MAC $mac"
+            worker_ips+=("$ip")
+            step_info_log "Worker VM $vmid -> $ip"
         fi
     done
 
-    if [[ ${#missing_vms[@]} -gt 0 ]]; then
-        log_info "Retrying discovery for ${#missing_vms[@]} missing VMs in 10s..."
-        sleep 10
+    CONTROL_PLANE_IPS=$(IFS=' '; echo "${cp_ips[*]}")
+    WORKER_IPS=$(IFS=' '; echo "${worker_ips[*]}")
 
-        # Retry ARP table fetch from the same host
-        get_ssh_output "cat /proc/net/arp" "$PROXMOX_SSH_HOST" > /tmp/arp_new.txt 2>>"$LOG_FILE" || true
-        while read -r ip_addr _ _ mac_addr _ _; do
-            [[ -z "$ip_addr" || "$ip_addr" == "IP" ]] && continue
-            mac_addr=$(echo "$mac_addr" | tr '[:upper:]' '[:lower:]')
-            [[ "$mac_addr" != "00:00:00:00:00:00" ]] && DISC_MAC_TO_IP[$mac_addr]="$ip_addr"
-        done < /tmp/arp_new.txt
-        rm -f /tmp/arp_new.txt
+    job_info_log "Discovery complete: ${#cp_ips[@]} control planes, ${#worker_ips[@]} workers"
+    job_info_log "Control plane IPs: $CONTROL_PLANE_IPS"
+    job_info_log "Worker IPs: $WORKER_IPS"
 
-        for vmid in "${missing_vms[@]}"; do
-            local mac="${DISC_VM_MACS[$vmid]}"
-            local ip="${DISC_MAC_TO_IP[$mac]:-}"
-            if [[ -n "$ip" && "$(test_port "$ip" 50000)" == "open" ]]; then
-                local role="${DISC_VM_ROLES[$vmid]}"
-                DISC_VM_IPS[$vmid]="$ip"
-                NODE_VMIDS[$ip]="$vmid"
-                [[ "$role" == "control-plane" ]] && DISC_CONTROL_PLANE_IPS+=("$ip") || DISC_WORKER_IPS+=("$ip")
-                log_info "Discovered on retry: ${DISC_VM_NAMES[$vmid]} -> $ip"
-                _log_file "DISCOVERY" "Retry success: $role at $ip"
-            fi
-        done
-    fi
-
-    if [[ "$mode" == "initial" ]]; then
-        CONTROL_PLANE_IPS="${DISC_CONTROL_PLANE_IPS[*]}"
-        WORKER_IPS="${DISC_WORKER_IPS[*]}"
-    else
-        WORKER_IPS="${DISC_WORKER_IPS[*]}"
-        CONTROL_PLANE_IPS="${DISC_CONTROL_PLANE_IPS[*]}"
-    fi
-
-    log_info "Discovery complete: ${#DISC_CONTROL_PLANE_IPS[@]} control planes, ${#DISC_WORKER_IPS[@]} workers"
-
-    if [[ ${#DISC_CONTROL_PLANE_IPS[@]} -eq 0 ]]; then
-        log_error "No responsive control plane nodes found"
-        return 1
-    fi
-    return 0
+    [[ ${#cp_ips[@]} -gt 0 ]]
 }
 
-# ==================== USER INPUT ====================
-prompt_user() {
-    local question="$1"
-    local var_name="$2"
-    local default_value="${3:-}"
-    local is_secret="${4:-false}"
+job_preflight_checks() {
+    job_info_log "Pre-flight Checks"
 
-    local prompt_text="${C_WARN}${question}${C_RESET}"
-    [[ -n "$default_value" ]] && prompt_text+=" ${C_TIMESTAMP}[${default_value}]${C_RESET}"
-    prompt_text+=" ${C_STEP}→${C_RESET} "
+    local all_passed=true
 
-    echo -en "$prompt_text"
-
-    if [[ "$is_secret" == "true" ]]; then
-        local input
-        read -rs input
-        echo ""
-        _log_file "PROMPT" "${var_name}=<redacted>"
-    else
-        local input
-        read -r input
-        _log_file "PROMPT" "${var_name}=${input:-$default_value}"
-    fi
-
-    if [[ -z "$input" && -n "$default_value" ]]; then
-        printf -v "$var_name" '%s' "$default_value"
-    else
-        printf -v "$var_name" '%s' "$input"
-    fi
-}
-
-confirm_proceed() {
-    local msg="${1:-Proceed?}"
-    local response
-
-    echo -en "${C_WARN}${msg} ${C_DETAIL}(y/N)${C_RESET} ${C_WHITE}"
-    read -n 1 -r response
-    echo -e "${C_RESET}"
-
-    _log_file "CONFIRM" "User responded: ${response}"
-
-    [[ "$response" =~ ^[Yy]$ ]]
-}
-
-# ==================== IMPROVED DEPLOYMENT ====================
-deploy_node() {
-    local node_type=$1
-    local ip=$2
-    local config_file=$3
-    local vmid="${NODE_VMIDS[$ip]:-}"
-    local attempt=1
-
-    log_info "[$ip] Starting deployment (VM ${vmid:-unknown})..."
-    _log_file "DEPLOY" "$node_type $ip (VM ${vmid:-unknown}) file: $config_file"
-
-    while [[ $attempt -le $MAX_RETRIES ]]; do
-        log_detail "[$ip] Attempt $attempt/$MAX_RETRIES"
-
-        if talosctl apply-config --insecure --nodes "$ip" --file "$config_file" >> "$LOG_FILE" 2>&1; then
-            log_info "[$ip] Configuration applied successfully"
-            _log_file "DEPLOY" "Success: $ip on attempt $attempt"
-
-            # Use separate result files per node to avoid race conditions
-            echo "SUCCESS:$ip:$(date +%s)" >> "$STATE_DIR/deploy-${ip}.result"
-            return 0
+    for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}" "${WORKER_IPS_ARRAY[@]}"; do
+        if step_test_port "$ip" "50000" "2"; then
+            step_info_log "$ip: reachable"
         else
-            local delay=$((RETRY_DELAY * attempt))
-            log_warn "[$ip] Attempt $attempt failed, retrying in ${delay}s..."
-            _log_file "DEPLOY" "Failed attempt $attempt for $ip"
-            sleep $delay
+            step_warn_log "$ip: not reachable"
+            all_passed=false
         fi
-        ((attempt++))
     done
 
-    log_error "[$ip] Failed after $MAX_RETRIES attempts"
-    _log_file "DEPLOY" "Final failure: $ip after $MAX_RETRIES attempts"
-    echo "FAILED:$ip:$(date +%s)" >> "$STATE_DIR/deploy-${ip}.result"
-    return 1
+    $all_passed
 }
 
-deploy_control_planes() {
-    local -n cp_ips=$1
-    log_step "Deploying Control Planes (${#cp_ips[@]} nodes)"
+job_manage_secrets() {
+    job_info_log "Manage Secrets"
 
-    for ip in "${cp_ips[@]}"; do
-        deploy_node "control-plane" "$ip" "${NODES_DIR}/node-cp-${ip}.yaml" || return 1
-    done
+    if [[ -f "$SECRETS_FILE" ]]; then
+        step_info_log "Using existing secrets: $SECRETS_FILE"
+        return 0
+    fi
 
-    log_info "Control plane deployment complete"
+    step_info_log "Generate new secrets"
+    step_run_command "Generate Talos secrets" \
+        talosctl gen secrets -o "$SECRETS_FILE"
+    chmod 600 "$SECRETS_FILE"
+    step_info_log "Secrets generated"
 }
 
-deploy_workers_parallel() {
-    local -n worker_ips=$1
-    local total=${#worker_ips[@]}
-    log_step "Deploying Workers ($total nodes, max $DEPLOY_JOBS parallel)"
+job_generate_configs() {
+    job_info_log "Generate Node Configs"
 
-    mkdir -p "$STATE_DIR/pids"
+    step_run_command "Generate base configurations" \
+        talosctl gen config \
+            --with-secrets "$SECRETS_FILE" \
+            --kubernetes-version "$KUBERNETES_VERSION" \
+            --talos-version "$TALOS_VERSION" \
+            --install-image "$INSTALLER_IMAGE" \
+            --additional-sans "${HAPROXY_IP},${CONTROL_PLANE_ENDPOINT},127.0.0.1" \
+            "$CLUSTER_NAME" \
+            "https://${CONTROL_PLANE_ENDPOINT}:6443"
 
-    local pids=()
-    for ip in "${worker_ips[@]}"; do
-        deploy_node "worker" "$ip" "${NODES_DIR}/node-worker-${ip}.yaml" &
-        local pid=$!
-        pids+=("$pid")
-        echo "$pid:$ip" >> "$STATE_DIR/pids/workers.pids"
-        _log_file "DEPLOY" "Spawned $ip as PID $pid"
-
-        if [[ ${#pids[@]} -ge $DEPLOY_JOBS ]]; then
-            wait -n "${pids[@]}" 2>/dev/null || true
-            local new_pids=()
-            for p in "${pids[@]}"; do
-                kill -0 "$p" 2>/dev/null && new_pids+=("$p")
-            done
-            pids=("${new_pids[@]}")
-        fi
-    done
-
-    [[ ${#pids[@]} -gt 0 ]] && wait "${pids[@]}" 2>/dev/null || true
-
-    # Aggregate results from individual result files
-    local success_count=0
-    local failed_count=0
-    for f in "$STATE_DIR"/deploy-*.result; do
-        [[ -f "$f" ]] || continue
-        if grep -q "^SUCCESS:" "$f" 2>/dev/null; then
-            ((success_count++))
-        elif grep -q "^FAILED:" "$f" 2>/dev/null; then
-            ((failed_count++))
-        fi
-    done
-
-    log_info "Worker results: $success_count succeeded, $failed_count failed (total: $total)"
-    [[ "$failed_count" -gt 0 ]] && return 1
-    return 0
-}
-
-wait_for_talos_api() {
-    local ip=$1
-    local timeout=${2:-300}
-    local start_time=$(date +%s)
-
-    log_step "Waiting for Talos API on $ip (timeout: ${timeout}s)"
-    _log_file "WAIT-API" "$ip timeout=${timeout}s"
-
-    while true; do
-        local elapsed=$(($(date +%s) - start_time))
-        if [[ $elapsed -gt $timeout ]]; then
-            log_error "Timeout waiting for Talos API on $ip (${elapsed}s elapsed)"
-            _log_file "WAIT-API" "$ip TIMEOUT after ${elapsed}s"
-            return 1
-        fi
-
-        if [[ "$(test_port "$ip" 50000)" == "open" ]]; then
-            log_info "Talos API ready on $ip (${elapsed}s elapsed)"
-            _log_file "WAIT-API" "$ip ready after ${elapsed}s"
-            return 0
-        fi
-
-        # Log progress every 15 seconds
-        if [[ $((elapsed % 15)) -eq 0 && $elapsed -gt 0 ]]; then
-            log_info "Still waiting for $ip... (${elapsed}s elapsed, ${ips_checked:-0}/${ips_total:-?} nodes ready)"
-        fi
-        sleep 2
-    done
-}
-
-# ==================== IMPROVED CONFIG GENERATION ====================
-generate_patches() {
-    log_step "Generating Configuration Patches"
-
-    # Define base config locations (in secrets dir, not script dir)
-    local base_cp="${SECRETS_DIR}/controlplane.yaml"
-    local base_worker="${SECRETS_DIR}/worker.yaml"
-
-    # Move base configs from script dir to secrets if they exist there
     if [[ -f "${SCRIPT_DIR}/controlplane.yaml" ]]; then
-        mv "${SCRIPT_DIR}/controlplane.yaml" "$base_cp"
-        chmod 600 "$base_cp"
-        log_detail "Moved controlplane.yaml to secrets dir"
+        mv "${SCRIPT_DIR}/controlplane.yaml" "$SECRETS_DIR/"
+        chmod 600 "$SECRETS_DIR/controlplane.yaml"
     fi
     if [[ -f "${SCRIPT_DIR}/worker.yaml" ]]; then
-        mv "${SCRIPT_DIR}/worker.yaml" "$base_worker"
-        chmod 600 "$base_worker"
-        log_detail "Moved worker.yaml to secrets dir"
+        mv "${SCRIPT_DIR}/worker.yaml" "$SECRETS_DIR/"
+        chmod 600 "$SECRETS_DIR/worker.yaml"
+    fi
+    if [[ -f "${SCRIPT_DIR}/talosconfig" ]]; then
+        mv "${SCRIPT_DIR}/talosconfig" "$TALOSCONFIG"
+        chmod 600 "$TALOSCONFIG"
     fi
 
-    # Verify base configs exist in secrets dir
-    if [[ ! -f "$base_cp" ]]; then
-        log_error "Base controlplane.yaml not found in ${SECRETS_DIR}"
-        exit 1
-    fi
-    if [[ ! -f "$base_worker" ]]; then
-        log_error "Base worker.yaml not found in ${SECRETS_DIR}"
-        exit 1
-    fi
+    detail_info_log "Base configs secured in $SECRETS_DIR"
+
+    # Create temporary directory for patches
+    local patch_dir="${NODES_DIR}/.patches"
+    mkdir -p "$patch_dir"
 
     for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}"; do
-        local vmid="${NODE_VMIDS[$ip]:-}"
-        local nic="${NODE_INTERFACES[$ip]:-$DEFAULT_NETWORK_INTERFACE}"
-        local disk="${NODE_DISKS[$ip]:-$DEFAULT_DISK}"
+        local vmid=${VMID_BY_IP[$ip]}
+        local patch_file="${patch_dir}/cp-${ip}.yaml"
 
-        # Patch file in nodes dir (temporary, cleaned up later)
-        local patch_file="${NODES_DIR}/patch-cp-${ip}.yaml"
-        local node_config="${NODES_DIR}/node-cp-${ip}.yaml"
+        # Write patch to file instead of using here-string
+        generate_cp_patch "$ip" "$vmid" > "$patch_file"
 
-        cat > "$patch_file" <<EOF
+        step_run_command "Generate config for control plane $ip" \
+            talosctl machineconfig patch \
+                "$SECRETS_DIR/controlplane.yaml" \
+                --patch "@${patch_file}" \
+                --output "$NODES_DIR/node-cp-$ip.yaml"
+    done
+
+    for ip in "${WORKER_IPS_ARRAY[@]}"; do
+        local vmid=${VMID_BY_IP[$ip]}
+        local patch_file="${patch_dir}/worker-${ip}.yaml"
+
+        # Write patch to file instead of using here-string
+        generate_worker_patch "$ip" "$vmid" > "$patch_file"
+
+        step_run_command "Generate config for worker $ip" \
+            talosctl machineconfig patch \
+                "$SECRETS_DIR/worker.yaml" \
+                --patch "@${patch_file}" \
+                --output "$NODES_DIR/node-worker-$ip.yaml"
+    done
+
+    # Clean up patch files
+    rm -rf "$patch_dir"
+
+    step_info_log "Node configs generated in $NODES_DIR"
+}
+
+job_apply_cluster_patches() {
+    job_info_log "Apply Cluster Patches"
+
+    step_info_log "Create cluster patch"
+    cat > "${NODES_DIR}/cluster-patch.yaml" <<'EOF'
+cluster:
+  extraManifests:
+    - https://raw.githubusercontent.com/alex1989hu/kubelet-serving-cert-approver/main/deploy/standalone-install.yaml
+    - https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+  allowSchedulingOnControlPlanes: false
+  apiServer:
+    admissionControl:
+      - name: PodSecurity
+        configuration:
+          apiVersion: pod-security.admission.config.k8s.io/v1
+          kind: PodSecurityConfiguration
+          exemptions:
+            namespaces:
+              - longhorn-system
+EOF
+
+    for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}"; do
+        step_run_command "Apply cluster patch to $ip" \
+            talosctl machineconfig patch "${NODES_DIR}/node-cp-${ip}.yaml" \
+            --patch "@${NODES_DIR}/cluster-patch.yaml" \
+            --output "${NODES_DIR}/node-cp-${ip}.yaml"
+    done
+
+    rm -f "${NODES_DIR}/cluster-patch.yaml"
+
+    step_info_log "Prepare StaticHostConfig"
+    cat > "${NODES_DIR}/statichost-config.yaml" <<EOF
+apiVersion: v1alpha1
+kind: StaticHostConfig
+name: ${HAPROXY_IP}
+hostnames:
+  - ${CONTROL_PLANE_ENDPOINT}
+EOF
+
+    if [[ -f "${SCRIPT_DIR}/talosconfig" ]]; then
+        mv "${SCRIPT_DIR}/talosconfig" "$TALOSCONFIG"
+        chmod 600 "$TALOSCONFIG"
+    fi
+}
+
+job_deploy_control_planes() {
+    job_info_log "Deploy Control Planes"
+
+    local pids=()
+    local -a failed_ips=()
+    local -a all_ips=("${CONTROL_PLANE_IPS_ARRAY[@]}")
+    local total=${#all_ips[@]}
+    local running=0
+    local i=0
+
+    step_info_log "Deploying $total nodes sequentially"
+
+    for ip in "${all_ips[@]}"; do
+        local vmid=${VMID_BY_IP[$ip]}
+        local config="$NODES_DIR/node-cp-$ip.yaml"
+
+        step_info_log "Deploying control plane $ip (VM $vmid)"
+
+        if step_apply_config "$ip" "$config" "$vmid" 5; then
+            log_file_only "DEPLOY" "SUCCESS:$ip"
+        else
+            log_file_only "DEPLOY" "FAILED:$ip"
+            failed_ips+=("$ip")
+        fi
+    done
+
+    if [[ ${#failed_ips[@]} -gt 0 ]]; then
+        step_error_log "Failed control planes: ${failed_ips[*]}"
+        return 1
+    fi
+
+    step_info_log "Control plane deployment complete ($total/${#all_ips[@]} successful)"
+}
+
+job_deploy_workers() {
+    job_info_log "Deploy Workers"
+
+    local -a failed_ips=()
+    local total=${#WORKER_IPS_ARRAY[@]}
+
+    step_info_log "Deploying $total workers sequentially"
+
+    for ip in "${WORKER_IPS_ARRAY[@]}"; do
+        local vmid=${VMID_BY_IP[$ip]}
+        local config="$NODES_DIR/node-worker-$ip.yaml"
+
+        step_info_log "Deploying worker $ip (VM $vmid)"
+
+        if step_apply_config "$ip" "$config" "$vmid" 5; then
+            log_file_only "DEPLOY" "SUCCESS:$ip"
+        else
+            log_file_only "DEPLOY" "FAILED:$ip"
+            failed_ips+=("$ip")
+        fi
+    done
+
+    local success_count=$((total - ${#failed_ips[@]}))
+    step_info_log "Worker deployment: $success_count/$total successful"
+
+    if [[ ${#failed_ips[@]} -gt 0 ]]; then
+        step_warn_log "Failed workers: ${failed_ips[*]}"
+    fi
+
+    step_info_log "Worker deployment complete"
+}
+
+job_wait_for_restart() {
+    job_info_log "Wait for Node Restart"
+
+    local timeout="${REBOOT_WAIT_TIME:-180}"
+    local all_ready=false
+    local -i start_time elapsed
+
+    # STEP 1: Immediately rediscover nodes after reboot (IPs likely changed)
+    step_info_log "Re-discovering nodes after reboot (IPs may have changed)..."
+
+    if ! job_discover_vms "post-deploy"; then
+        step_warn_log "Post-deploy rediscovery failed, using original IPs"
+        # Restore original IPs from initial discovery
+        CONTROL_PLANE_IPS="$ORIGINAL_CONTROL_PLANE_IPS"
+        WORKER_IPS="$ORIGINAL_WORKER_IPS"
+    fi
+
+    # Update arrays with potentially new IPs
+    IFS=' ' read -r -a CONTROL_PLANE_IPS_ARRAY <<< "$CONTROL_PLANE_IPS"
+    IFS=' ' read -r -a WORKER_IPS_ARRAY <<< "$WORKER_IPS"
+
+    step_info_log "Control plane IPs after rediscovery: ${CONTROL_PLANE_IPS_ARRAY[*]}"
+    step_info_log "Worker IPs after rediscovery: ${WORKER_IPS_ARRAY[*]}"
+
+    # STEP 2: Now test ports with the correct (potentially new) IPs
+    local -a all_nodes=("${CONTROL_PLANE_IPS_ARRAY[@]}" "${WORKER_IPS_ARRAY[@]}")
+    local total_nodes=${#all_nodes[@]}
+
+    step_info_log "Polling $total_nodes nodes for Talos API readiness (timeout: ${timeout}s)"
+
+    start_time=$(date +%s)
+    while true; do
+        elapsed=$(($(date +%s) - start_time))
+
+        if [[ $elapsed -ge $timeout ]]; then
+            step_warn_log "Timeout waiting for nodes to restart (${timeout}s)"
+            break
+        fi
+
+        all_ready=true
+        local ready_count=0
+
+        for ip in "${all_nodes[@]}"; do
+            if step_test_port "$ip" "50000" "2"; then
+                ready_count=$((ready_count + 1))
+            else
+                all_ready=false
+            fi
+        done
+
+        if $all_ready; then
+            step_info_log "All $total_nodes nodes ready after ${elapsed}s"
+            break
+        fi
+
+        detail_info_log "Waiting... $ready_count/$total_nodes nodes ready (${elapsed}s elapsed)"
+        sleep 5
+    done
+}
+
+job_bootstrap_cluster() {
+    job_info_log "Bootstrap Cluster"
+
+    job_diagnose_nodes
+
+    local bootstrap_node="${CONTROL_PLANE_IPS_ARRAY[0]}"
+    step_info_log "Using control plane node $bootstrap_node for bootstrap (first in array: ${CONTROL_PLANE_IPS_ARRAY[*]})"
+
+    step_wait_for_api "$bootstrap_node" 300 "secure" || {
+        step_error_log "Control plane API never became available at $bootstrap_node"
+        return 1
+    }
+
+    step_info_log "Configure Talos Client"
+    if [[ -f "$TALOSCONFIG" ]]; then
+        step_run_command "Merge talosconfig" talosctl config merge "$TALOSCONFIG"
+    else
+        step_warn_log "talosconfig not found in $SECRETS_DIR, checking script dir..."
+        step_run_command "Merge talosconfig" talosctl config merge talosconfig
+    fi
+    step_run_command "Set talosctl endpoint" talosctl config endpoint "$bootstrap_node"
+
+    step_info_log "Apply StaticHostConfig"
+    for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}" "${WORKER_IPS_ARRAY[@]}"; do
+        talosctl patch machineconfig --nodes "$ip" --patch-file "${NODES_DIR}/statichost-config.yaml" >> "$LOG_FILE" 2>&1 || \
+            step_warn_log "StaticHostConfig failed for $ip (may already exist)"
+    done
+    rm -f "${NODES_DIR}/statichost-config.yaml"
+
+    step_info_log "Bootstrap etcd"
+
+    local etcd_members
+    step_info_log "Checking existing etcd members (10s timeout)..."
+    if etcd_members=$(timeout 10 talosctl etcd members --nodes "$bootstrap_node" 2>&1); then
+        step_warn_log "etcd appears to already have members - may need manual reset"
+        log_file_only "ETCD-MEMBERS" "$etcd_members"
+    else
+        # Log the failure but don't fail - this is just a check
+        log_file_only "ETCD-CHECK" "etcd members check failed or timed out: $?"
+    fi
+    step_run_command "Bootstrap etcd" talosctl bootstrap --nodes "$bootstrap_node"
+
+    # Stage 1: Wait for etcd to be healthy (this is critical)
+    local etcd_timeout=60
+    local etcd_start=$(date +%s)
+    local etcd_healthy=false
+    step_info_log "Stage 1: Wait for etcd health ($etcd_timeout)s"
+
+    while true; do
+        local etcd_elapsed=$(($(date +%s) - etcd_start))
+
+        # Capture output to a temp file so we can both log it and check it
+        local health_output
+        health_output=$(talosctl health --endpoints "$bootstrap_node" \
+            --nodes "${CONTROL_PLANE_IPS_ARRAY[*]}" \
+            --wait-timeout=10s 2>&1) || true
+
+        # Log the output for debugging
+        if [[ -n "$health_output" ]]; then
+            log_file_only "HEALTH-CHECK" "$health_output"
+        fi
+
+        if echo "$health_output" | grep -q "waiting for etcd to be healthy: OK"; then
+            etcd_healthy=true
+            step_info_log "etcd is healthy (${etcd_elapsed}s)"
+            break
+        fi
+
+        if [[ $etcd_elapsed -ge $etcd_timeout ]]; then
+            step_warn_log "etcd health check timeout, continuing anyway..."
+            break
+        fi
+
+        detail_info_log "Waiting for etcd... (${etcd_elapsed}s)"
+        sleep 5
+    done
+
+    # Stage 2: Wait for kubelet on all nodes
+    step_info_log "Stage 2: Wait for kubelet health (120s)"
+    local kubelet_timeout=120
+    local kubelet_start=$(date +%s)
+
+    while true; do
+        local kubelet_elapsed=$(($(date +%s) - kubelet_start))
+
+        # Check if all nodes report kubelet ready
+        local all_kubelets_ready=true
+        local health_output=""
+
+        for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}"; do
+            local node_health
+            node_health=$(talosctl health --endpoints "$bootstrap_node" --nodes "$ip" --wait-timeout=5s 2>&1) || true
+            health_output+="$node_health"$'\n'
+
+            if ! echo "$node_health" | grep -q "waiting for kubelet to be healthy: OK"; then
+                all_kubelets_ready=false
+            fi
+        done
+
+        # Log accumulated health output
+        if [[ -n "$health_output" ]]; then
+            log_file_only "HEALTH-CHECK-KUBELET" "$health_output"
+        fi
+
+        if $all_kubelets_ready; then
+            step_info_log "All kubelets healthy (${kubelet_elapsed}s)"
+            break
+        fi
+
+        if [[ $kubelet_elapsed -ge $kubelet_timeout ]]; then
+            step_warn_log "Kubelet health check timeout, continuing..."
+            break
+        fi
+
+        detail_info_log "Waiting for kubelets... (${kubelet_elapsed}s)"
+        sleep 5
+    done
+
+    # Stage 3: Check Kubernetes API (quick check only, don't block)
+    step_info_log "Stage 3: Quick Kubernetes API check (30s)"
+    local k8s_timeout=30  # Reduced from 180
+    local k8s_start=$(date +%s)
+    local k8s_ready=false
+
+    while true; do
+        local k8s_elapsed=$(($(date +%s) - k8s_start))
+
+        # Try via endpoint if DNS is working
+        if curl -sk "https://${CONTROL_PLANE_ENDPOINT}:6443/healthz" &>/dev/null; then
+            k8s_ready=true
+            step_info_log "Kubernetes API ready via endpoint (${k8s_elapsed}s)"
+            break
+        fi
+
+        if [[ $k8s_elapsed -ge $k8s_timeout ]]; then
+            step_info_log "K8s API not ready yet (expected), will verify via HAProxy"
+            break
+        fi
+
+        detail_info_log "Waiting for K8s API... (${k8s_elapsed}s)"
+        sleep 5
+    done
+
+    # Stage 4: Full health check (best effort - failure doesn't affect exit code)
+    step_info_log "Stage 4: Full cluster health check (optional)"
+    # Run directly without step_run_command to prevent exit code propagation
+    local health_output
+    if health_output=$(talosctl health --endpoints "$bootstrap_node" --nodes "$bootstrap_node" --wait-timeout=60s 2>&1); then
+        log_file_only "HEALTH-CHECK-FINAL" "$health_output"
+        step_info_log "Full health check passed"
+    else
+        log_file_only "HEALTH-CHECK-FINAL" "$health_output"
+        step_warn_log "Full health check failed (see log), but core services are up"
+    fi
+
+    step_info_log "Switch to HAProxy endpoint"
+    step_run_command "Switch endpoint to HAProxy" talosctl config endpoint "$HAPROXY_IP"
+
+    step_info_log "Update HAProxy with current control plane IPs"
+    update_haproxy "${CONTROL_PLANE_IPS_ARRAY[@]}" || step_warn_log "HAProxy update failed"
+
+    # Verify via HAProxy with shorter timeout
+    if step_run_command "Verify health via HAProxy" \
+        talosctl health --endpoints "$HAPROXY_IP" --nodes "$HAPROXY_IP" --wait-timeout=30s; then
+        step_info_log "Cluster accessible via HAProxy ($HAPROXY_IP)"
+    else
+        step_warn_log "Cluster healthy via direct IP but not via HAProxy (DNS may need time)"
+    fi
+
+    KUBECONFIG_PATH="${HOME}/.kube/config-${CLUSTER_NAME}"
+    mkdir -p "$(dirname "$KUBECONFIG_PATH")"
+
+    if step_run_command "Retrieve kubeconfig" talosctl kubeconfig "$KUBECONFIG_PATH" --nodes "$bootstrap_node"; then
+        chmod 600 "$KUBECONFIG_PATH"
+        log_file_only "KUBECONFIG" "Saved to $KUBECONFIG_PATH"
+    fi
+
+    save_state
+
+    # Final status
+    if $k8s_ready; then
+        step_info_log "Cluster bootstrap completed successfully"
+    else
+        step_warn_log "Cluster bootstrap completed with warnings - K8s API may need more time"
+        step_info_log "You can check status later with: kubectl --kubeconfig $KUBECONFIG_PATH get nodes"
+    fi
+}
+
+job_verify_cluster() {
+    job_info_log "Verify Cluster"
+
+    step_info_log "Check Kubernetes API"
+    if kubectl --kubeconfig "$KUBECONFIG_PATH" cluster-info &>/dev/null; then
+        step_info_log "Kubernetes API is ready"
+    else
+        step_warn_log "Kubernetes API not yet ready"
+    fi
+
+    step_info_log "Check node status"
+    kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide || true
+}
+
+job_diagnose_nodes() {
+    job_info_log "Pre-Bootstrap Diagnostics"
+
+    for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}"; do
+        step_info_log "Diagnosing $ip"
+
+        # Test port with verbose output
+        if timeout 5 bash -c "echo >/dev/tcp/$ip/50000" 2>/dev/null; then
+            step_info_log "  Port 50000: OPEN"
+        else
+            step_error_log "  Port 50000: CLOSED"
+        fi
+
+        # Try talosctl version (insecure)
+        local version_output
+        version_output=$(talosctl version --nodes "$ip" --insecure 2>&1) || true
+        if [[ -n "$version_output" ]]; then
+            step_info_log "  Talos version (insecure): $(echo "$version_output" | head -1)"
+        else
+            step_warn_log "  Talos version (insecure): No response"
+        fi
+
+        # Try secure API
+        local secure_output
+        secure_output=$(talosctl version --nodes "$ip" --endpoints "$ip" 2>&1) || true
+        if [[ -n "$secure_output" ]]; then
+            step_info_log "  Talos API (secure): RESPONDING"
+        else
+            step_warn_log "  Talos API (secure): No response"
+        fi
+    done
+}
+
+# ==================== STAGE LEVEL FUNCTIONS ====================
+
+stage_environment() {
+    stage_info_log "Environment Setup"
+
+    job_init_directories
+    job_detect_environment
+    check_prerequisites
+    job_parse_terraform || {
+        step_warn_log "Using defaults (terraform.tfvars not found)"
+    }
+    job_display_config
+}
+
+stage_discovery() {
+    stage_info_log "Node Discovery"
+
+    if [[ "${NO_DISCOVER:-false}" != "true" ]]; then
+        if ! job_discover_vms "initial"; then
+            stage_fatal_log "Discovery failed - cannot proceed"
+        fi
+    fi
+
+    if [[ -z "$CONTROL_PLANE_IPS" ]]; then
+        stage_fatal_log "No control plane IPs found. Set CONTROL_PLANE_IPS or ensure discovery works."
+    fi
+
+    IFS=' ' read -r -a CONTROL_PLANE_IPS_ARRAY <<< "$CONTROL_PLANE_IPS"
+    IFS=' ' read -r -a WORKER_IPS_ARRAY <<< "$WORKER_IPS"
+    ORIGINAL_CONTROL_PLANE_IPS="$CONTROL_PLANE_IPS"
+    ORIGINAL_WORKER_IPS="$WORKER_IPS"
+
+    if ! validate_environment; then
+        stage_fatal_log "Environment validation failed"
+    fi
+
+    if ! job_preflight_checks; then
+        stage_warn_log "Some pre-flight checks failed"
+    fi
+}
+
+stage_configuration() {
+    stage_info_log "Configuration Generation"
+
+    job_manage_secrets
+    job_generate_configs
+    job_apply_cluster_patches
+
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        step_info_log "DRY-RUN: Configuration files generated in ${NODES_DIR}"
+        save_state
+        exit 0
+    fi
+}
+
+stage_deployment() {
+    stage_info_log "Deployment"
+
+    step_info_log "Summary:"
+    detail_info_log "Control Planes: ${#CONTROL_PLANE_IPS_ARRAY[@]} nodes"
+    detail_info_log "Workers: ${#WORKER_IPS_ARRAY[@]} nodes"
+    detail_info_log "Parallel: Yes (CP: $MAX_PARALLEL_CONTROL_PLANES, Worker: $MAX_PARALLEL_WORKERS)"
+
+    if ! confirm_proceed "Deploy cluster with these settings?"; then
+        step_info_log "Deployment cancelled by user"
+        exit 0
+    fi
+
+    job_deploy_control_planes || {
+        stage_fatal_log "Control plane deployment failed"
+    }
+
+    job_deploy_workers
+
+    update_haproxy "${CONTROL_PLANE_IPS_ARRAY[@]}" || step_warn_log "HAProxy update failed"
+    check_haproxy_status
+}
+
+stage_post_deploy() {
+    stage_info_log "Post-Deployment"
+
+    job_wait_for_restart
+
+    job_info_log "Using rediscovered IPs for bootstrap:"
+    step_info_log "Control planes: ${CONTROL_PLANE_IPS_ARRAY[*]}"
+    step_info_log "Workers: ${WORKER_IPS_ARRAY[*]}"
+
+    job_bootstrap_cluster
+    job_verify_cluster
+}
+
+# ==================== PLAN LEVEL FUNCTIONS ====================
+
+plan_bootstrap() {
+    plan_info_log "Bootstrap Execution"
+
+    stage_environment
+    stage_discovery
+    stage_configuration
+    stage_deployment
+    stage_post_deploy
+
+    plan_info_log "Bootstrap Complete"
+    step_info_log "Kubeconfig: export KUBECONFIG=$KUBECONFIG_PATH"
+    step_info_log "Talos Dashboard: talosctl dashboard --endpoints $HAPROXY_IP "
+    log_file_only "COMPLETE" "Bootstrap finished successfully"
+}
+
+plan_discover() {
+    plan_info_log "Discovery Only"
+
+    stage_info_log "Node Discovery"
+
+    job_init_directories
+    job_detect_environment
+    job_parse_terraform || {
+        stage_error_log "Failed to parse terraform configuration"
+        exit 1
+    }
+    job_display_config
+
+    if ! job_discover_vms "initial"; then
+        stage_error_log "Discovery failed"
+        exit 1
+    fi
+
+    echo
+    echo "CONTROL_PLANE_IPS=\"${CONTROL_PLANE_IPS}\""
+    echo "WORKER_IPS=\"${WORKER_IPS}\""
+}
+
+plan_status() {
+    plan_info_log "Show Status"
+    load_state 2>/dev/null || {
+        plan_error_log "No state file"
+        exit 1
+    }
+
+    if command -v jq &>/dev/null; then
+        echo "State: $STATE_FILE"
+        jq -r '"Timestamp: \(.timestamp)", "Control Planes:", (.control_planes[] | "  \(.ip) (VM \(.vmid))"), "Workers:", (.workers[] | "  \(.ip) (VM \(.vmid))")' "$STATE_FILE"
+    else
+        cat "$STATE_FILE"
+    fi
+}
+
+plan_logs() {
+    plan_info_log "Collect Logs"
+    load_state 2>/dev/null || {
+        plan_error_log "No state file"
+        exit 1
+    }
+
+    local cp_ips worker_ips
+    cp_ips=$(jq -r '.control_planes[].ip' "$STATE_FILE" 2>/dev/null)
+    worker_ips=$(jq -r '.workers[].ip' "$STATE_FILE" 2>/dev/null)
+
+    for ip in $cp_ips $worker_ips; do
+        collect_node_logs "$ip"
+    done
+    check_haproxy_status
+}
+
+plan_cleanup() {
+    plan_info_log "Cleanup"
+
+    stage_info_log "Remove Generated Files"
+
+    job_info_log "Clean node configurations"
+
+    local removed_count=0
+    if [[ -d "$NODES_DIR" ]]; then
+        removed_count=$(find "$NODES_DIR" -type f 2>/dev/null | wc -l)
+        rm -rf "${NODES_DIR:?}/"*
+    fi
+
+    rm -f "${SCRIPT_DIR}"/node-*.yaml \
+          "${SCRIPT_DIR}"/patch-*.yaml \
+          "${SCRIPT_DIR}"/controlplane.yaml \
+          "${SCRIPT_DIR}"/worker.yaml \
+          "${SCRIPT_DIR}"/talosconfig \
+          "${SCRIPT_DIR}"/statichost-config.yaml \
+          "${SCRIPT_DIR}"/cluster-patch.yaml 2>/dev/null || true
+
+    step_info_log "Cleanup complete (removed ${removed_count} files from nodes/)"
+    step_info_log "Secrets preserved in ${SECRETS_DIR}"
+}
+
+plan_reset() {
+    plan_info_log "Full Reset"
+
+    stage_info_log "Reset Cluster"
+
+    job_info_log "Confirm reset"
+
+    if ! confirm_proceed "Permanently delete all configs, state, and secrets for cluster ${CLUSTER_NAME}?"; then
+        step_info_log "Reset cancelled"
+        exit 0
+    fi
+
+    job_info_log "Remove cluster data"
+
+    if [[ -d "$CLUSTER_DIR" ]]; then
+        rm -rf "${CLUSTER_DIR:?}"
+        step_info_log "Removed cluster directory: $CLUSTER_DIR"
+    fi
+
+    rm -f "${SCRIPT_DIR}"/node-*.yaml \
+          "${SCRIPT_DIR}"/patch-*.yaml \
+          "${SCRIPT_DIR}"/controlplane.yaml \
+          "${SCRIPT_DIR}"/worker.yaml \
+          "${SCRIPT_DIR}"/talosconfig 2>/dev/null || true
+
+    step_info_log "Reset complete for cluster ${CLUSTER_NAME}"
+}
+
+plan_haproxy() {
+    plan_info_log "Update HAProxy Configuration"
+
+    stage_info_log "Configure HAProxy"
+
+    job_info_log "Update backend servers"
+
+    update_haproxy "$@"
+}
+
+# ==================== HELPER FUNCTIONS ====================
+
+check_prerequisites() {
+    job_info_log "Check Prerequisites"
+
+    local missing=()
+    local version_issues=()
+
+    # Required binaries
+    for cmd in talosctl ssh scp; do
+        if ! command -v "$cmd" &>/dev/null; then
+            missing+=("$cmd")
+        fi
+    done
+
+    # Optional but recommended
+    if ! command -v jq &>/dev/null; then
+        step_warn_log "jq not found - state management will be limited"
+    fi
+
+    # Check talosctl version compatibility
+    if command -v talosctl &>/dev/null; then
+        local talos_version
+        talos_version=$(talosctl version --client 2>/dev/null | grep -oP 'Tag:\s*\K[^[:space:]]+' | head -1 || echo "unknown")
+        detail_info_log "talosctl version: $talos_version"
+
+        # Warn if major version mismatch
+        if [[ "$talos_version" != "unknown" && ! "$talos_version" =~ ^${TALOS_VERSION%%.*} ]]; then
+            step_warn_log "talosctl version ($talos_version) may not match target ($TALOS_VERSION)"
+        fi
+    fi
+
+    # Check SSH key is available
+    if ! ssh-add -l &>/dev/null; then
+        step_warn_log "No SSH keys loaded in ssh-agent"
+        # Check for default key files
+        if [[ ! -f "$HOME/.ssh/id_rsa" && ! -f "$HOME/.ssh/id_ed25519" ]]; then
+            step_warn_log "No default SSH key found"
+        fi
+    fi
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        step_fatal_log "Missing required tools: ${missing[*]}"
+    fi
+
+    step_info_log "Prerequisites satisfied"
+}
+
+collect_node_logs() {
+    local ip="$1"
+    local log_file="${LOG_DIR}/node-${ip}-$(date +%Y%m%d_%H%M%S).log"
+
+    step_info_log "Collect logs from $ip"
+    talosctl logs kubelet --nodes "$ip" 2>/dev/null | head -100 > "$log_file" || true
+    talosctl dmesg --nodes "$ip" 2>/dev/null | tail -100 >> "$log_file" || true
+
+    log_file_only "NODE-LOGS" "Saved to $log_file"
+}
+
+populate_arp_table() {
+    local host="$1"
+
+    step_info_log "Populating ARP table"
+
+    ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+        "${TF_PROXMOX_SSH_USER}@$host" \
+        "ip -s -s neigh flush all" >/dev/null 2>&1 || true
+
+    local arp_populated=false
+    local arp_attempts=0
+    local max_arp_attempts=5
+    local parallel_pings=255
+
+    while [[ $arp_attempts -lt $max_arp_attempts && "$arp_populated" == "false" ]]; do
+        arp_attempts=$(($arp_attempts + 1))
+        detail_info_log "ARP population attempt $arp_attempts/$max_arp_attempts"
+
+        # Clear associative arrays to start fresh each attempt
+        IP_BY_MAC=()
+        VMID_BY_IP=()
+
+        # Rate-limited ping sweep
+        ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+            "${TF_PROXMOX_SSH_USER}@$host" \
+            "seq 1 254 | xargs -P $parallel_pings -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true" \
+            2>/dev/null || true
+
+        sleep 3
+
+        local arp_output
+        arp_output=$(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+            "${TF_PROXMOX_SSH_USER}@$host" \
+            "cat /proc/net/arp" 2>/dev/null) || continue
+
+        local found_macs=0
+        while IFS= read -r line; do
+            [[ "$line" =~ ^IP[[:space:]]+HW ]] && continue
+            local ip mac
+            ip=$(echo "$line" | awk '{print $1}')
+            mac=$(echo "$line" | awk '{print $4}' | tr '[:lower:]' '[:upper:]')
+            [[ "$mac" == "00:00:00:00:00:00" ]] && continue
+            [[ -z "$mac" || "$mac" == "INCOMPLETE" ]] && continue
+
+            for vmid in "${!MAC_BY_VMDATA[@]}"; do
+                local vm_mac="${MAC_BY_VMDATA[$vmid]}"
+                if [[ "$mac" == "$vm_mac" && -n "$ip" ]]; then
+                    IP_BY_MAC["$vmid"]="$ip"
+                    VMID_BY_IP["$ip"]="$vmid"
+                    found_macs=$(($found_macs + 1))
+                    step_info_log "Discovered ${NODE_ROLES[$vmid]}: $vmid -> $ip"
+                    break
+                fi
+            done
+        done <<< "$arp_output"
+
+        if [[ $found_macs -ge ${#MAC_BY_VMDATA[@]} ]]; then
+            arp_populated=true
+        else
+            detail_info_log "Found $found_macs/${#MAC_BY_VMDATA[@]} VMs in ARP, retrying..."
+            sleep 5
+        fi
+    done
+
+    [[ "$arp_populated" == "true" ]]
+}
+
+generate_cp_patch() {
+    local ip="$1"
+    local vmid="$2"
+    local nic="${NODE_INTERFACES[$ip]:-$DEFAULT_NETWORK_INTERFACE}"
+    local disk="${NODE_DISKS[$ip]:-$DEFAULT_DISK}"
+
+    cat <<EOF
 machine:
   install:
     disk: /dev/${disk}
@@ -1056,38 +1703,16 @@ machine:
       - name: nvme_tcp
       - name: vfio_pci
       - name: zfs
-  certSANs:
-    - ${ip}
-    - ${HAPROXY_IP}
-    - ${CONTROL_PLANE_ENDPOINT}
-cluster:
-  apiServer:
-    certSANs:
-      - ${ip}
-      - ${HAPROXY_IP}
-      - ${CONTROL_PLANE_ENDPOINT}
-      - 127.0.0.1
 EOF
-        # Copy from secrets dir base config
-        cp "$base_cp" "$node_config"
+}
 
-        run_cmd "Patch control plane config for $ip" \
-            talosctl machineconfig patch "$node_config" \
-            --patch "@$patch_file" \
-            --output "$node_config"
+generate_worker_patch() {
+    local ip="$1"
+    local vmid="$2"
+    local nic="${NODE_INTERFACES[$ip]:-$DEFAULT_NETWORK_INTERFACE}"
+    local disk="${NODE_DISKS[$ip]:-$DEFAULT_DISK}"
 
-        log_detail "Generated control plane config: $node_config"
-    done
-
-    for ip in "${WORKER_IPS_ARRAY[@]}"; do
-        local vmid="${NODE_VMIDS[$ip]:-}"
-        local nic="${NODE_INTERFACES[$ip]:-$DEFAULT_NETWORK_INTERFACE}"
-        local disk="${NODE_DISKS[$ip]:-$DEFAULT_DISK}"
-
-        local patch_file="${NODES_DIR}/patch-worker-${ip}.yaml"
-        local node_config="${NODES_DIR}/node-worker-${ip}.yaml"
-
-        cat > "$patch_file" <<EOF
+    cat <<EOF
 machine:
   install:
     disk: /dev/${disk}
@@ -1120,442 +1745,475 @@ machine:
           - bind
           - rshared
           - rw
-  certSANs:
-    - ${ip}
-    - ${HAPROXY_IP}
-    - ${CONTROL_PLANE_ENDPOINT}
-cluster:
-  apiServer:
-    certSANs:
-      - ${ip}
-      - ${HAPROXY_IP}
-      - ${CONTROL_PLANE_ENDPOINT}
-      - 127.0.0.1
 EOF
-        # Copy from secrets dir base config
-        cp "$base_worker" "$node_config"
-
-        run_cmd "Patch worker config for $ip" \
-            talosctl machineconfig patch "$node_config" \
-            --patch "@$patch_file" \
-            --output "$node_config"
-
-        log_detail "Generated worker config: $node_config"
-    done
-
-    # Clean up patch files, keep only final node configs
-    rm -f "${NODES_DIR}"/patch-*.yaml
-    log_info "Node configurations generated in ${NODES_DIR}"
-    log_info "Base configs secured in ${SECRETS_DIR}"
 }
 
-# ==================== IMPROVED MAIN BOOTSTRAP ====================
-run_bootstrap() {
-    local SKIP_PREFLIGHT=false
-    local DISCOVER_MODE=false
-    local DRY_RUN=false
-
-    for arg in "$@"; do
-        case "$arg" in
-            --skip-preflight) SKIP_PREFLIGHT=true ;;
-            --discover) DISCOVER_MODE=true ;;
-            --dry-run) DRY_RUN=true ;;
-        esac
-    done
-
-    # Initialize directory structure first
-    init_directories
-
-    # Parse terraform.tfvars for VM configuration
-    parse_terraform_tfvars
-    show_terraform_config
-
-    if [[ "$DISCOVER_MODE" == "true" ]] || [[ "$USE_DISCOVERY" == "true" && -z "$CONTROL_PLANE_IPS" ]]; then
-        log_step "Auto-Discovery Mode (Initial)"
-        discover_proxmox_nodes "initial" || { log_error "Discovery failed"; exit 1; }
-    fi
-
-    if [[ -z "$CONTROL_PLANE_IPS" ]]; then
-        log_error "No control plane IPs defined (use --discover or set CONTROL_PLANE_IPS)"
-        exit 1
-    fi
-
-    IFS=' ' read -r -a CONTROL_PLANE_IPS_ARRAY <<< "$CONTROL_PLANE_IPS"
-    IFS=' ' read -r -a WORKER_IPS_ARRAY <<< "$WORKER_IPS"
-    ORIGINAL_CONTROL_PLANE_IPS="$CONTROL_PLANE_IPS"
-    ORIGINAL_WORKER_IPS="$WORKER_IPS"
-
-    log_step "Bootstrap Configuration"
-    log_info "Control Planes: ${CONTROL_PLANE_IPS_ARRAY[*]}"
-    log_info "Workers: ${WORKER_IPS_ARRAY[*]:-<none>}"
-    log_info "HAProxy: $HAPROXY_IP"
-    log_info "Platform: $([[ "$IS_WINDOWS" == "true" ]] && echo "Windows/Git Bash" || echo "Unix/Linux")"
-    log_info "Cluster Dir: $CLUSTER_DIR"
-
-    if [[ "$SKIP_PREFLIGHT" == "false" ]]; then
-        log_step "Pre-flight Checks"
-
-        for cmd in talosctl kubectl curl ssh jq; do  # Added jq check
-            if ! command -v "$cmd" &>/dev/null; then
-                log_error "$cmd not found in PATH (jq is required for state management)"
-                exit 1
-            fi
-        done
-
-        run_cmd "Check HAProxy stats endpoint" curl -s -o /dev/null "http://${HAPROXY_IP}:9000" || \
-            log_warn "HAProxy stats not responding (continuing anyway)"
-
-        for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}" "${WORKER_IPS_ARRAY[@]}"; do
-            if $PING_CMD "$ip" >/dev/null 2>&1; then
-                log_info "✓ $ip reachable"
-            else
-                log_error "✗ $ip unreachable"
-                exit 1
-            fi
-        done
-    fi
-
-    log_step "Secrets Management"
-
-    # Use secrets directory
-    if [[ ! -f "$SECRETS_FILE" ]]; then
-        log_info "Generating new secrets..."
-        run_cmd "Generate Talos secrets" talosctl gen secrets -o "$SECRETS_FILE" && \
-            chmod 600 "$SECRETS_FILE" && \
-            cp "$SECRETS_FILE" "${SECRETS_DIR}/secrets-$(date +%Y%m%d_%H%M%S).yaml"
-    else
-        log_info "Using existing secrets: $SECRETS_FILE"
-    fi
-
-    log_step "Generating Talos Configurations"
-    # Clean only nodes dir, keep secrets
-    rm -rf "${NODES_DIR:?}/"*
-
-    # Generate configs to script dir first (talosctl limitation), then we'll copy if needed
-    run_cmd "Generate Talos configurations" \
-        talosctl gen config \
-        --with-secrets "$SECRETS_FILE" \
-        --kubernetes-version "$KUBERNETES_VERSION" \
-        --talos-version "$TALOS_VERSION" \
-        --install-image "$INSTALLER_IMAGE" \
-        --additional-sans "${HAPROXY_IP},${CONTROL_PLANE_ENDPOINT}" \
-        "$CLUSTER_NAME" "https://${CONTROL_PLANE_ENDPOINT}:6443"
-
-    generate_patches
-
-    log_step "Applying Common Cluster Settings"
-    cat > "${NODES_DIR}/cluster-patch.yaml" <<'EOF'
-cluster:
-  extraManifests:
-    - https://raw.githubusercontent.com/alex1989hu/kubelet-serving-cert-approver/main/deploy/standalone-install.yaml
-    - https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-  allowSchedulingOnControlPlanes: false
-  apiServer:
-    admissionControl:
-      - name: PodSecurity
-        configuration:
-          apiVersion: pod-security.admission.config.k8s.io/v1
-          kind: PodSecurityConfiguration
-          exemptions:
-            namespaces:
-              - longhorn-system
-EOF
-
-    for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}"; do
-        run_cmd "Apply cluster patch to $ip" \
-            talosctl machineconfig patch "${NODES_DIR}/node-cp-${ip}.yaml" \
-            --patch "@${NODES_DIR}/cluster-patch.yaml" \
-            --output "${NODES_DIR}/node-cp-${ip}.yaml"
-    done
-    rm -f "${NODES_DIR}/cluster-patch.yaml"
-
-    log_step "Preparing StaticHostConfig"
-    cat > "${NODES_DIR}/statichost-config.yaml" <<EOF
-apiVersion: v1alpha1
-kind: StaticHostConfig
-name: ${HAPROXY_IP}
-hostnames:
-  - ${CONTROL_PLANE_ENDPOINT}
-EOF
-
-    # Move talosconfig to secrets dir
-    if [[ -f "${SCRIPT_DIR}/talosconfig" ]]; then
-        mv "${SCRIPT_DIR}/talosconfig" "$TALOSCONFIG"
-        chmod 600 "$TALOSCONFIG"
-    fi
-
-    if [[ "$DRY_RUN" == "true" ]]; then
-        log_info "DRY-RUN: Configuration files generated in ${NODES_DIR}"
-        ls -la "${NODES_DIR}/" | _log_file "DRY-RUN" "$(cat)"
-        save_state
-        exit 0
-    fi
-
-    log_step "Ready to Deploy"
-    log_info "Summary:"
-    log_info "  Control Planes: ${#CONTROL_PLANE_IPS_ARRAY[@]} nodes"
-    log_info "  Workers: ${#WORKER_IPS_ARRAY[@]} nodes"
-    log_info "  Parallel: $([[ "$PARALLEL_WORKERS" == "true" ]] && echo "Yes (max $DEPLOY_JOBS)" || echo "No")"
-
-    if ! confirm_proceed "Deploy cluster with these settings?"; then
-        log_info "Deployment cancelled by user"
-        exit 0
-    fi
-
-    # Clean up old result files
-    rm -f "$STATE_DIR"/deploy-*.result "$STATE_DIR"/pids/*.pids 2>/dev/null || true
-
-    deploy_control_planes CONTROL_PLANE_IPS_ARRAY || { log_error "Control plane deployment failed"; exit 1; }
-
-    if [[ ${#WORKER_IPS_ARRAY[@]} -gt 0 ]]; then
-        if [[ "$PARALLEL_WORKERS" == "true" ]]; then
-            deploy_workers_parallel WORKER_IPS_ARRAY || log_warn "Some workers may have failed"
-        else
-            for ip in "${WORKER_IPS_ARRAY[@]}"; do
-                deploy_node "worker" "$ip" "${NODES_DIR}/node-worker-${ip}.yaml" || log_warn "Worker $ip failed"
-            done
-        fi
-    fi
-
-    log_step "Waiting for nodes to restart (${POST_DEPLOY_WAIT}s)..."
-    sleep "$POST_DEPLOY_WAIT"
-
-    log_step "Re-discovering nodes after reboot..."
-    local rediscovery_attempts=3
-    local rediscovery_success=false
-
-    while [[ $rediscovery_attempts -gt 0 ]]; do
-        if discover_proxmox_nodes "post-deploy"; then
-            rediscovery_success=true
-            break
-        fi
-        ((rediscovery_attempts--))
-        [[ $rediscovery_attempts -gt 0 ]] && { log_warn "Re-discovery failed, retrying in 30s..."; sleep 30; }
-    done
-
-    IFS=' ' read -r -a CONTROL_PLANE_IPS_ARRAY <<< "$CONTROL_PLANE_IPS"
-    IFS=' ' read -r -a WORKER_IPS_ARRAY <<< "$WORKER_IPS"
-
-    if [[ "$rediscovery_success" == "false" ]]; then
-        log_warn "Re-discovery failed, falling back to original IPs..."
-        IFS=' ' read -r -a CONTROL_PLANE_IPS_ARRAY <<< "$ORIGINAL_CONTROL_PLANE_IPS"
-        IFS=' ' read -r -a WORKER_IPS_ARRAY <<< "$ORIGINAL_WORKER_IPS"
-    fi
-
-    log_info "Post-reboot IPs:"
-    log_info "  Control Planes: ${CONTROL_PLANE_IPS_ARRAY[*]:-<none>}"
-    log_info "  Workers: ${WORKER_IPS_ARRAY[*]:-<none>}"
+validate_environment() {
+    local valid=true
 
     if [[ ${#CONTROL_PLANE_IPS_ARRAY[@]} -eq 0 ]]; then
-        log_error "No control plane nodes available after re-discovery"
-        exit 1
+        step_error_log "No control plane IPs"
+        valid=false
     fi
 
-    log_step "Waiting for Talos API on control plane nodes..."
-    local api_ready_count=0
+    if [[ ${#CONTROL_PLANE_IPS_ARRAY[@]} -lt 1 ]]; then
+        step_error_log "At least 1 control plane required"
+        valid=false
+    fi
+
+    if [[ ${#CONTROL_PLANE_IPS_ARRAY[@]} -gt 1 && $((${#CONTROL_PLANE_IPS_ARRAY[@]} % 2)) -eq 0 ]]; then
+        step_warn_log "Even number of control planes (${#CONTROL_PLANE_IPS_ARRAY[@]}) - etcd prefers odd numbers"
+    fi
+
     for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}"; do
-        wait_for_talos_api "$ip" "$API_READY_WAIT" && ((api_ready_count++)) || log_warn "API not ready on $ip"
+        if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            step_error_log "Invalid control plane IP: $ip"
+            valid=false
+        fi
     done
 
-    if [[ $api_ready_count -eq 0 ]]; then
-        log_error "No control plane nodes have Talos API available"
-        collect_node_logs "${CONTROL_PLANE_IPS_ARRAY[0]}"
-        exit 1
+    for ip in "${WORKER_IPS_ARRAY[@]}"; do
+        if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            step_error_log "Invalid worker IP: $ip"
+            valid=false
+        fi
+    done
+
+    # Check for required files
+    if [[ ! -f "$SECRETS_FILE" && "${DRY_RUN:-false}" != "true" ]]; then
+        step_info_log "Secrets will be generated: $SECRETS_FILE"
     fi
 
-    log_info "$api_ready_count/${#CONTROL_PLANE_IPS_ARRAY[@]} control plane nodes ready"
+    $valid
+}
 
+save_state() {
+    local timestamp
+    timestamp=$(date -Iseconds)
+
+    # Check if jq is available
+    if ! command -v jq &>/dev/null; then
+        step_warn_log "jq not available, using fallback state format"
+        # Fallback to simple format
+        cat > "$STATE_FILE" <<EOF
+{
+  "timestamp": "$timestamp",
+  "cluster_name": "$CLUSTER_NAME",
+  "control_planes": $(printf '%s\n' "${CONTROL_PLANE_IPS_ARRAY[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]"),
+  "workers": $(printf '%s\n' "${WORKER_IPS_ARRAY[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]"),
+  "haproxy_ip": "$HAPROXY_IP",
+  "control_plane_endpoint": "$CONTROL_PLANE_ENDPOINT"
+}
+EOF
+        return
+    fi
+
+    # Build control planes array - match IPs to VMIDs properly
+    local cp_array="[]"
     if [[ ${#CONTROL_PLANE_IPS_ARRAY[@]} -gt 0 ]]; then
-        update_haproxy "${CONTROL_PLANE_IPS_ARRAY[@]}" || log_warn "HAProxy update failed"
+        # Create array of ip:vmid pairs for control planes
+        local cp_pairs=()
+        for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}"; do
+            local vmid="${VMID_BY_IP[$ip]:-unknown}"
+            cp_pairs+=("$ip:$vmid")
+        done
+        cp_array=$(jq -n --arg pairs "${cp_pairs[*]}" '
+            ($pairs | split(" ")) as $pair_list |
+            [range($pair_list | length) |
+                ($pair_list[.] | split(":")) as $parts |
+                {ip: $parts[0], vmid: $parts[1]}
+            ]
+        ')
     fi
 
-    check_haproxy_status
+    # Build workers array - match IPs to VMIDs properly
+    local worker_array="[]"
+    if [[ ${#WORKER_IPS_ARRAY[@]} -gt 0 ]]; then
+        # Create array of ip:vmid pairs for workers
+        local worker_pairs=()
+        for ip in "${WORKER_IPS_ARRAY[@]}"; do
+            local vmid="${VMID_BY_IP[$ip]:-unknown}"
+            worker_pairs+=("$ip:$vmid")
+        done
+        worker_array=$(jq -n --arg pairs "${worker_pairs[*]}" '
+            ($pairs | split(" ")) as $pair_list |
+            [range($pair_list | length) |
+                ($pair_list[.] | split(":")) as $parts |
+                {ip: $parts[0], vmid: $parts[1]}
+            ]
+        ')
+    fi
 
-    local bootstrap_node="${CONTROL_PLANE_IPS_ARRAY[0]}"
-    log_info "Using control plane node $bootstrap_node for bootstrap..."
+    # Construct final JSON
+    jq -n \
+        --arg timestamp "$timestamp" \
+        --arg cluster_name "$CLUSTER_NAME" \
+        --argjson control_planes "$cp_array" \
+        --argjson workers "$worker_array" \
+        --arg haproxy_ip "$HAPROXY_IP" \
+        --arg control_plane_endpoint "$CONTROL_PLANE_ENDPOINT" \
+        '{
+            timestamp: $timestamp,
+            cluster_name: $cluster_name,
+            control_planes: $control_planes,
+            workers: $workers,
+            haproxy_ip: $haproxy_ip,
+            control_plane_endpoint: $control_plane_endpoint
+        }' > "$STATE_FILE"
 
-    wait_for_talos_api "$bootstrap_node" 300 || {
-        log_error "Control plane API never became available at $bootstrap_node"
-        collect_node_logs "$bootstrap_node"
-        exit 1
+    chmod 600 "$STATE_FILE"
+}
+
+load_state() {
+    if [[ ! -f "$STATE_FILE" ]]; then
+        return 1
+    fi
+
+    if ! command -v jq &>/dev/null; then
+        step_error_log "jq required for state loading"
+        return 1
+    fi
+
+    # Validate JSON
+    if ! jq empty "$STATE_FILE" 2>/dev/null; then
+        step_error_log "State file is corrupted: $STATE_FILE"
+        return 1
+    fi
+
+    CLUSTER_NAME=$(jq -r '.cluster_name // empty' "$STATE_FILE")
+    CONTROL_PLANE_IPS=$(jq -r '[.control_planes[].ip] | join(" ")' "$STATE_FILE" 2>/dev/null || echo "")
+    WORKER_IPS=$(jq -r '[.workers[].ip] | join(" ")' "$STATE_FILE" 2>/dev/null || echo "")
+    HAPROXY_IP=$(jq -r '.haproxy_ip // empty' "$STATE_FILE")
+    CONTROL_PLANE_ENDPOINT=$(jq -r '.control_plane_endpoint // empty' "$STATE_FILE")
+
+    # Rebuild arrays
+    IFS=' ' read -r -a CONTROL_PLANE_IPS_ARRAY <<< "$CONTROL_PLANE_IPS"
+    IFS=' ' read -r -a WORKER_IPS_ARRAY <<< "$WORKER_IPS"
+
+    # Rebuild VMID mappings if available
+    if [[ -f "$STATE_FILE" ]]; then
+        local cp_vmids
+        cp_vmids=$(jq -r '.control_planes[] | "\(.ip):\(.vmid)"' "$STATE_FILE" 2>/dev/null)
+        while IFS=: read -r ip vmid; do
+            [[ -n "$ip" && -n "$vmid" ]] && VMID_BY_IP["$ip"]="$vmid"
+        done <<< "$cp_vmids"
+
+        local worker_vmids
+        worker_vmids=$(jq -r '.workers[] | "\(.ip):\(.vmid)"' "$STATE_FILE" 2>/dev/null)
+        while IFS=: read -r ip vmid; do
+            [[ -n "$ip" && -n "$vmid" ]] && VMID_BY_IP["$ip"]="$vmid"
+        done <<< "$worker_vmids"
+    fi
+
+    [[ -n "$CLUSTER_NAME" ]]
+}
+
+check_haproxy_status() {
+    job_info_log "Check HAProxy Status"
+
+    if curl -s -u "${HAPROXY_STATS_USERNAME}:${HAPROXY_STATS_PASSWORD}" "http://${HAPROXY_IP}:9000/stats" > /dev/null 2>&1; then
+        step_info_log "HAProxy stats accessible at http://${HAPROXY_IP}:9000/stats"
+    else
+        step_warn_log "HAProxy stats not accessible"
+    fi
+}
+
+update_haproxy() {
+    local ips=()
+
+    # Handle both: update_haproxy "ip1 ip2 ip3" AND update_haproxy ip1 ip2 ip3
+    if [[ $# -eq 1 && "$1" =~ [[:space:]] ]]; then
+        read -ra ips <<< "$1"
+    else
+        ips=("$@")
+    fi
+
+    if [[ ${#ips[@]} -eq 0 ]]; then
+        step_warn_log "No IPs provided to update_haproxy"
+        return 1
+    fi
+
+    for ip in "${ips[@]}"; do
+        if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            step_error_log "Invalid IP address: $ip"
+            return 1
+        fi
+    done
+
+    step_info_log "Generate HAProxy configuration"
+    step_info_log "Backend servers: ${ips[*]}"
+
+    local haproxy_cfg
+    haproxy_cfg=$(mktemp /tmp/haproxy.cfg.XXXXXX) || {
+        step_error_log "Failed to create temporary file"
+        return 1
     }
 
-    log_step "Configuring Talos Client"
-    # Use talosconfig from secrets dir
-    if [[ -f "$TALOSCONFIG" ]]; then
-        run_cmd "Merge talosconfig" talosctl config merge "$TALOSCONFIG"
-    else
-        log_warn "talosconfig not found in $SECRETS_DIR, checking script dir..."
-        run_cmd "Merge talosconfig" talosctl config merge talosconfig
-    fi
-    run_cmd "Set talosctl endpoint" talosctl config endpoint "$bootstrap_node"
+    # Use double quotes for the heredoc delimiter to allow variable expansion
+    cat > "$haproxy_cfg" <<EOFCFG
+# ==================== GLOBAL ====================
+global
+    log /dev/log local0 info
+    log /dev/log local1 notice
+    chroot /var/lib/haproxy
+    stats socket /run/haproxy/admin.sock mode 660 level admin
+    stats timeout 30s
+    user haproxy
+    group haproxy
+    daemon
+    maxconn 32000
+    ulimit-n 65535
+    nbthread 4
+    cpu-map auto:1/1-4 0-3
+    tune.ssl.default-dh-param 2048
 
-    log_step "Applying StaticHostConfig"
-    for ip in "${CONTROL_PLANE_IPS_ARRAY[@]}" "${WORKER_IPS_ARRAY[@]}"; do
-        talosctl patch machineconfig --nodes "$ip" --patch-file "${NODES_DIR}/statichost-config.yaml" >> "$LOG_FILE" 2>&1 || \
-            log_warn "StaticHostConfig failed for $ip (may already exist)"
+# ==================== DEFAULTS ====================
+defaults
+    log global
+    mode tcp
+    option tcplog
+    option dontlognull
+    option tcp-smart-connect
+    option redispatch
+    option tcp-check
+    retries 3
+    timeout connect 5s
+    timeout client 30s
+    timeout server 30s
+    timeout check 5s
+    maxconn 32000
+
+# ==================== STATS PAGE ====================
+listen stats
+    bind ${HAPROXY_IP}:9000
+    mode http
+    stats enable
+    stats uri /
+    stats refresh 5s
+    stats show-legends
+    stats admin if TRUE
+    stats auth ${HAPROXY_STATS_USERNAME}:${HAPROXY_STATS_PASSWORD}
+
+# ==================== KUBERNETES API ====================
+frontend k8s-apiserver
+    bind ${HAPROXY_IP}:6443
+    mode tcp
+    option tcplog
+    tcp-request inspect-delay 5s
+    tcp-request content accept if { req_ssl_hello_type 1 }
+    default_backend k8s-controlplane
+
+backend k8s-controlplane
+    mode tcp
+    balance leastconn
+    option tcp-check
+    tcp-check connect port 6443
+    default-server inter 5s fall 3 rise 2
+EOFCFG
+
+    for ip in "${ips[@]}"; do
+        local server_name="talos-cp-${ip##*.}"
+        printf '    server %s %s:6443 check\n' "$server_name" "$ip" >> "$haproxy_cfg"
     done
-    rm -f "${NODES_DIR}/statichost-config.yaml"
 
-    log_step "Bootstrapping Cluster (etcd)"
-    run_cmd "Bootstrap etcd" talosctl bootstrap --nodes "$bootstrap_node"
+    # Continue with double-quoted heredoc
+    cat >> "$haproxy_cfg" <<EOFCFG
 
-    log_step "Waiting for Cluster Health"
-    run_cmd "Wait for cluster health (${BOOTSTRAP_TIMEOUT}s)" \
-        talosctl --endpoints "$bootstrap_node" --nodes "$bootstrap_node" health --wait-timeout="${BOOTSTRAP_TIMEOUT}s" || {
-        log_error "Cluster failed to become healthy within timeout"
-        collect_node_logs "$bootstrap_node"
-        exit 1
-    }
+# ==================== TALOS API ====================
+frontend talos-apiserver
+    bind ${HAPROXY_IP}:50000
+    mode tcp
+    option tcplog
+    tcp-request inspect-delay 5s
+    tcp-request content accept if { req_ssl_hello_type 1 }
+    default_backend talos-controlplane
 
-    log_step "Switching to HAProxy Endpoint"
-    run_cmd "Switch endpoint to HAProxy" talosctl config endpoint "$HAPROXY_IP"
+backend talos-controlplane
+    mode tcp
+    balance leastconn
+    option tcp-check
+    tcp-check connect port 50000
+    timeout connect 10s
+    timeout server 60s
+    default-server inter 5s fall 3 rise 2
+EOFCFG
 
-    if run_cmd "Verify health via HAProxy" \
-        talosctl --endpoints "$HAPROXY_IP" --nodes "$HAPROXY_IP" health --wait-timeout=60s; then
-        log_info "✓ Cluster accessible via HAProxy ($HAPROXY_IP)"
-    else
-        log_warn "Cluster healthy via direct IP but not via HAProxy"
-    fi
-
-    KUBECONFIG_PATH="${HOME}/.kube/config-${CLUSTER_NAME}"
-    mkdir -p "$(dirname "$KUBECONFIG_PATH")"
-
-    if run_cmd "Retrieve kubeconfig" talosctl kubeconfig "$KUBECONFIG_PATH" --nodes "$bootstrap_node"; then
-        chmod 600 "$KUBECONFIG_PATH"
-        _log_file "KUBECONFIG" "Saved to $KUBECONFIG_PATH"
-    fi
-
-    save_state
-
-    log_step "Bootstrap Complete"
-    log_info "Kubeconfig: export KUBECONFIG=$KUBECONFIG_PATH"
-    log_info "Talos Dashboard: talosctl --endpoints $HAPROXY_IP dashboard"
-    _log_file "COMPLETE" "Bootstrap finished successfully"
-}
-
-# ==================== OTHER COMMANDS ====================
-cmd_discover() {
-    log_step "Running Discovery Only"
-    discover_proxmox_nodes "initial"
-    echo
-    echo "CONTROL_PLANE_IPS=\"${CONTROL_PLANE_IPS}\""
-    echo "WORKER_IPS=\"${WORKER_IPS}\""
-}
-
-cmd_status() {
-    load_state 2>/dev/null || { log_error "No state file"; exit 1; }
-
-    if command -v jq &>/dev/null; then
-        echo "State: $STATE_FILE"
-        jq -r '"Timestamp: \(.timestamp)", "Control Planes:", (.control_planes[] | "  \(.ip) (VM \(.vmid))"), "Workers:", (.workers[] | "  \(.ip) (VM \(.vmid))")' "$STATE_FILE"
-    else
-        cat "$STATE_FILE"
-    fi
-}
-
-cmd_logs() {
-    load_state 2>/dev/null || { log_error "No state file"; exit 1; }
-
-    log_step "Collecting logs from all cluster nodes"
-    local cp_ips worker_ips
-    cp_ips=$(jq -r '.control_planes[].ip' "$STATE_FILE" 2>/dev/null)
-    worker_ips=$(jq -r '.workers[].ip' "$STATE_FILE" 2>/dev/null)
-
-    for ip in $cp_ips $worker_ips; do
-        collect_node_logs "$ip"
+    for ip in "${ips[@]}"; do
+        local server_name="talos-cp-${ip##*.}"
+        printf '    server %s %s:50000 check\n' "$server_name" "$ip" >> "$haproxy_cfg"
     done
-    check_haproxy_status
-}
 
-# ==================== IMPROVED CLEANUP ====================
-cmd_cleanup() {
-    log_step "Cleaning up generated files"
+    step_info_log "Copy configuration to HAProxy server"
+    detail_info_log "Target: ${HAPROXY_LOGIN_USERNAME}@${HAPROXY_IP}"
 
-    # Be more surgical - only remove generated node configs, keep secrets
-    local removed_count=0
-    if [[ -d "$NODES_DIR" ]]; then
-        removed_count=$(find "$NODES_DIR" -type f 2>/dev/null | wc -l)
-        rm -rf "${NODES_DIR:?}/"*
+    if ! scp -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+         "$haproxy_cfg" "${HAPROXY_LOGIN_USERNAME}@${HAPROXY_IP}:/tmp/haproxy.cfg.new" >> "$LOG_FILE" 2>&1; then
+        step_error_log "Failed to copy config to HAProxy server"
+        rm -f "$haproxy_cfg"
+        return 1
     fi
 
-    # Remove any stray base configs from script dir (backward compat)
-    rm -f "${SCRIPT_DIR}"/node-*.yaml \
-          "${SCRIPT_DIR}"/patch-*.yaml \
-          "${SCRIPT_DIR}"/controlplane.yaml \
-          "${SCRIPT_DIR}"/worker.yaml \
-          "${SCRIPT_DIR}"/talosconfig \
-          "${SCRIPT_DIR}"/statichost-config.yaml \
-          "${SCRIPT_DIR}"/cluster-patch.yaml 2>/dev/null || true
+    step_info_log "Install and validate configuration"
 
-    log_info "Cleanup complete (removed ${removed_count} files from nodes/)"
-    log_info "Secrets preserved in ${SECRETS_DIR}"
-}
+    local timestamp
+    timestamp=$(date +%Y%m%d_%H%M%S)
 
-cmd_reset() {
-    log_step "Full reset"
-    if ! confirm_proceed "Permanently delete all configs, state, and secrets for cluster ${CLUSTER_NAME}?"; then
-        log_info "Reset cancelled"
-        exit 0
+    # Backup and install with atomic operation
+    if ! ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+         "${HAPROXY_LOGIN_USERNAME}@${HAPROXY_IP}" "
+        set -e
+        sudo cp /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.backup.${timestamp}
+        sudo mv /tmp/haproxy.cfg.new /etc/haproxy/haproxy.cfg
+    " >> "$LOG_FILE" 2>&1; then
+        step_error_log "Failed to install new configuration"
+        rm -f "$haproxy_cfg"
+        return 1
     fi
 
-    # Safer reset - remove entire cluster directory (includes secrets, nodes, state)
-    if [[ -d "$CLUSTER_DIR" ]]; then
-        rm -rf "${CLUSTER_DIR:?}"
-        log_info "Removed cluster directory: $CLUSTER_DIR"
+    # Validate config
+    if ! ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+         "${HAPROXY_LOGIN_USERNAME}@${HAPROXY_IP}" "sudo haproxy -c -f /etc/haproxy/haproxy.cfg" >> "$LOG_FILE" 2>&1; then
+        step_error_log "HAProxy configuration validation failed"
+        step_info_log "Restoring backup configuration..."
+
+        ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+            "${HAPROXY_LOGIN_USERNAME}@${HAPROXY_IP}" "sudo cp /etc/haproxy/haproxy.cfg.backup.${timestamp} /etc/haproxy/haproxy.cfg" >> "$LOG_FILE" 2>&1 || true
+
+        # Attempt to reload old config
+        ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+            "${HAPROXY_LOGIN_USERNAME}@${HAPROXY_IP}" "sudo systemctl reload haproxy" >> "$LOG_FILE" 2>&1 || true
+
+        rm -f "$haproxy_cfg"
+        return 1
     fi
 
-    # Also clean script dir for backward compatibility
-    rm -f "${SCRIPT_DIR}"/node-*.yaml \
-          "${SCRIPT_DIR}"/patch-*.yaml \
-          "${SCRIPT_DIR}"/controlplane.yaml \
-          "${SCRIPT_DIR}"/worker.yaml \
-          "${SCRIPT_DIR}"/talosconfig 2>/dev/null || true
+    # Reload HAProxy
+    if ! ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+         "${HAPROXY_LOGIN_USERNAME}@${HAPROXY_IP}" "sudo systemctl reload haproxy || sudo systemctl start haproxy" >> "$LOG_FILE" 2>&1; then
+        step_error_log "Failed to reload HAProxy"
+        rm -f "$haproxy_cfg"
+        return 1
+    fi
 
-    log_info "Reset complete for cluster ${CLUSTER_NAME}"
+    # Explicit cleanup
+    rm -f "$haproxy_cfg"
+
+    step_info_log "HAProxy updated successfully"
+    detail_info_log "Backup: /etc/haproxy/haproxy.cfg.backup.${timestamp}"
+    detail_info_log "Stats: http://${HAPROXY_IP}:9000"
+
+    return 0
 }
 
-cd "$SCRIPT_DIR"
-init_logging
-detect_environment
-MODE="${1:-help}"
+confirm_proceed() {
+    local msg="${1:-Proceed?}"
+    local response
 
-case "$MODE" in
-    bootstrap)
-        shift
-        run_bootstrap "$@"
-        ;;
-    discover)
-        cmd_discover
-        ;;
-    status)
-        cmd_status
-        ;;
-    logs)
-        cmd_logs
-        ;;
-    cleanup)
-        cmd_cleanup
-        ;;
-    reset)
-        cmd_reset
-        ;;
-    help|--help|-h|*)
-        echo "Usage: $0 {bootstrap|discover|status|logs|cleanup|reset} [--discover|--dry-run|--skip-preflight]"
-        echo ""
-        echo "Commands:"
-        echo "  bootstrap    Run the full bootstrap process"
-        echo "  discover     Only run node discovery"
-        echo "  status       Show saved cluster state"
-        echo "  logs         Collect diagnostic logs from all nodes"
-        echo "  cleanup      Remove generated configuration files"
-        echo "  reset        Full reset (delete secrets and state)"
-        echo ""
-        echo "Directory Structure:"
-        echo "  clusters/${CLUSTER_NAME}/"
-        echo "    ├── nodes/     # Generated node configs (ephemeral)"
-        echo "    ├── secrets/   # Sensitive files (secrets.yaml, talosconfig)"
-        echo "    ├── state/     # Runtime state and deployment results"
-        echo "    └── patches/   # Custom patches (optional)"
-        ;;
-esac
+    echo -en "${C_TIMESTAMP}[$(date '+%H:%M:%S')]${C_RESET} ${SEV_COLORS[WARN]}[INPUT]${C_RESET} ${msg} (y/N) "
+    read -n 1 -r response
+    echo ""
+
+    log_file_only "INPUT" "Prompt: '$msg' Response: '$response'"
+
+    [[ "$response" =~ ^[Yy]$ ]]
+}
+
+show_help() {
+    echo "Usage: $0 {bootstrap|discover|status|logs|cleanup|reset|haproxy} [options]"
+    echo ""
+    echo "Commands:"
+    echo "  bootstrap    Run the full bootstrap process"
+    echo "  discover     Only run node discovery and output IPs"
+    echo "  status       Show saved cluster state"
+    echo "  logs         Collect diagnostic logs from all nodes"
+    echo "  cleanup      Remove generated configuration files (keep secrets)"
+    echo "  reset        Full reset (delete all configs, state, and secrets)"
+    echo "  haproxy      Update HAProxy configuration"
+    echo ""
+    echo "Bootstrap Options:"
+    echo "  --no-discover      Skip auto-discovery (use CONTROL_PLANE_IPS env var)"
+    echo "  --dry-run          Generate configs but don't deploy"
+    echo "  --skip-preflight   Skip pre-flight connectivity checks"
+    echo ""
+    echo "Environment Variables:"
+    echo "  CLUSTER_NAME                  Cluster name (default: proxmox-talos-test)"
+    echo "  CONTROL_PLANE_ENDPOINT        DNS endpoint (default: \$CLUSTER_NAME.jdwkube.com)"
+    echo "  HAPROXY_IP                    HAProxy IP (default: 192.168.1.237)"
+    echo "  CONTROL_PLANE_IPS             Space-separated list of CP IPs (auto-discovered if not set)"
+    echo "  WORKER_IPS                    Space-separated list of worker IPs (auto-discovered if not set)"
+    echo "  KUBERNETES_VERSION            K8s version (default: v1.34.0)"
+    echo "  TALOS_VERSION                 Talos version (default: v1.12.1)"
+    echo "  INSTALLER_IMAGE               Talos installer image"
+    echo "  DEFAULT_NETWORK_INTERFACE     NIC for nodes (default: eth0)"
+    echo "  DEFAULT_DISK                  Disk for install (default: sda)"
+    echo "  VERBOSE=true                  Show all command output (default: false)"
+    echo ""
+    echo "Directory Structure:"
+    echo "  clusters/\${CLUSTER_NAME}/"
+    echo "    ├── nodes/     # Generated node configs (ephemeral, excluded from git)"
+    echo "    ├── secrets/   # Sensitive files (secrets.yaml, talosconfig)"
+    echo "    ├── state/     # Runtime state and deployment results"
+    echo "    └── patches/   # Custom Talos patches (optional)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 bootstrap                    # Full bootstrap with auto-discovery"
+    echo "  $0 bootstrap --no-discover      # Use CONTROL_PLANE_IPS from environment"
+    echo "  $0 bootstrap --dry-run          # Generate configs only"
+    echo "  $0 discover                     # Just discover and show IPs"
+    echo "  $0 cleanup                      # Clean up generated files"
+}
+
+# ==================== MAIN ENTRY ====================
+
+main() {
+    cd "$SCRIPT_DIR"
+
+    local command="${1:-help}"
+    shift || true
+
+    case "$command" in
+        bootstrap)
+            shift || true
+            local args=()
+            # Parse arguments
+            for arg in "$@"; do
+                case "$arg" in
+                    --skip-preflight) export SKIP_PREFLIGHT=true; args+=("$arg") ;;
+                    --no-discover) export NO_DISCOVER=true; args+=("$arg") ;;
+                    --dry-run) export DRY_RUN=true; args+=("$arg") ;;
+                esac
+            done
+            init_logging "$command" "${args[@]}"
+            plan_bootstrap
+            ;;
+        discover)
+            init_logging "$command"
+            plan_discover
+            ;;
+        status)
+            init_logging "$command"
+            plan_status
+            ;;
+        logs)
+            init_logging "$command"
+            plan_logs
+            ;;
+        cleanup)
+            init_logging "$command"
+            plan_cleanup
+            ;;
+        reset)
+            init_logging "$command"
+            plan_reset
+            ;;
+        haproxy|update-haproxy)
+            init_logging "$command" "$@"
+            plan_haproxy "$@"
+            ;;
+        help|--help|-h|*)
+            show_help
+            ;;
+    esac
+}
+
+main "$@"
