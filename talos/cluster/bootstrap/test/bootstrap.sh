@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.9.0"
+readonly VERSION="3.9.2"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
@@ -615,6 +615,7 @@ Exit Code: $exit_code
     [[ -n "${LOG_FILE:-}" ]] && echo "$footer_content" >> "$LOG_FILE"
     [[ -n "${CONSOLE_LOG_FILE:-}" ]] && echo "$footer_content" >> "$CONSOLE_LOG_FILE"
     [[ -n "${ALL_LOGS_FILE:-}" ]] && echo "$footer_content" >> "$ALL_LOGS_FILE"
+
     [[ "${LOG_SUMMARY:-true}" == "true" && -n "${RUN_DIR:-}" ]] && {
         local summary_file="$RUN_DIR/SUMMARY.txt"
         local add_cp_count=${#PLAN_ADD_CP[@]}
@@ -628,60 +629,60 @@ Exit Code: $exit_code
         local desired_worker_count=${#DESIRED_WORKER_VMIDS[@]}
         local deployed_cp_count=${#DEPLOYED_CP_IPS[@]}
         local deployed_worker_count=${#DEPLOYED_WORKER_IPS[@]}
-        local summary_content
-        summary_content=$(cat <<EOF
-TALOS BOOTSTRAP RUN SUMMARY
-===========================
 
-Run Information:
-  Timestamp:    ${RUN_TIMESTAMP:-unknown}
-  Date:         ${RUN_DATE_PREFIX:-unknown}
-  Cluster:      ${CLUSTER_NAME:-unknown}
-  Command:      ${0:-unknown}
-  Exit Code:    $exit_code
-  Status:       $([[ $exit_code -eq 0 ]] && echo "SUCCESS" || echo "FAILED")
+        {
+            echo "TALOS BOOTSTRAP RUN SUMMARY"
+            echo "==========================="
+            echo ""
+            echo "Run Information:"
+            echo "  Timestamp:    ${RUN_TIMESTAMP:-unknown}"
+            echo "  Date:         ${RUN_DATE_PREFIX:-unknown}"
+            echo "  Cluster:      ${CLUSTER_NAME:-unknown}"
+            echo "  Command:      ${0:-unknown}"
+            echo "  Exit Code:    $exit_code"
+            echo "  Status:       $([[ $exit_code -eq 0 ]] && echo "SUCCESS" || echo "FAILED")"
+            echo ""
+            echo "Configuration:"
+            echo "  Terraform:    ${TERRAFORM_TFVARS:-unknown}"
+            echo "  Hash:         ${TERRAFORM_HASH:-unknown}"
+            echo "  K8s Version:  ${KUBERNETES_VERSION:-unknown}"
+            echo "  Talos Version: ${TALOS_VERSION:-unknown}"
+            echo ""
+            echo "Operations Performed:"
+            echo "  Add Control Planes:    $add_cp_count"
+            echo "  Add Workers:           $add_worker_count"
+            echo "  Remove Control Planes: $remove_cp_count"
+            echo "  Remove Workers:        $remove_worker_count"
+            echo "  Update Configs:        $update_count"
+            echo "  Unchanged:             $noop_count"
+            echo "  -------------------------"
+            echo "  Total Operations:      $total_ops"
+            echo ""
+            echo "Node Counts:"
+            echo "  Desired Control Planes:  $desired_cp_count"
+            echo "  Desired Workers:         $desired_worker_count"
+            echo "  Deployed Control Planes: $deployed_cp_count"
+            echo "  Deployed Workers:        $deployed_worker_count"
+            echo ""
+            echo "Bootstrap Status:"
+            echo "  Completed: ${BOOTSTRAP_COMPLETED:-false}"
+            echo "  First CP:  ${FIRST_CONTROL_PLANE_VMID:-none}"
+            echo ""
+            echo "Files:"
+            echo "  Console Log:   console.log"
+            echo "  Structured:    structured.log"
+            echo "  Audit Trail:   audit.log"
+            echo "  Full Path:     ${RUN_DIR:-unknown}"
+            echo ""
+            echo "Quick Commands:"
+            echo "  View console:  cat ${RUN_DIR:-.}/console.log"
+            echo "  View audit:    tail -100 ${RUN_DIR:-.}/audit.log"
+            echo "  Rerun:         $0"
+        } > "$summary_file"
 
-Configuration:
-  Terraform:    ${TERRAFORM_TFVARS:-unknown}
-  Hash:         ${TERRAFORM_HASH:-unknown}
-  K8s Version:  ${KUBERNETES_VERSION:-unknown}
-  Talos Version: ${TALOS_VERSION:-unknown}
-
-Operations Performed:
-  Add Control Planes:    $add_cp_count
-  Add Workers:           $add_worker_count
-  Remove Control Planes: $remove_cp_count
-  Remove Workers:        $remove_worker_count
-  Update Configs:        $update_count
-  Unchanged:             $noop_count
-  -------------------------
-  Total Operations:      $total_ops
-
-Node Counts:
-  Desired Control Planes:  $desired_cp_count
-  Desired Workers:         $desired_worker_count
-  Deployed Control Planes: $deployed_cp_count
-  Deployed Workers:        $deployed_worker_count
-
-Bootstrap Status:
-  Completed: ${BOOTSTRAP_COMPLETED:-false}
-  First CP:  ${FIRST_CONTROL_PLANE_VMID:-none}
-
-Files:
-  Console Log:   console.log
-  Structured:    structured.log
-  Audit Trail:   audit.log
-  Full Path:     ${RUN_DIR:-unknown}
-
-Quick Commands:
-  View console:  cat ${RUN_DIR:-.}/console.log
-  View audit:    tail -100 ${RUN_DIR:-.}/audit.log
-  Rerun:         $0
-EOF
-)
-        write_file_audited "$summary_content" "$summary_file"
         chmod 600 "$summary_file"
     }
+
     [[ "${LOG_HISTORY:-true}" == "true" && -n "${RUNS_LOG_LINE:-}" && -f "$LOG_DIR/runs.log" ]] && {
         local status="failed"
         [[ $exit_code -eq 0 ]] && status="success"
@@ -768,7 +769,7 @@ fetch_node_ips_via_ssh() {
     local main_node=$(get_node_ip "pve1")
     log_step_info "Fetching node IPs via SSH from $main_node"
     local cluster_status
-    if run_command ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no         "${TF_PROXMOX_SSH_USER}@$main_node"         "pvesh get /cluster/status --output-format json"; then
+    if run_command ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$main_node" "pvesh get /cluster/status --output-format json"; then
         cluster_status="$LAST_COMMAND_OUTPUT"
     else
         log_step_warn "Failed to fetch cluster status via SSH"
@@ -1044,13 +1045,12 @@ reconcile_cluster() {
         return 0
     }
     [[ "$AUTO_APPROVE" != "true" ]] && {
-        echo -n "Proceed with reconciliation? [y/N] "
-        read -r response
-        [[ ! "$response" =~ ^[Yy]$ ]] && {
+        confirm_proceed "Proceed with reconciliation?" || {
             log_stage_info "Reconciliation cancelled by user"
             exit 0
         }
     }
+    return 0
 }
 
 discover_live_state() {
@@ -1227,10 +1227,12 @@ build_reconcile_plan() {
             [[ -f "$config_file" ]] && {
                 run_command sha256sum "$config_file"
                 new_hash=$(echo "$LAST_COMMAND_OUTPUT" | cut -d' ' -f1)
-                [[ "$current_hash" != "$new_hash" || "$FORCE_RECONFIGURE" == "true" ]] && {
+                if [[ "$current_hash" != "$new_hash" || "$FORCE_RECONFIGURE" == "true" ]]; then
                     PLAN_UPDATE+=("$vmid:control-plane")
                     log_file_only "RECONCILE" "UPDATE: $vmid (hash changed)"
-                } || PLAN_NOOP+=("$vmid")
+                else
+                    PLAN_NOOP+=("$vmid")
+                fi
             }
         }
     done
@@ -1242,18 +1244,22 @@ build_reconcile_plan() {
             [[ -f "$config_file" ]] && {
                 run_command sha256sum "$config_file"
                 new_hash=$(echo "$LAST_COMMAND_OUTPUT" | cut -d' ' -f1)
-                [[ "$current_hash" != "$new_hash" || "$FORCE_RECONFIGURE" == "true" ]] && {
+                if [[ "$current_hash" != "$new_hash" || "$FORCE_RECONFIGURE" == "true" ]]; then
                     PLAN_UPDATE+=("$vmid:worker")
                     log_file_only "RECONCILE" "UPDATE: $vmid (hash changed)"
-                } || PLAN_NOOP+=("$vmid")
+                else
+                    PLAN_NOOP+=("$vmid")
+                fi
             }
         }
     done
+
     [[ "$BOOTSTRAP_COMPLETED" != "true" && ${#DEPLOYED_CP_IPS[@]} -gt 0 ]] && {
         log_step_warn "Cluster has ${#DEPLOYED_CP_IPS[@]} control planes but bootstrap was never completed"
         log_step_warn "Will attempt to bootstrap before proceeding with other changes"
         PLAN_NEED_BOOTSTRAP=true
     }
+    return 0
 }
 
 format_node_display() {
@@ -1757,13 +1763,13 @@ populate_arp_table() {
     local host="$1"
     local subnet=$(get_network_subnet "$host")
     log_step_info "[ARP-SCAN] Populating ARP table from $host (subnet: $subnet.0/24)"
-    run_command ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$host"         "ip -s -s neigh flush all" || true
+    run_command ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$host" "ip -s -s neigh flush all" || true
     log_step_info "[ARP-SCAN] Pinging ${subnet}.0/24..."
-    run_command ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$host"         "seq 1 254 | xargs -P 100 -I{} ping -c 1 -W 1 ${subnet}.{} >/dev/null 2>&1 || true" || true
+    run_command ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$host" "seq 1 254 | xargs -P 100 -I{} ping -c 1 -W 1 ${subnet}.{} >/dev/null 2>&1 || true" || true
     sleep 3
     log_step_info "[ARP-SCAN] Reading ARP table..."
     local arp_output
-    run_command ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$host"         "cat /proc/net/arp" && arp_output="$LAST_COMMAND_OUTPUT" || {
+    run_command ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$host" "cat /proc/net/arp" && arp_output="$LAST_COMMAND_OUTPUT" || {
         log_step_warn "[ARP-SCAN] Failed to read ARP table from $host"
         return 1
     }
@@ -1889,7 +1895,7 @@ wait_for_node_with_rediscovery() {
                     last_state_change=$waited
                     log_step_info "Node $initial_ip stopped responding (possible reboot starting)"
                 else
-                    if step_test_port "$initial_ip" "50000" "2"; then
+                    if test_port "$initial_ip" "50000" "2" "$vmid"; then
                         log_detail_debug "Node still responding at $initial_ip, Talos API up"
                     else
                         log_detail_debug "Node pingable but Talos API not responding (reboot may be starting)"
@@ -1907,7 +1913,7 @@ wait_for_node_with_rediscovery() {
                         state="verifying"
                         last_state_change=$waited
                     else
-                        if step_test_port "$found_ip" "50000" "2"; then
+                        if test_port "$found_ip" "50000" "2" "$vmid"; then
                             if verify_talos_ready "$found_ip" "$vmid"; then
                                 log_step_info "Node back at same IP $found_ip, appears ready"
                                 REDISCOVERED_IP="$found_ip"
@@ -1924,7 +1930,7 @@ wait_for_node_with_rediscovery() {
                 ;;
             "verifying")
                 local verify_time=$((waited - last_state_change))
-                if step_test_port "$candidate_ip" "50000" "3"; then
+                if test_port "$candidate_ip" "50000" "3" "$vmid"; then
                     if verify_talos_ready "$candidate_ip" "$vmid"; then
                         log_step_info "VM $vmid verified ready at $candidate_ip (found after ${verify_time}s)"
                         REDISCOVERED_IP="$candidate_ip"
@@ -2042,7 +2048,7 @@ rediscover_ip_by_mac() {
         while IFS= read -r candidate_ip; do
             [[ -z "$candidate_ip" ]] && continue
             log_detail_debug "Testing candidate IP $candidate_ip for VM $vmid..."
-            if step_test_port "$candidate_ip" "50000" "2"; then
+            if test_port "$candidate_ip" "50000" "2" "$vmid"; then
                 log_detail_debug "Found responsive IP $candidate_ip for VM $vmid"
                 echo "$candidate_ip"
                 return 0
@@ -2539,7 +2545,7 @@ run_preflight_checks() {
             pending_vms+=("$vmid:$name:$node")
             continue
         }
-        test_port "$ip" "50000" "$PREFLIGHT_CONNECT_TIMEOUT" && {
+        test_port "$ip" "50000" "$PREFLIGHT_CONNECT_TIMEOUT" "$vmid" && {
             log_detail_info "VMID $vmid ($name at $ip): Talos API ready"
             ready_vms=$((ready_vms + 1))
             LIVE_NODE_IPS["$vmid"]="$ip"
@@ -2558,27 +2564,37 @@ run_preflight_checks() {
     while [[ $attempt -le $PREFLIGHT_MAX_RETRIES && ${#pending_vms[@]} -gt 0 ]]; do
         still_pending=()
         local newly_ready=0
+        local rediscovered_count=0
+
         for entry in "${pending_vms[@]}"; do
-            local vmid name node ip
+            local vmid name node old_ip new_ip
             vmid=$(echo "$entry" | cut -d':' -f1)
             name=$(echo "$entry" | cut -d':' -f2)
             node=$(echo "$entry" | cut -d':' -f3)
-            ip=$(echo "$entry" | cut -d':' -f4)
-            [[ -z "$ip" ]] && ip=$(discover_ip_for_vmid "$vmid" 2>/dev/null || echo "")
-            [[ -z "$ip" ]] && {
+            old_ip=$(echo "$entry" | cut -d':' -f4)
+            new_ip=$(discover_ip_for_vmid "$vmid" 2>/dev/null || echo "")
+            [[ -n "$old_ip" && -n "$new_ip" && "$old_ip" != "$new_ip" ]] && {
+                log_step_info "VMID $vmid IP changed: $old_ip -> $new_ip (rediscovered)"
+                rediscovered_count=$((rediscovered_count + 1))
+            }
+            [[ -z "$new_ip" ]] && {
+                log_detail_debug "Attempt $attempt: VMID $vmid ($name) still no IP discovered"
                 still_pending+=("$vmid:$name:$node:")
                 continue
             }
-            test_port "$ip" "50000" "$PREFLIGHT_CONNECT_TIMEOUT" && {
-                log_detail_info "Attempt $attempt: VMID $vmid ($name) now ready at $ip"
-                LIVE_NODE_IPS["$vmid"]="$ip"
+            test_port "$new_ip" "50000" "$PREFLIGHT_CONNECT_TIMEOUT" "$vmid" && {
+                log_detail_info "Attempt $attempt: VMID $vmid ($name) now ready at $new_ip"
+                LIVE_NODE_IPS["$vmid"]="$new_ip"
                 ready_vms=$((ready_vms + 1))
                 newly_ready=$((newly_ready + 1))
-            } || still_pending+=("$vmid:$name:$node:$ip")
+            } || {
+                still_pending+=("$vmid:$name:$node:$new_ip")
+            }
         done
         pending_vms=("${still_pending[@]}")
         [[ $newly_ready -gt 0 ]] && log_step_info "Attempt $attempt: $newly_ready VM(s) became ready (${#pending_vms[@]} still pending)"
-        [[ $((attempt % 10)) -eq 0 ]] && log_step_info "Attempt $attempt/$PREFLIGHT_MAX_RETRIES: ${#pending_vms[@]} VMs still pending..."
+        [[ $rediscovered_count -gt 0 ]] && log_step_info "Attempt $attempt: $rediscovered_count VM(s) had IP changes"
+        [[ $((attempt % 10)) -eq 0 && ${#pending_vms[@]} -gt 0 ]] && log_step_info "Attempt $attempt/$PREFLIGHT_MAX_RETRIES: ${#pending_vms[@]} VMs still pending..."
         [[ ${#pending_vms[@]} -eq 0 ]] && break
         sleep "$PREFLIGHT_RETRY_DELAY"
         attempt=$((attempt + 1))
@@ -2592,10 +2608,15 @@ run_preflight_checks() {
             name=$(echo "$entry" | cut -d':' -f2)
             node=$(echo "$entry" | cut -d':' -f3)
             ip=$(echo "$entry" | cut -d':' -f4)
+            local final_ip=$(discover_ip_for_vmid "$vmid" 2>/dev/null || echo "")
+            [[ -n "$final_ip" && "$final_ip" != "$ip" ]] && {
+                log_step_warn "  - VMID $vmid ($name): IP changed during check ($ip -> $final_ip)"
+                ip="$final_ip"
+            }
             [[ -n "$ip" ]] && {
                 log_step_warn "  - VMID $vmid ($name at $ip): Talos API not responding"
-                ping -c 1 -W 2 "$ip" &>/dev/null || log_step_warn "    Host is unreachable (check network/VM status)"
-                ping -c 1 -W 2 "$ip" &>/dev/null && log_step_warn "    Host is pingable but port 50000 closed (Talos still booting?)"
+                ping -c 1 -W 2 "$ip" &>/dev/null || log_step_warn "  - VMID $vmid ($name at $ip): Host is unreachable (check network/VM status)"
+                ping -c 1 -W 2 "$ip" &>/dev/null && log_step_warn "  - VMID $vmid ($name at $ip): Host is pingable but port 50000 closed (Talos still booting?)"
             } || log_step_warn "  - VMID $vmid ($name): No IP discovered (check Proxmox VM status)"
         done
         [[ "$SKIP_PREFLIGHT" != "true" ]] && {
@@ -2758,14 +2779,17 @@ test_port() {
     local ip="$1"
     local port="${2:-50000}"
     local timeout="${3:-2}"
-    log_detail_info "Testing $ip:$port"
-    run_command timeout "$timeout" bash -c "echo >/dev/tcp/$ip/$port" 2>/dev/null && {
-        log_detail_debug "$ip:$port is open"
+    local vmid="${4:-}"
+    local context=""
+    [[ -n "$vmid" ]] && context="[VMID:${vmid}] "
+    log_detail_debug "${context}Testing $ip:$port"
+    if run_command timeout "$timeout" bash -c "echo >/dev/tcp/$ip/$port" 2>/dev/null; then
+        log_detail_trace "${context}$ip:$port is open"
         return 0
-    } || {
-        log_detail_warn "$ip:$port is closed"
+    else
+        log_detail_debug "${context}$ip:$port is closed/unreachable"
         return 1
-    }
+    fi
 }
 
 run_bootstrap_plan() {
@@ -2933,7 +2957,6 @@ confirm_proceed() {
     local prompt_output="${C_TIMESTAMP}[$(date '+%H:%M:%S')]${C_RESET} ${SEV_COLORS[WARN]}[INPUT]${C_RESET} ${msg} (y/N) "
     echo -en "$prompt_output"
     read -r response
-    echo ""
     [[ -n "${ALL_LOGS_FILE:-}" ]] && {
         echo "[$(date "$LOG_TIMESTAMP_FORMAT")] [USER-INPUT] Prompt: '$msg' Response: '$response'" >> "$ALL_LOGS_FILE"
         echo "[$(date "$LOG_TIMESTAMP_FORMAT")] [DECISION] Auto-approve=$AUTO_APPROVE, User-response=$response" >> "$ALL_LOGS_FILE"
