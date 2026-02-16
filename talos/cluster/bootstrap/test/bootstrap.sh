@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.9.2"
+readonly VERSION="3.9.3"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
@@ -554,6 +554,12 @@ EOF
         log_job_error "Failed to write state file to $STATE_FILE"
         return 1
     fi
+}
+
+flush_arp_cache() {
+    local host="$1"
+    log_detail_debug "Flushing ARP cache on $host..."
+    run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$host" "ip -s -s neigh flush all" || true
 }
 
 populate_arp_table() {
@@ -1813,13 +1819,13 @@ apply_config_to_node() {
     fi
     log_step_info "Applying config to $ip (VMID: $vmid)"
     check_node_configured "$ip" && {
-        log_step_info "Node $ip is already configured and responsive (secure mode)"
+        log_step_info "Node $ip (VMID: $vmid) is already configured and responsive (secure mode)"
         return 0
     }
     while [[ $attempt -le $max_attempts ]]; do
         log_detail_info "Attempt $attempt/$max_attempts (maintenance mode)"
         if run_command talosctl apply-config --nodes "$ip" --file "$config_file" --insecure; then
-            log_step_info "Config applied successfully in maintenance mode"
+            log_step_info "Config applied successfully in maintenance mode (VMID: $vmid)"
             wait_for_node_ready "$ip" "$vmid"
             return 0
         fi
@@ -1828,7 +1834,7 @@ apply_config_to_node() {
         echo "$cleaned_error" | grep -qi "certificate required" && {
             log_step_info "Node reports certificate required - already configured, trying secure mode"
             run_command talosctl apply-config --nodes "$ip" --endpoints "$ip" --file "$config_file" && {
-                log_step_info "Config applied successfully in secure mode"
+                log_step_info "Config applied successfully in secure mode (VMID: $vmid)"
                 return 0
             }
             check_node_configured "$ip" && {
@@ -1878,6 +1884,7 @@ wait_for_node_with_rediscovery() {
     local vmid="$1"
     local initial_ip="$2"
     local max_wait="${3:-180}"
+    local subnet="${initial_ip%.*}"
     local waited=0
     local check_interval=3
     REDISCOVERED_IP=""
@@ -1886,6 +1893,12 @@ wait_for_node_with_rediscovery() {
     local last_seen_ip="$initial_ip"
     local candidate_ip=""
     local last_state_change=0
+    flush_arp_with_gateway_ping() {
+        local target_node_ip="$1"
+        run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
+            "${TF_PROXMOX_SSH_USER}@$target_node_ip" \
+            "ip -s -s neigh flush all && ping -c 2 -W 2 ${subnet}.254 >/dev/null 2>&1 || true" || true
+    }
     while [[ $waited -lt $max_wait ]]; do
         case "$state" in
             "monitoring")
@@ -1893,7 +1906,7 @@ wait_for_node_with_rediscovery() {
                     local downtime_start=$waited
                     state="rebooting"
                     last_state_change=$waited
-                    log_step_info "Node $initial_ip stopped responding (possible reboot starting)"
+                    log_step_info "Node $initial_ip (VMID: $vmid) stopped responding (possible reboot starting)"
                 else
                     if test_port "$initial_ip" "50000" "2" "$vmid"; then
                         log_detail_debug "Node still responding at $initial_ip, Talos API up"
@@ -1904,23 +1917,60 @@ wait_for_node_with_rediscovery() {
                 ;;
             "rebooting")
                 local downtime=$((waited - last_state_change))
+                if [[ $((downtime % 15)) -eq 0 && $downtime -gt 0 ]]; then
+                    log_step_debug "Flushing ARP caches to clear stale entries after ${downtime}s..."
+                    for node_name in "${!PROXMOX_NODE_IPS[@]}"; do
+                        local node_ip="${PROXMOX_NODE_IPS[$node_name]}"
+                        flush_arp_with_gateway_ping "$node_ip"
+                    done
+                    sleep 2
+                fi
                 local found_ip=""
                 found_ip=$(rediscover_ip_by_mac "$vmid")
                 if [[ -n "$found_ip" ]]; then
                     if [[ "$found_ip" != "$last_seen_ip" ]]; then
-                        log_step_info "IP changed: $last_seen_ip -> $found_ip (reboot confirmed)"
+                        log_step_info "IP changed: $last_seen_ip -> $found_ip (reboot confirmed, VMID: $vmid)"
                         candidate_ip="$found_ip"
                         state="verifying"
                         last_state_change=$waited
                     else
-                        if test_port "$found_ip" "50000" "2" "$vmid"; then
-                            if verify_talos_ready "$found_ip" "$vmid"; then
-                                log_step_info "Node back at same IP $found_ip, appears ready"
-                                REDISCOVERED_IP="$found_ip"
-                                return 0
+                        if ping -c 1 -W 2 "$found_ip" &>/dev/null; then
+                            if test_port "$found_ip" "50000" "2" "$vmid"; then
+                                if verify_talos_ready "$found_ip" "$vmid"; then
+                                    log_step_info "Node back at same IP $found_ip (VMID: $vmid), appears ready"
+                                    REDISCOVERED_IP="$found_ip"
+                                    return 0
+                                fi
+                            fi
+                            log_detail_debug "Still at $found_ip (pingable) but Talos API not ready (${downtime}s since unresponsive)"
+                        else
+                            log_detail_warn "IP $found_ip not responding to ping - likely stale ARP, forcing ARP refresh..."
+                            for node_name in "${!PROXMOX_NODE_IPS[@]}"; do
+                                local node_ip="${PROXMOX_NODE_IPS[$node_name]}"
+                                # Using the same helper function here
+                                flush_arp_with_gateway_ping "$node_ip"
+                            done
+                            sleep 3
+                            local refreshed_ip=""
+                            refreshed_ip=$(rediscover_ip_by_mac "$vmid")
+                            if [[ -n "$refreshed_ip" && "$refreshed_ip" != "$last_seen_ip" ]]; then
+                                log_step_info "Found new IP after ARP flush: $last_seen_ip -> $refreshed_ip"
+                                candidate_ip="$refreshed_ip"
+                                state="verifying"
+                                last_state_change=$waited
+                            elif [[ -n "$refreshed_ip" && "$refreshed_ip" == "$last_seen_ip" ]]; then
+                                if test_port "$refreshed_ip" "50000" "3" "$vmid"; then
+                                    if verify_talos_ready "$refreshed_ip" "$vmid"; then
+                                        log_step_info "Node at $refreshed_ip now ready after ARP refresh"
+                                        REDISCOVERED_IP="$refreshed_ip"
+                                        return 0
+                                    fi
+                                fi
+                                log_detail_debug "Still at $refreshed_ip but not ready after ARP refresh"
+                            else
+                                log_detail_debug "No IP found after ARP refresh"
                             fi
                         fi
-                        log_detail_debug "Still at $found_ip but Talos not ready yet (${downtime}s since unresponsive)"
                     fi
                 else
                     if [[ $((downtime % 10)) -eq 0 && $downtime -gt 0 ]]; then
@@ -1938,7 +1988,7 @@ wait_for_node_with_rediscovery() {
                     fi
                 fi
                 if [[ $((verify_time % 15)) -eq 0 ]]; then
-                    log_step_info "Waiting for Talos to be ready at $candidate_ip... (${verify_time}s)"
+                    log_step_info "Waiting for Talos to be ready at $candidate_ip (VMID: $vmid)... (${verify_time}s)"
                 fi
                 if [[ $((waited % 20)) -eq 0 ]]; then
                     local reverify_ip=""
@@ -1954,7 +2004,7 @@ wait_for_node_with_rediscovery() {
         waited=$((waited + check_interval))
     done
     log_step_error "Timeout waiting for VM $vmid after ${max_wait}s"
-    log_step_error "Final state: $state, Last IP: ${candidate_ip:-$last_seen_ip}"
+    log_step_error "Final state: $state, Last IP: ${candidate_ip:-$last_seen_ip} (VMID: $vmid)"
     return 1
 }
 
@@ -1965,14 +2015,14 @@ verify_talos_ready() {
     if run_command talosctl version --nodes "$ip" --endpoints "$ip" --insecure 2>/dev/null; then
         local version_output="$LAST_COMMAND_OUTPUT"
         if echo "$version_output" | grep -q "not implemented in maintenance mode"; then
-            log_detail_debug "Node $ip still in maintenance mode"
+            log_detail_debug "Node $ip (VMID: $vmid) still in maintenance mode"
             return 1
         fi
         if run_command talosctl get machineconfig --nodes "$ip" --endpoints "$ip" 2>/dev/null; then
-            log_detail_debug "Node $ip has machineconfig - fully configured"
+            log_detail_debug "Node $ip (VMID: $vmid) has machineconfig - fully configured"
             return 0
         fi
-        log_detail_debug "Node $ip responding to version but not fully configured yet"
+        log_detail_debug "Node $ip (VMID: $vmid) responding to version but not fully configured yet"
         return 1
     fi
     if run_command talosctl version --nodes "$ip" --insecure 2>/dev/null; then
@@ -1981,7 +2031,7 @@ verify_talos_ready() {
             log_detail_debug "Node $ip in maintenance mode (insecure)"
             return 1
         else
-            log_step_info "Node $ip responding to insecure check"
+            log_step_info "Node $ip (VMID: $vmid) responding to insecure check"
             return 0
         fi
     fi
@@ -2008,7 +2058,8 @@ rediscover_ip_by_mac() {
             return 1
         fi
     fi
-    log_detail_debug "Looking for MAC $mac (VM $vmid) in ARP tables..."
+    log_detail_debug "Looking for MAC $mac (VM $vmid) in ARP tables across all nodes..."
+    local all_ips=()
     local nodes_to_check=()
     if [[ ${#PROXMOX_NODE_IPS[@]} -gt 0 ]]; then
         for node_name in "${!PROXMOX_NODE_IPS[@]}"; do
@@ -2017,7 +2068,7 @@ rediscover_ip_by_mac() {
     else
         nodes_to_check+=("$(get_node_ip "pve1")")
     fi
-    local all_found_ips=""
+    local unique_ips=""
     for node_ip in "${nodes_to_check[@]}"; do
         run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$node_ip" "ping -c 2 -W 2 ${subnet}.254 >/dev/null 2>&1 || true" || true
         local arp_results=""
@@ -2037,34 +2088,60 @@ rediscover_ip_by_mac() {
                         fi
                     done
                     if [[ "$valid_ip" == true ]]; then
-                        all_found_ips+="$ip"$'\n'
+                        if [[ ! "$unique_ips" =~ (^|[[:space:]])"$ip"($|[[:space:]]) ]]; then
+                            unique_ips+="$ip "
+                            all_ips+=("$ip")
+                            log_detail_debug "Found candidate IP $ip for VM $vmid on node $node_ip"
+                        fi
                     fi
                 fi
             done <<< "$arp_results"
         fi
     done
-    if [[ -n "$all_found_ips" ]]; then
-        all_found_ips=$(echo "$all_found_ips" | sort -u)
-        while IFS= read -r candidate_ip; do
-            [[ -z "$candidate_ip" ]] && continue
-            log_detail_debug "Testing candidate IP $candidate_ip for VM $vmid..."
-            if test_port "$candidate_ip" "50000" "2" "$vmid"; then
-                log_detail_debug "Found responsive IP $candidate_ip for VM $vmid"
-                echo "$candidate_ip"
-                return 0
-            else
-                log_detail_debug "IP $candidate_ip not responding on port 50000"
-            fi
-        done <<< "$all_found_ips"
-        local first_ip
-        first_ip=$(echo "$all_found_ips" | head -1)
-        if [[ -n "$first_ip" ]]; then
-            log_detail_warn "No responsive IP found for VM $vmid, returning first: $first_ip"
-            echo "$first_ip"
+    if [[ ${#all_ips[@]} -eq 0 ]]; then
+        log_detail_warn "No IPs found in ARP for MAC $mac (VM $vmid)"
+        return 1
+    fi
+    log_detail_info "Found ${#all_ips[@]} unique IP(s) for VM $vmid MAC $mac: ${all_ips[*]}"
+    local responsive_ips=()
+    local unresponsive_ips=()
+    for candidate_ip in "${all_ips[@]}"; do
+        log_detail_debug "Testing responsiveness of $candidate_ip..."
+        if ping -c 1 -W 2 "$candidate_ip" &>/dev/null; then
+            responsive_ips+=("$candidate_ip")
+        else
+            unresponsive_ips+=("$candidate_ip")
+        fi
+    done
+    local ordered_ips=("${responsive_ips[@]}" "${unresponsive_ips[@]}")
+    for candidate_ip in "${ordered_ips[@]}"; do
+        [[ -z "$candidate_ip" ]] && continue
+        log_detail_info "Testing candidate IP $candidate_ip for VM $vmid..."
+        if test_port "$candidate_ip" "50000" "3" "$vmid"; then
+            log_detail_info "Found responsive Talos API at $candidate_ip for VM $vmid"
+            echo "$candidate_ip"
+            return 0
+        else
+            log_detail_debug "IP $candidate_ip not responding on port 50000, trying next..."
+        fi
+    done
+    for candidate_ip in "${ordered_ips[@]}"; do
+        [[ -z "$candidate_ip" ]] && continue
+        log_detail_debug "Checking $candidate_ip for Kubernetes API (port 6443)..."
+        if test_port "$candidate_ip" "6443" "2" "$vmid"; then
+            log_detail_warn "VM $vmid at $candidate_ip has k8s API but no Talos API - may need secure mode"
+            echo "$candidate_ip"
             return 0
         fi
+    done
+    if [[ ${#responsive_ips[@]} -gt 0 ]]; then
+        log_detail_warn "No APIs responding for VM $vmid, returning first responsive IP: ${responsive_ips[0]}"
+        echo "${responsive_ips[0]}"
+        return 0
     fi
-    return 1
+    log_detail_warn "No responsive IP found for VM $vmid, returning first ARP entry: ${all_ips[0]}"
+    echo "${all_ips[0]}"
+    return 0
 }
 
 wait_for_talos_ready_at_ip() {
@@ -2130,16 +2207,16 @@ apply_config_with_rediscovery() {
     local max_attempts=5
     local attempt=1
     while [[ $attempt -le $max_attempts ]]; do
-        log_step_info "Applying config to $ip (attempt $attempt/$max_attempts)..."
+        log_step_info "Applying config to $ip (VMID: $vmid, attempt $attempt/$max_attempts)..."
         run_command talosctl apply-config --nodes "$ip" --file "$config_file" --insecure && {
-            log_step_info "Configuration applied successfully, node will reboot"
+            log_step_info "Configuration applied successfully, node will reboot (VMID: $vmid)"
             return 0
         }
         local error_output="$LAST_COMMAND_OUTPUT"
         echo "$error_output" | grep -qi "already configured\|certificate required" && {
-            log_step_info "Node reports already configured, checking state..."
+            log_step_info "Node $ip (VMID: $vmid) reports already configured, checking state..."
             wait_for_talos_ready_at_ip "$ip" "$vmid" 30 && return 0
-            log_step_warn "Node partially configured, attempting recovery..."
+            log_step_warn "Node $ip (VMID: $vmid) partially configured, attempting recovery..."
             attempt_recovery_reapply "$ip" "$config_file" && return 0
         }
         echo "$error_output" | grep -qi "connection refused" && {
