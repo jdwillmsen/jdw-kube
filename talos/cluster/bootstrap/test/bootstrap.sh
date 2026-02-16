@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.9.3"
+readonly VERSION="3.10.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
@@ -145,9 +145,10 @@ log_output() {
     local content="$1"
     local to_console="${2:-true}"
     local to_structured="${3:-true}"
-    echo -e "$content" >&2 # IDK if needed??
+    echo -e "$content" >&2
     [[ "$to_console" == "true" && -n "${CONSOLE_LOG_FILE:-}" ]] && echo -e "$content" >> "$CONSOLE_LOG_FILE"
     [[ "$to_structured" == "true" && -n "${LOG_FILE:-}" ]] && strip_colors "$content" >> "$LOG_FILE"
+    return 0
 }
 
 print_box_line() {
@@ -1893,12 +1894,6 @@ wait_for_node_with_rediscovery() {
     local last_seen_ip="$initial_ip"
     local candidate_ip=""
     local last_state_change=0
-    flush_arp_with_gateway_ping() {
-        local target_node_ip="$1"
-        run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
-            "${TF_PROXMOX_SSH_USER}@$target_node_ip" \
-            "ip -s -s neigh flush all && ping -c 2 -W 2 ${subnet}.254 >/dev/null 2>&1 || true" || true
-    }
     while [[ $waited -lt $max_wait ]]; do
         case "$state" in
             "monitoring")
@@ -1918,12 +1913,20 @@ wait_for_node_with_rediscovery() {
             "rebooting")
                 local downtime=$((waited - last_state_change))
                 if [[ $((downtime % 15)) -eq 0 && $downtime -gt 0 ]]; then
-                    log_step_debug "Flushing ARP caches to clear stale entries after ${downtime}s..."
+                    log_step_debug "Re-populating ARP tables after ${downtime}s..."
                     for node_name in "${!PROXMOX_NODE_IPS[@]}"; do
                         local node_ip="${PROXMOX_NODE_IPS[$node_name]}"
-                        flush_arp_with_gateway_ping "$node_ip"
+                        run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
+                            "${TF_PROXMOX_SSH_USER}@$node_ip" \
+                            "ip -s -s neigh flush all && seq 1 254 | xargs -P 100 -I{} ping -c 1 -W 1 ${subnet}.{} >/dev/null 2>&1 || true" || true
                     done
-                    sleep 2
+                    sleep 3
+                fi
+                if [[ $((downtime % 5)) -eq 0 && $downtime -gt 0 ]]; then
+                    local main_node=$(get_node_ip "pve1")
+                    run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
+                        "${TF_PROXMOX_SSH_USER}@$main_node" \
+                        "seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 ${subnet}.{} >/dev/null 2>&1 || true" || true
                 fi
                 local found_ip=""
                 found_ip=$(rediscover_ip_by_mac "$vmid")
@@ -1947,8 +1950,9 @@ wait_for_node_with_rediscovery() {
                             log_detail_warn "IP $found_ip not responding to ping - likely stale ARP, forcing ARP refresh..."
                             for node_name in "${!PROXMOX_NODE_IPS[@]}"; do
                                 local node_ip="${PROXMOX_NODE_IPS[$node_name]}"
-                                # Using the same helper function here
-                                flush_arp_with_gateway_ping "$node_ip"
+                                run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
+                                    "${TF_PROXMOX_SSH_USER}@$node_ip" \
+                                    "ip -s -s neigh flush all && seq 1 254 | xargs -P 100 -I{} ping -c 1 -W 1 ${subnet}.{} >/dev/null 2>&1 || true" || true
                             done
                             sleep 3
                             local refreshed_ip=""
@@ -2012,29 +2016,28 @@ verify_talos_ready() {
     local ip="$1"
     local vmid="$2"
     [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG
-    if run_command talosctl version --nodes "$ip" --endpoints "$ip" --insecure 2>/dev/null; then
-        local version_output="$LAST_COMMAND_OUTPUT"
-        if echo "$version_output" | grep -q "not implemented in maintenance mode"; then
-            log_detail_debug "Node $ip (VMID: $vmid) still in maintenance mode"
-            return 1
-        fi
-        if run_command talosctl get machineconfig --nodes "$ip" --endpoints "$ip" 2>/dev/null; then
-            log_detail_debug "Node $ip (VMID: $vmid) has machineconfig - fully configured"
-            return 0
-        fi
-        log_detail_debug "Node $ip (VMID: $vmid) responding to version but not fully configured yet"
+    if run_command talosctl version --nodes "$ip" --endpoints "$ip" --insecure; then
+        log_detail_debug "Node $ip (VMID: $vmid) responding to insecure version check"
+        return 0
+    fi
+    local error_output="$LAST_COMMAND_OUTPUT"
+    if echo "$error_output" | grep -qi "certificate required"; then
+        log_detail_debug "Node $ip (VMID: $vmid) has certificates, trying secure mode"
+    elif echo "$error_output" | grep -qi "connection refused"; then
+        log_detail_debug "Node $ip (VMID: $vmid) connection refused - still booting"
         return 1
     fi
-    if run_command talosctl version --nodes "$ip" --insecure 2>/dev/null; then
-        local insecure_output="$LAST_COMMAND_OUTPUT"
-        if echo "$insecure_output" | grep -q "not implemented in maintenance mode"; then
-            log_detail_debug "Node $ip in maintenance mode (insecure)"
-            return 1
-        else
-            log_step_info "Node $ip (VMID: $vmid) responding to insecure check"
+    if [[ -f "$TALOSCONFIG" ]]; then
+        if run_command talosctl version --nodes "$ip" --endpoints "$ip"; then
+            log_detail_debug "Node $ip (VMID: $vmid) responding to secure version check"
+            return 0
+        fi
+        if run_command talosctl get machineconfig --nodes "$ip" --endpoints "$ip"; then
+            log_detail_debug "Node $ip (VMID: $vmid) has machineconfig"
             return 0
         fi
     fi
+    log_detail_debug "Node $ip (VMID: $vmid) not ready"
     return 1
 }
 
@@ -2242,7 +2245,7 @@ bootstrap_etcd_at_ip() {
         run_command talosctl version --nodes "$ip" --endpoints "$ip" --insecure 2>/dev/null && {
             echo "$LAST_COMMAND_OUTPUT" | grep -q "not implemented in maintenance mode" || bootstrap_flags="--insecure"
         }
-        run_command talosctl bootstrap --nodes "$ip" $bootstrap_flags && {
+        run_command talosctl bootstrap --nodes "$ip" --endpoints "$ip" $bootstrap_flags && {
             log_step_info "Bootstrap command succeeded"
             wait_for_etcd_healthy "$ip" "$vmid" && return 0
         } || {
@@ -2266,7 +2269,7 @@ wait_for_etcd_healthy() {
     [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG
     log_step_info "Waiting for etcd to become healthy..."
     while [[ $attempt -le $max_attempts ]]; do
-        if run_command talosctl etcd members --nodes "$ip" --endpoints "$ip" 2>/dev/null; then
+        if run_command timeout 10 talosctl etcd members --nodes "$ip" --endpoints "$ip" 2>/dev/null; then
             if echo "$LAST_COMMAND_OUTPUT" | grep -q "Healthy"; then
                 log_step_info "etcd is healthy on VM $vmid"
                 return 0
