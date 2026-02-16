@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.10.0"
+readonly VERSION="3.10.1"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
@@ -1474,7 +1474,7 @@ remove_control_plane() {
     local current_cp_count=${#DEPLOYED_CP_IPS[@]}
     local desired_cp_count=${#DESIRED_CP_VMIDS[@]}
     local min_quorum=$(( (desired_cp_count / 2) + 1 ))
-    local healthy_members=$(talosctl etcd members 2>/dev/null | grep -c "Healthy" || echo "0")
+    local healthy_members=$(run_command talosctl etcd members 2>/dev/null | grep -c "Healthy" || echo "0")
     local after_removal=$((healthy_members - 1))
     [[ $after_removal -lt $min_quorum ]] && {
         log_step_error "Cannot remove VM $vmid: would violate etcd quorum"
@@ -1495,19 +1495,19 @@ remove_control_plane() {
         return 0
     }
     local node_name=""
-    [[ -n "$ip" && -f "$KUBECONFIG_PATH" ]] && node_name=$(kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null | grep "$ip" | awk '{print $1}')
+    [[ -n "$ip" && -f "$KUBECONFIG_PATH" ]] && node_name=$(run_command kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null | grep "$ip" | awk '{print $1}')
     [[ -n "$node_name" ]] && {
         log_step_info "Draining node $node_name..."
-        kubectl --kubeconfig "$KUBECONFIG_PATH" cordon "$node_name" || true
-        kubectl --kubeconfig "$KUBECONFIG_PATH" drain "$node_name" --ignore-daemonsets --delete-emptydir-data --timeout=300s || log_step_warn "Drain incomplete"
+        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" cordon "$node_name" || true
+        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" drain "$node_name" --ignore-daemonsets --delete-emptydir-data --timeout=300s || log_step_warn "Drain incomplete"
     }
     [[ -n "$ip" ]] && {
         log_step_info "Removing from etcd..."
-        talosctl etcd remove-member --nodes "$ip" 2>/dev/null || log_step_warn "etcd remove failed (may already be removed)"
+        run_command talosctl etcd remove-member --nodes "$ip" 2>/dev/null || log_step_warn "etcd remove failed (may already be removed)"
     }
     [[ -n "$node_name" ]] && {
         log_step_info "Removing from Kubernetes..."
-        kubectl --kubeconfig "$KUBECONFIG_PATH" delete node "$node_name" --timeout=60s || true
+        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" delete node "$node_name" --timeout=60s || true
     }
     unset DEPLOYED_CP_IPS["$vmid"]
     unset DEPLOYED_CONFIG_HASH["$vmid"]
@@ -1526,12 +1526,12 @@ remove_worker() {
         return 0
     }
     local node_name=""
-    [[ -n "$ip" && -f "$KUBECONFIG_PATH" ]] && node_name=$(kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null | grep "$ip" | awk '{print $1}')
+    [[ -n "$ip" && -f "$KUBECONFIG_PATH" ]] && node_name=$(run_command kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null | grep "$ip" | awk '{print $1}')
     [[ -n "$node_name" ]] && {
         log_step_info "Draining worker node $node_name..."
-        kubectl --kubeconfig "$KUBECONFIG_PATH" cordon "$node_name" || true
-        kubectl --kubeconfig "$KUBECONFIG_PATH" drain "$node_name" --ignore-daemonsets --delete-emptydir-data --timeout=180s || log_step_warn "Drain incomplete"
-        kubectl --kubeconfig "$KUBECONFIG_PATH" delete node "$node_name" || true
+        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" cordon "$node_name" || true
+        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" drain "$node_name" --ignore-daemonsets --delete-emptydir-data --timeout=180s || log_step_warn "Drain incomplete"
+        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" delete node "$node_name" || true
     }
     unset DEPLOYED_WORKER_IPS["$vmid"]
     unset DEPLOYED_CONFIG_HASH["$vmid"]
@@ -1647,6 +1647,20 @@ machine:
       - name: nvme_tcp
       - name: vfio_pci
       - name: zfs
+cluster:
+  extraManifests:
+    - https://raw.githubusercontent.com/alex1989hu/kubelet-serving-cert-approver/main/deploy/standalone-install.yaml
+    - https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+  allowSchedulingOnControlPlanes: false
+  apiServer:
+    admissionControl:
+      - name: PodSecurity
+        configuration:
+          apiVersion: pod-security.admission.config.k8s.io/v1
+          kind: PodSecurityConfiguration
+          exemptions:
+            namespaces:
+              - longhorn-system
 EOF
 }
 
@@ -2753,56 +2767,89 @@ update_kubeconfig() {
     done
     [[ -z "$bootstrap_node" ]] && {
         log_step_error "No healthy control plane found after $max_attempts attempts"
-        log_step_error "The nodes may still be booting or etcd may not be initialized."
-        log_step_error ""
-        log_step_error "Check node status manually:"
-        for vmid in "${!DEPLOYED_CP_IPS[@]}"; do
-            local ip="${DEPLOYED_CP_IPS[$vmid]}"
-            log_step_error "  talosctl version --nodes $ip --endpoints $ip"
-            log_step_error "  talosctl etcd members --nodes $ip --endpoints $ip"
-        done
-        log_step_error ""
-        log_step_error "If nodes are up but etcd shows no members, the bootstrap may have failed."
-        log_step_error "You can try resetting and re-running, or debug manually."
         return 1
     }
     log_step_info "Retrieving kubeconfig from $bootstrap_node"
     run_command mkdir -p "$(dirname "$KUBECONFIG_PATH")"
-    run_command talosctl kubeconfig "$KUBECONFIG_PATH" --nodes "$bootstrap_node" --endpoints "$bootstrap_node" && {
-        chmod 600 "$KUBECONFIG_PATH"
-        log_step_info "Kubeconfig saved to $KUBECONFIG_PATH"
-        log_file_only "KUBECONFIG" "Saved to $KUBECONFIG_PATH"
-        log_step_info "Configuring talosctl endpoints"
-        if run_command talosctl config endpoint "$HAPROXY_IP"; then
-            log_step_info "Set talosctl endpoint to HAProxy ($HAPROXY_IP)"
-            log_file_only "TALOSCONFIG" "Endpoint set to $HAPROXY_IP"
-        else
-            log_step_warn "Failed to set talosctl endpoint to HAProxy, falling back to bootstrap node"
-            if run_command talosctl config endpoint "$bootstrap_node"; then
-                log_step_info "Set talosctl endpoint to bootstrap node ($bootstrap_node)"
-                log_file_only "TALOSCONFIG" "Endpoint set to $bootstrap_node"
+    local temp_kubeconfig
+    temp_kubeconfig=$(mktemp)
+    run_command talosctl kubeconfig "$temp_kubeconfig" --nodes "$bootstrap_node" --endpoints "$bootstrap_node" && {
+        chmod 600 "$temp_kubeconfig"
+        local context_name="${CLUSTER_NAME}"
+        KUBECONFIG="$temp_kubeconfig" kubectl config rename-context "admin@${CLUSTER_NAME}" "$context_name" 2>/dev/null || true
+        if [[ -f "${HOME}/.kube/config" ]]; then
+            log_step_info "Merging with existing kubeconfig at ${HOME}/.kube/config"
+            local merged_config
+            merged_config=$(mktemp)
+            KUBECONFIG="${HOME}/.kube/config:${temp_kubeconfig}" kubectl config view --flatten > "$merged_config"
+            if [[ -s "$merged_config" ]]; then
+                local backup_name="${HOME}/.kube/config.backup.$(date +%Y%m%d_%H%M%S)"
+                cp "${HOME}/.kube/config" "$backup_name"
+                log_step_info "Backed up existing kubeconfig to $backup_name"
+                mv "$merged_config" "${HOME}/.kube/config"
+                chmod 600 "${HOME}/.kube/config"
+                cp "${HOME}/.kube/config" "$KUBECONFIG_PATH"
             else
-                log_step_warn "Failed to set talosctl endpoint"
+                log_step_warn "Merge failed, using cluster-specific config only"
+                mv "$temp_kubeconfig" "$KUBECONFIG_PATH"
             fi
-        fi
-        if run_command talosctl config node "$bootstrap_node"; then
-            log_step_info "Set talosctl node to $bootstrap_node"
-            log_file_only "TALOSCONFIG" "Node set to $bootstrap_node"
+            rm -f "$merged_config"
         else
-            log_step_warn "Failed to set talosctl node"
+            mv "$temp_kubeconfig" "${HOME}/.kube/config"
+            chmod 600 "${HOME}/.kube/config"
+            cp "${HOME}/.kube/config" "$KUBECONFIG_PATH"
         fi
-        export TALOSCONFIG
-        if kubectl --kubeconfig "$KUBECONFIG_PATH" cluster-info &>/dev/null; then
-            log_step_info "Kubernetes API is accessible"
-        else
-            log_step_warn "Kubeconfig saved but Kubernetes API not yet ready (nodes still joining)"
-            log_step_warn "Try: kubectl --kubeconfig $KUBECONFIG_PATH cluster-info"
+        rm -f "$temp_kubeconfig"
+        log_step_info "Kubeconfig saved and merged successfully"
+        log_step_info "Available contexts:"
+        run_command kubectl config get-contexts 2>/dev/null || true
+        local current_context
+        current_context=$(run_command kubectl config current-context 2>/dev/null || echo "")
+        if [[ -z "$current_context" ]]; then
+            run_command kubectl config use-context "$context_name"
+            log_step_info "Set current context to: $context_name"
         fi
+        configure_talosctl_endpoints "$bootstrap_node"
+        verify_kubernetes_access
     } || {
         log_step_error "Failed to retrieve kubeconfig from $bootstrap_node"
-        log_step_error "Check Talos logs: talosctl logs --nodes $bootstrap_node --endpoints $bootstrap_node"
+        rm -f "$temp_kubeconfig"
         return 1
     }
+}
+
+configure_talosctl_endpoints() {
+    local bootstrap_node="$1"
+    log_step_info "Configuring talosctl endpoints"
+    if run_command talosctl config endpoint "$HAPROXY_IP"; then
+        log_step_info "Set talosctl endpoint to HAProxy ($HAPROXY_IP)"
+        log_file_only "TALOSCONFIG" "Endpoint set to $HAPROXY_IP"
+    else
+        log_step_warn "Failed to set talosctl endpoint to HAProxy, using bootstrap node"
+        if run_command talosctl config endpoint "$bootstrap_node"; then
+            log_step_info "Set talosctl endpoint to bootstrap node ($bootstrap_node)"
+            log_file_only "TALOSCONFIG" "Endpoint set to $bootstrap_node"
+        fi
+    fi
+    if run_command talosctl config node "$bootstrap_node"; then
+        log_step_info "Set talosctl node to $bootstrap_node"
+        log_file_only "TALOSCONFIG" "Node set to $bootstrap_node"
+    fi
+    export TALOSCONFIG
+}
+
+verify_kubernetes_access() {
+    log_step_info "Verifying Kubernetes API access..."
+    if kubectl cluster-info &>/dev/null; then
+        log_step_info "Kubernetes API is accessible"
+        log_step_info "Cluster info:"
+        run_command kubectl cluster-info 2>/dev/null | head -5 || true
+        log_step_info "Node status:"
+        run_command kubectl get nodes -o wide 2>/dev/null || log_step_warn "Could not retrieve node list (may still be joining)"
+    else
+        log_step_warn "Kubernetes API not yet ready (nodes may still be joining)"
+        log_step_info "Try: kubectl cluster-info"
+    fi
 }
 
 verify_cluster() {
@@ -2812,14 +2859,14 @@ verify_cluster() {
         return 0
     }
     log_step_info "Checking Kubernetes API"
-    kubectl --kubeconfig "$KUBECONFIG_PATH" cluster-info &>/dev/null && log_step_info "Kubernetes API is ready" || {
+    run_command kubectl --kubeconfig "$KUBECONFIG_PATH" cluster-info &>/dev/null && log_step_info "Kubernetes API is ready" || {
         log_step_warn "Kubernetes API not yet ready"
         return 0
     }
     log_step_info "Node status:"
-    kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null || true
+    run_command kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null || true
     log_step_info "etcd members:"
-    talosctl etcd members 2>/dev/null || true
+    run_command talosctl etcd members 2>/dev/null || true
 }
 
 sync_deployed_ips_with_live_discovery() {
