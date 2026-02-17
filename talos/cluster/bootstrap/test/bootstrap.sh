@@ -2328,8 +2328,9 @@ wait_for_etcd_healthy() {
     log_step_info "Waiting for etcd to become healthy..."
     while [[ $attempt -le $max_attempts ]]; do
         if run_command timeout 10 talosctl etcd members --nodes "$ip" --endpoints "$ip" 2>/dev/null; then
-            if echo "$LAST_COMMAND_OUTPUT" | grep -q "Healthy"; then
-                log_step_info "etcd is healthy on VM $vmid"
+            if echo "$LAST_COMMAND_OUTPUT" | grep -qE '[0-9a-f]{16}'; then
+                local member_count=$(echo "$LAST_COMMAND_OUTPUT" | grep -cE '[0-9a-f]{16}' || echo "0")
+                log_step_info "etcd has $member_count member(s) on VM $vmid (healthy)"
                 return 0
             fi
         fi
