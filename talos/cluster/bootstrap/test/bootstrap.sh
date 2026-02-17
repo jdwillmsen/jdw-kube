@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.11.1"
+readonly VERSION="3.12.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
@@ -308,24 +308,28 @@ log_plan_error() { log "PLAN" "ERROR" "$1"; }
 log_plan_warn() { log "PLAN" "WARN" "$1"; }
 log_plan_info() { log "PLAN" "INFO" "$1"; }
 log_plan_debug() { log "PLAN" "DEBUG" "$1"; }
+log_plan_trace() { log "PLAN" "TRACE" "$1"; }
 
 log_stage_fatal() { log "STAGE" "FATAL" "$1"; }
 log_stage_error() { log "STAGE" "ERROR" "$1"; }
 log_stage_warn() { log "STAGE" "WARN" "$1"; }
 log_stage_info() { log "STAGE" "INFO" "$1"; }
 log_stage_debug() { log "STAGE" "DEBUG" "$1"; }
+log_stage_trace() { log "STAGE" "TRACE" "$1"; }
 
 log_job_fatal() { log "JOB" "FATAL" "$1"; }
 log_job_error() { log "JOB" "ERROR" "$1"; }
 log_job_warn() { log "JOB" "WARN" "$1"; }
 log_job_info() { log "JOB" "INFO" "$1"; }
 log_job_debug() { log "JOB" "DEBUG" "$1"; }
+log_job_trace() { log "JOB" "TRACE" "$1"; }
 
 log_step_fatal() { log "STEP" "FATAL" "$1"; }
 log_step_error() { log "STEP" "ERROR" "$1"; }
 log_step_warn() { log "STEP" "WARN" "$1"; }
 log_step_info() { log "STEP" "INFO" "$1"; }
 log_step_debug() { log "STEP" "DEBUG" "$1"; }
+log_step_trace() { log "STEP" "TRACE" "$1"; }
 
 log_detail_fatal() { log "DETAIL" "FATAL" "$1"; }
 log_detail_error() { log "DETAIL" "ERROR" "$1"; }
@@ -409,13 +413,16 @@ write_file_audited() {
     local file="$2"
     local temp_f
     temp_f=$(mktemp)
+    log_detail_trace "write_file_audited: Writing ${#content} bytes to $file"
     cat <<EOF > "$temp_f"
 $content
 EOF
     run_command mv "$temp_f" "$file"
+    log_detail_debug "write_file_audited: Successfully wrote to $file"
 }
 
 init_logging() {
+    log_detail_trace "init_logging: Starting with args: $*"
     if [[ ! -d "$LOG_DIR" ]]; then
         mkdir -p "$LOG_DIR"
     fi
@@ -497,11 +504,12 @@ Environment:
 
     print_banner
     trap 'cleanup_on_exit' EXIT INT TERM
+    log_detail_trace "init_logging: Completed, RUN_DIR=$RUN_DIR"
 }
 
 save_state() {
-    local timestamp
-    timestamp=$(date -Iseconds)
+    local timestamp=$(date -Iseconds)
+    log_detail_trace "save_state: Starting state save with timestamp=$timestamp"
 
     run_command mkdir -p "$STATE_DIR" || {
         echo "ERROR: Failed to create state directory $STATE_DIR" >&2
@@ -549,9 +557,11 @@ save_state() {
 }
 EOF
 )
+    log_detail_debug "save_state: Writing state with ${#DEPLOYED_CP_IPS[@]} CPs, ${#DEPLOYED_WORKER_IPS[@]} workers"
     if write_file_audited "$state_content" "$STATE_FILE"; then
         chmod 600 "$STATE_FILE"
         log_file_only "STATE" "Saved to $STATE_FILE"
+        log_detail_trace "save_state: Successfully saved state"
     else
         log_job_error "Failed to write state file to $STATE_FILE"
         return 1
@@ -566,8 +576,7 @@ flush_arp_cache() {
 
 populate_arp_table() {
     local host="$1"
-    local subnet
-    subnet=$(get_network_subnet "$host")
+    local subnet=$(get_network_subnet "$host")
     log_step_debug "[ARP-SCAN] Populating ARP table from $host (subnet: $subnet.0/24)"
     run_command ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
         "${TF_PROXMOX_SSH_USER}@$host" \
@@ -613,6 +622,7 @@ populate_arp_table() {
 
 cleanup_on_exit() {
     local exit_code=$?
+    log_detail_trace "cleanup_on_exit: Starting cleanup with exit_code=$exit_code"
     run_command rm -f /tmp/haproxy.cfg.* || true
 
     local footer_content="
@@ -689,13 +699,16 @@ Exit Code: $exit_code
         } > "$summary_file"
 
         chmod 600 "$summary_file"
+        log_detail_debug "cleanup_on_exit: Summary written to $summary_file"
     }
 
     [[ "${LOG_HISTORY:-true}" == "true" && -n "${RUNS_LOG_LINE:-}" && -f "$LOG_DIR/runs.log" ]] && {
         local status="failed"
         [[ $exit_code -eq 0 ]] && status="success"
         sed -i "${RUNS_LOG_LINE}s/pending$/$status/" "$LOG_DIR/runs.log" 2>/dev/null || true
+        log_detail_trace "cleanup_on_exit: Updated runs.log status to $status"
     }
+    log_detail_trace "cleanup_on_exit: Cleanup completed"
 }
 
 print_banner() {
@@ -712,6 +725,7 @@ print_banner() {
 
 fetch_proxmox_node_ips() {
     log_job_info "Fetching Proxmox cluster node IPs from API"
+    log_job_trace "fetch_proxmox_node_ips: Starting with TF_PROXMOX_ENDPOINT=${TF_PROXMOX_ENDPOINT:-empty}"
     local api_url
     if [[ -n "${TF_PROXMOX_ENDPOINT:-}" ]]; then
         api_url="${TF_PROXMOX_ENDPOINT}/api2/json"
@@ -770,12 +784,14 @@ fetch_proxmox_node_ips() {
         return $?
     }
     log_step_debug "Resolved ${#PROXMOX_NODE_IPS[@]} Proxmox node IPs"
+    log_job_trace "fetch_proxmox_node_ips: Resolved nodes: ${!PROXMOX_NODE_IPS[*]}"
     return 0
 }
 
 fetch_node_ips_via_ssh() {
     local main_node=$(get_node_ip "pve1")
     log_step_info "Fetching node IPs via SSH from $main_node"
+    log_job_trace "fetch_node_ips_via_ssh: Connecting to $main_node as $TF_PROXMOX_SSH_USER"
     local cluster_status
     if run_command ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$main_node" "pvesh get /cluster/status --output-format json"; then
         cluster_status="$LAST_COMMAND_OUTPUT"
@@ -793,11 +809,13 @@ fetch_node_ips_via_ssh() {
             }
         done <<< "$nodes_json"
     fi
+    log_job_trace "fetch_node_ips_via_ssh: Completed with ${#PROXMOX_NODE_IPS[@]} nodes"
     return 0
 }
 
 get_node_ip() {
     local node_name="$1"
+    log_detail_trace "get_node_ip: Resolving $node_name"
     [[ ${#PROXMOX_NODE_IPS[@]} -gt 0 ]] && {
         echo "${PROXMOX_NODE_IPS[$node_name]:-$node_name}"
     } || {
@@ -807,11 +825,13 @@ get_node_ip() {
 
 get_network_subnet() {
     local ip="$1"
+    log_detail_trace "get_network_subnet: Extracting subnet from $ip"
     [[ "$ip" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\.[0-9]+$ ]] && echo "${BASH_REMATCH[1]}" || echo "192.168.1"
 }
 
 load_desired_state() {
     log_job_info "Loading Desired State from Terraform"
+    log_job_trace "load_desired_state: Resetting all desired state arrays"
     DESIRED_CP_VMIDS=()
     DESIRED_WORKER_VMIDS=()
     DESIRED_ALL_VMIDS=()
@@ -844,6 +864,7 @@ load_desired_state() {
     local cp_count=${#DESIRED_CP_VMIDS[@]}
     local worker_count=${#DESIRED_WORKER_VMIDS[@]}
     log_step_info "Parsed: $cp_count control planes, $worker_count workers"
+    log_job_trace "load_desired_state: CPs=[${!DESIRED_CP_VMIDS[*]}], Workers=[${!DESIRED_WORKER_VMIDS[*]}]"
     if [[ -n "${ALL_LOGS_FILE:-}" ]]; then
         {
             echo "[$(date "$LOG_TIMESTAMP_FORMAT")] [TERRAFORM-PREVIEW]"
@@ -884,6 +905,7 @@ parse_terraform_array() {
     local brace_count=0
     local parsed_count=0
     log_detail_debug "Parsing array: $array_name (role: $role)"
+    log_detail_trace "parse_terraform_array: Starting parse of $array_name"
     if [[ ! -f "$TERRAFORM_TFVARS" ]]; then
         log_detail_warn "Terraform file not found, skipping parse"
         return 0
@@ -935,11 +957,13 @@ parse_terraform_array() {
         return 0
     }
     log_detail_debug "Parsed $parsed_count $role nodes from $array_name"
+    log_detail_trace "parse_terraform_array: Completed with $parsed_count nodes"
     return 0
 }
 
 load_deployed_state() {
     log_job_info "Loading Deployed State"
+    log_job_trace "load_deployed_state: Resetting deployed state arrays"
     DEPLOYED_CP_IPS=()
     DEPLOYED_WORKER_IPS=()
     DEPLOYED_CONFIG_HASH=()
@@ -992,6 +1016,7 @@ load_deployed_state() {
     local cp_count=${#DEPLOYED_CP_IPS[@]}
     local worker_count=${#DEPLOYED_WORKER_IPS[@]}
     log_step_info "Loaded: $cp_count control planes, $worker_count workers"
+    log_job_trace "load_deployed_state: CPs=[${!DEPLOYED_CP_IPS[*]}], Workers=[${!DEPLOYED_WORKER_IPS[*]}]"
 }
 
 save_state() {
@@ -1039,6 +1064,7 @@ EOF
 
 reconcile_cluster() {
     log_stage_info "Reconciling Cluster State"
+    log_stage_trace "reconcile_cluster: Starting reconciliation"
     discover_live_state
     build_reconcile_plan
     display_reconcile_plan
@@ -1058,11 +1084,13 @@ reconcile_cluster() {
             exit 0
         }
     }
+    log_stage_trace "reconcile_cluster: Completed successfully"
     return 0
 }
 
 discover_live_state() {
     log_job_info "Discovering Live Cluster State"
+    log_job_trace "discover_live_state: Resetting live state arrays"
     LIVE_NODE_IPS=()
     LIVE_NODE_STATUS=()
     MAC_BY_VMID=()
@@ -1086,6 +1114,7 @@ discover_live_state() {
         log_step_info "No VMs to discover"
         return 0
     }
+    log_job_trace "discover_live_state: Checking ${#VMID_TO_NODE[@]} VMs across nodes"
     for vmid in "${!VMID_TO_NODE[@]}"; do
         local node node_ip qm_output ssh_exit_code current_vmid line
         node="${VMID_TO_NODE[$vmid]}"
@@ -1185,10 +1214,12 @@ discover_live_state() {
         [[ -z "${LIVE_NODE_STATUS[$vmid]:-}" ]] && LIVE_NODE_STATUS["$vmid"]="discovered"
     done
     log_step_debug "Discovery complete: ${#LIVE_NODE_IPS[@]} nodes found"
+    log_job_trace "discover_live_state: Final state - ${#LIVE_NODE_IPS[@]} IPs, ${#LIVE_NODE_STATUS[@]} statuses"
 }
 
 build_reconcile_plan() {
     log_job_info "Building Reconciliation Plan"
+    log_job_trace "build_reconcile_plan: Starting with ${#DESIRED_CP_VMIDS[@]} desired CPs, ${#DESIRED_WORKER_VMIDS[@]} desired workers"
     local old_plan_add_cp="${PLAN_ADD_CP[*]}"
     local old_plan_add_worker="${PLAN_ADD_WORKER[*]}"
     local old_deployed_cp="${!DEPLOYED_CP_IPS[*]}"
@@ -1204,12 +1235,14 @@ build_reconcile_plan() {
         [[ -z "${DEPLOYED_CP_IPS[$vmid]:-}" && -z "${DEPLOYED_WORKER_IPS[$vmid]:-}" ]] && {
             PLAN_ADD_CP+=("$vmid")
             log_file_only "RECONCILE" "ADD_CP: $vmid"
+            log_detail_trace "build_reconcile_plan: Will add CP VM $vmid"
         }
     done
     for vmid in "${!DESIRED_WORKER_VMIDS[@]}"; do
         [[ -z "${DEPLOYED_CP_IPS[$vmid]:-}" && -z "${DEPLOYED_WORKER_IPS[$vmid]:-}" ]] && {
             PLAN_ADD_WORKER+=("$vmid")
             log_file_only "RECONCILE" "ADD_WORKER: $vmid"
+            log_detail_trace "build_reconcile_plan: Will add Worker VM $vmid"
         }
     done
     log_step_debug "Checking for nodes to remove"
@@ -1217,12 +1250,14 @@ build_reconcile_plan() {
         [[ -z "${DESIRED_CP_VMIDS[$vmid]:-}" ]] && {
             PLAN_REMOVE_CP+=("$vmid")
             log_file_only "RECONCILE" "REMOVE_CP: $vmid"
+            log_detail_trace "build_reconcile_plan: Will remove CP VM $vmid"
         }
     done
     for vmid in "${!DEPLOYED_WORKER_IPS[@]}"; do
         [[ -z "${DESIRED_WORKER_VMIDS[$vmid]:-}" ]] && {
             PLAN_REMOVE_WORKER+=("$vmid")
             log_file_only "RECONCILE" "REMOVE_WORKER: $vmid"
+            log_detail_trace "build_reconcile_plan: Will remove Worker VM $vmid"
         }
     done
     log_state_change "PLAN_ADD_CP" "$old_plan_add_cp" "${PLAN_ADD_CP[*]}"
@@ -1238,8 +1273,10 @@ build_reconcile_plan() {
                 if [[ "$current_hash" != "$new_hash" || "$FORCE_RECONFIGURE" == "true" ]]; then
                     PLAN_UPDATE+=("$vmid:control-plane")
                     log_file_only "RECONCILE" "UPDATE: $vmid (hash changed)"
+                    log_detail_debug "Config drift detected for CP $vmid: ${current_hash:0:16} -> ${new_hash:0:16}"
                 else
                     PLAN_NOOP+=("$vmid")
+                    log_detail_trace "build_reconcile_plan: CP $vmid unchanged"
                 fi
             }
         }
@@ -1255,8 +1292,10 @@ build_reconcile_plan() {
                 if [[ "$current_hash" != "$new_hash" || "$FORCE_RECONFIGURE" == "true" ]]; then
                     PLAN_UPDATE+=("$vmid:worker")
                     log_file_only "RECONCILE" "UPDATE: $vmid (hash changed)"
+                    log_detail_debug "Config drift detected for Worker $vmid: ${current_hash:0:16} -> ${new_hash:0:16}"
                 else
                     PLAN_NOOP+=("$vmid")
+                    log_detail_trace "build_reconcile_plan: Worker $vmid unchanged"
                 fi
             }
         }
@@ -1267,6 +1306,7 @@ build_reconcile_plan() {
         log_step_warn "Will attempt to bootstrap before proceeding with other changes"
         PLAN_NEED_BOOTSTRAP=true
     }
+    log_job_trace "build_reconcile_plan: Plan complete - AddCP:${#PLAN_ADD_CP[@]} AddWorker:${#PLAN_ADD_WORKER[@]} RemoveCP:${#PLAN_REMOVE_CP[@]} RemoveWorker:${#PLAN_REMOVE_WORKER[@]} Update:${#PLAN_UPDATE[@]} Noop:${#PLAN_NOOP[@]}"
     return 0
 }
 
@@ -1351,6 +1391,7 @@ display_reconcile_plan() {
 
 execute_reconcile_plan() {
     log_job_info "Executing Reconciliation Plan"
+    log_job_trace "execute_reconcile_plan: Starting execution"
     [[ "$DRY_RUN" == "true" ]] && log_step_info "Dry run mode - simulating operations"
     [[ "$PLAN_NEED_BOOTSTRAP" == "true" ]] && {
         run_bootstrap || {
@@ -1399,6 +1440,7 @@ execute_reconcile_plan() {
     }
     save_state
     log_plan_info "Reconciliation complete"
+    log_job_trace "execute_reconcile_plan: Execution completed"
 }
 
 add_control_plane() {
@@ -1407,6 +1449,7 @@ add_control_plane() {
     info="${DESIRED_CP_VMIDS[$vmid]}"
     name=$(echo "$info" | cut -d'|' -f1)
     log_step_info "Adding control plane VM $vmid ($name)"
+    log_step_trace "add_control_plane: Starting for VM $vmid"
     [[ "$DRY_RUN" == "true" ]] && {
         log_step_info "[DRY-RUN] Would apply config to VM $vmid"
         return 0
@@ -1438,6 +1481,7 @@ add_control_plane() {
         log_step_info "Control plane VM $vmid added successfully (IP: $ip)"
         log_file_only "DEPLOY" "SUCCESS: CP $vmid at $ip"
     fi
+    log_step_trace "add_control_plane: Completed for VM $vmid"
     return 0
 }
 
@@ -1447,6 +1491,7 @@ add_worker() {
     info="${DESIRED_WORKER_VMIDS[$vmid]}"
     name=$(echo "$info" | cut -d'|' -f1)
     log_step_info "Adding worker VM $vmid ($name)"
+    log_step_trace "add_worker: Starting for VM $vmid"
     [[ "$DRY_RUN" == "true" ]] && {
         log_step_info "[DRY-RUN] Would apply config to VM $vmid"
         return 0
@@ -1477,6 +1522,7 @@ add_worker() {
         log_step_info "Worker VM $vmid added successfully (IP: $ip)"
         log_file_only "DEPLOY" "SUCCESS: Worker $vmid at $ip"
     fi
+    log_step_trace "add_worker: Completed for VM $vmid"
     return 0
 }
 
@@ -1484,6 +1530,7 @@ remove_control_plane() {
     local vmid=$1
     local ip="${DEPLOYED_CP_IPS[$vmid]:-}"
     log_step_info "Removing control plane VM $vmid"
+    log_step_trace "remove_control_plane: Starting for VM $vmid"
     [[ -z "$ip" ]] && {
         log_step_warn "No IP recorded for VM $vmid, attempting discovery"
         ip=$(discover_ip_for_vmid "$vmid" 2>/dev/null || echo "")
@@ -1531,12 +1578,14 @@ remove_control_plane() {
     run_command rm -f "$CHECKSUM_DIR/cp-${vmid}.sha256"
     log_step_info "Control plane VM $vmid removed"
     log_file_only "DEPLOY" "REMOVED: CP $vmid"
+    log_step_trace "remove_control_plane: Completed for VM $vmid"
 }
 
 remove_worker() {
     local vmid=$1
     local ip="${DEPLOYED_WORKER_IPS[$vmid]:-}"
     log_step_info "Removing worker VM $vmid"
+    log_step_trace "remove_worker: Starting for VM $vmid"
     [[ -z "$ip" ]] && ip=$(discover_ip_for_vmid "$vmid" 2>/dev/null || echo "")
     [[ "$DRY_RUN" == "true" ]] && {
         log_step_info "[DRY-RUN] Would remove VM $vmid from cluster"
@@ -1555,6 +1604,7 @@ remove_worker() {
     run_command rm -f "$CHECKSUM_DIR/worker-${vmid}.sha256"
     log_step_info "Worker VM $vmid removed"
     log_file_only "DEPLOY" "REMOVED: Worker $vmid"
+    log_step_trace "remove_worker: Completed for VM $vmid"
 }
 
 update_node_config() {
@@ -1562,6 +1612,7 @@ update_node_config() {
     local role=$2
     local ip="" config_file new_hash
     log_step_info "Updating configuration for VM $vmid ($role)"
+    log_step_trace "update_node_config: Starting for VM $vmid, role=$role"
     [[ "$role" == "control-plane" ]] && ip="${DEPLOYED_CP_IPS[$vmid]:-}" || ip="${DEPLOYED_WORKER_IPS[$vmid]:-}"
     [[ -z "$ip" ]] && ip=$(discover_ip_for_vmid "$vmid" 2>/dev/null || echo "")
     [[ -z "$ip" ]] && {
@@ -1584,6 +1635,7 @@ update_node_config() {
         log_step_error "Failed to update config for VM $vmid"
         return 1
     fi
+    log_step_trace "update_node_config: Completed for VM $vmid"
 }
 
 generate_node_config() {
@@ -1597,6 +1649,7 @@ generate_node_config() {
     memory=$(echo "$info" | cut -d'|' -f4)
     disk=$(echo "$info" | cut -d'|' -f5)
     log_step_info "Generating config for $name (VMID: $vmid)"
+    log_step_trace "generate_node_config: role=$role, node=$node, cpu=$cpu, memory=$memory, disk=$disk"
     patch_file="${NODES_DIR}/.patches/${role}-${vmid}.yaml"
     run_command mkdir -p "${NODES_DIR}/.patches"
     local patch_content
@@ -1620,10 +1673,12 @@ generate_node_config() {
     run_command mkdir -p "$CHECKSUM_DIR"
 
     write_file_audited "$config_hash" "$CHECKSUM_DIR/${role}-${vmid}.sha256"
+    log_step_trace "generate_node_config: Completed for VM $vmid, hash=${config_hash:0:16}"
 }
 
 generate_base_configs() {
     log_step_info "Generating base Talos configurations"
+    log_step_trace "generate_base_configs: Starting with secrets=$SECRETS_FILE"
     [[ ! -f "$SECRETS_FILE" ]] && {
         log_step_info "Generating secrets"
         run_command talosctl gen secrets -o "$SECRETS_FILE" && chmod 600 "$SECRETS_FILE" || log_job_fatal "Failed to generate secrets"
@@ -1634,6 +1689,7 @@ generate_base_configs() {
     [[ -f "talosconfig" ]] && run_command mv talosconfig "$TALOSCONFIG" && chmod 600 "$TALOSCONFIG"
     export TALOSCONFIG
     log_step_info "Talos config saved to $TALOSCONFIG"
+    log_step_trace "generate_base_configs: Completed"
 }
 
 generate_control_plane_patch() {
@@ -1722,6 +1778,7 @@ EOF
 
 discover_ip_for_vmid() {
     local vmid=$1
+    log_detail_trace "discover_ip_for_vmid: Starting for VM $vmid"
     if [[ -n "${LIVE_NODE_IPS[$vmid]:-}" ]]; then
         log_detail_debug "Using live discovered IP for VM $vmid: ${LIVE_NODE_IPS[$vmid]}"
         echo "${LIVE_NODE_IPS[$vmid]}"
@@ -1736,8 +1793,10 @@ discover_ip_for_vmid() {
     else
         host=$(get_node_ip "pve1")
     fi
+    log_detail_trace "discover_ip_for_vmid: Checking host $host for VM $vmid"
     local mac="${MAC_BY_VMID[$vmid]:-}"
     if [[ -z "$mac" ]]; then
+        log_detail_trace "discover_ip_for_vmid: No cached MAC, fetching from Proxmox"
         if run_command ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
                 "${TF_PROXMOX_SSH_USER}@$host" \
                 "qm config $vmid | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2"; then
@@ -1745,11 +1804,13 @@ discover_ip_for_vmid() {
         fi
         if [[ -n "$mac" ]]; then
             MAC_BY_VMID["$vmid"]="$mac"
+            log_detail_debug "Fetched MAC $mac for VM $vmid"
         fi
     fi
     if [[ -n "$mac" ]]; then
         local subnet
         subnet=$(get_network_subnet "$host")
+        log_detail_trace "discover_ip_for_vmid: Pinging subnet $subnet for VM $vmid"
         run_command ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
             "${TF_PROXMOX_SSH_USER}@$host" \
             "seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 ${subnet}.{} >/dev/null 2>&1 || true" || true
@@ -1761,6 +1822,7 @@ discover_ip_for_vmid() {
             all_ips="$LAST_COMMAND_OUTPUT"
         fi
         if [[ -n "$all_ips" ]]; then
+            log_detail_debug "Found ${#all_ips[@]} ARP entries for VM $vmid MAC $mac"
             local ip
             while IFS= read -r ip; do
                 ip=$(echo "$ip" | tr -d '\r' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
@@ -1771,7 +1833,7 @@ discover_ip_for_vmid() {
                     echo "$ip"
                     return 0
                 else
-                    log_detail_debug "IP $ip found in ARP but not reachable, trying next..."
+                    log_detail_trace "discover_ip_for_vmid: IP $ip found in ARP but not reachable"
                 fi
             done <<< "$all_ips" || true
             local first_valid_ip
@@ -1794,6 +1856,7 @@ discover_ip_for_vmid() {
         echo "${DEPLOYED_WORKER_IPS[$vmid]}"
         return 0
     fi
+    log_detail_error "discover_ip_for_vmid: Could not find IP for VM $vmid"
     return 1
 }
 
@@ -1843,6 +1906,7 @@ apply_config_to_node() {
     local role="$4"
     local max_attempts=5
     local attempt=1
+    log_step_trace "apply_config_to_node: Starting for VM $vmid at $ip, role=$role"
     if [[ -f "$TALOSCONFIG" ]]; then
         export TALOSCONFIG
         log_step_debug "Using TALOSCONFIG: $TALOSCONFIG"
@@ -1855,7 +1919,7 @@ apply_config_to_node() {
         return 0
     }
     while [[ $attempt -le $max_attempts ]]; do
-        log_detail_debug "Attempt $attempt/$max_attempts (maintenance mode)"
+        log_detail_trace "apply_config_to_node: Attempt $attempt/$max_attempts (maintenance mode)"
         if run_command talosctl apply-config --nodes "$ip" --file "$config_file" --insecure; then
             log_step_info "Config applied successfully in maintenance mode (VMID: $vmid)"
             wait_for_node_ready "$ip" "$vmid"
@@ -1897,18 +1961,23 @@ apply_config_to_node() {
 
 check_node_configured() {
     local ip="$1"
+    log_detail_trace "check_node_configured: Checking $ip"
     if [[ -f "$TALOSCONFIG" ]]; then
         export TALOSCONFIG
         if timeout 5 talosctl version --nodes "$ip" --endpoints "$ip" &>/dev/null; then
+            log_detail_trace "check_node_configured: $ip responsive to version check"
             return 0
         fi
         if timeout 5 talosctl version --endpoints "$ip" &>/dev/null; then
+            log_detail_trace "check_node_configured: $ip responsive to endpoint version check"
             return 0
         fi
     fi
     if timeout 5 talosctl etcd members --endpoints "$ip" &>/dev/null; then
+        log_detail_trace "check_node_configured: $ip has etcd members"
         return 0
     fi
+    log_detail_trace "check_node_configured: $ip not configured"
     return 1
 }
 
@@ -1924,6 +1993,7 @@ wait_for_node_with_rediscovery() {
     local check_interval=3
     REDISCOVERED_IP=""
     log_step_info "Monitoring VM $vmid (IP: $initial_ip, role: $role, reboot_expected: $config_triggered_reboot)..."
+    log_step_trace "wait_for_node_with_rediscovery: max_wait=$max_wait, check_interval=$check_interval"
     if [[ "$config_triggered_reboot" != "true" ]]; then
         log_step_debug "No reboot expected, verifying node readiness..."
         local ready_wait=0
@@ -1943,13 +2013,17 @@ wait_for_node_with_rediscovery() {
     local last_seen_ip="$initial_ip"
     local candidate_ip=""
     local last_state_change=0
+    local maintenance_stable_start=""
     while [[ $waited -lt $max_wait ]]; do
+        log_detail_trace "wait_for_node_with_rediscovery: State=$state, waited=${waited}s, last_ip=$last_seen_ip"
         case "$state" in
             "monitoring")
                 if ! ping -c 1 -W 2 "$initial_ip" &>/dev/null; then
+                    local downtime_start=$waited
                     state="rebooting"
                     last_state_change=$waited
-                    log_step_info "Node stopped responding (reboot starting)"
+                    log_step_info "Node $initial_ip (VMID: $vmid) stopped responding (possible reboot starting)"
+                    log_step_trace "wait_for_node_with_rediscovery: Transition monitoring->rebooting at ${waited}s"
                 else
                     log_detail_debug "Node still responding, waiting for reboot..."
                 fi
@@ -1957,18 +2031,18 @@ wait_for_node_with_rediscovery() {
             "rebooting")
                 local downtime=$((waited - last_state_change))
                 if [[ $((downtime % 15)) -eq 0 && $downtime -gt 0 ]]; then
-                    log_step_debug "Refreshing ARP after ${downtime}s..."
+                    log_step_debug "Re-populating ARP tables after ${downtime}s..."
                     for node_name in "${!PROXMOX_NODE_IPS[@]}"; do
                         local node_ip="${PROXMOX_NODE_IPS[$node_name]}"
-                        ssh -o ConnectTimeout=3 "${TF_PROXMOX_SSH_USER}@$node_ip" \
-                            "ip neigh flush all && seq 1 254 | xargs -P50 -I{} ping -c1 -W1 ${subnet}.{} &>/dev/null || true" 2>/dev/null || true
+                        run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$node_ip" "ip -s -s neigh flush all && seq 1 254 | xargs -P 100 -I{} ping -c 1 -W 1 ${subnet}.{} >/dev/null 2>&1 || true" || true
                     done
                     sleep 3
                 fi
-                local found_ip=$(rediscover_ip_by_mac "$vmid")
+                local found_ip=""
+                found_ip=$(rediscover_ip_by_mac "$vmid")
                 if [[ -n "$found_ip" ]]; then
                     if [[ "$found_ip" != "$last_seen_ip" ]]; then
-                        log_step_info "IP changed: $last_seen_ip -> $found_ip"
+                        log_step_info "IP changed: $last_seen_ip -> $found_ip (reboot confirmed, VMID: $vmid)"
                         candidate_ip="$found_ip"
                         state="verifying"
                         last_state_change=$waited
@@ -1979,8 +2053,9 @@ wait_for_node_with_rediscovery() {
                         last_state_change=$waited
                     fi
                 fi
-                [[ $((downtime % 30)) -eq 0 && $downtime -gt 0 ]] && \
-                    log_step_info "Waiting for VM $vmid... (${downtime}s downtime)"
+                if [[ $((downtime % 30)) -eq 0 && $downtime -gt 0 ]]; then
+                    log_step_info "Still waiting for VM $vmid to reappear... (${downtime}s downtime)"
+                fi
                 ;;
             "verifying")
                 local verify_time=$((waited - last_state_change))
@@ -1998,6 +2073,8 @@ wait_for_node_with_rediscovery() {
         waited=$((waited + check_interval))
     done
     log_step_error "Timeout waiting for VM $vmid after ${max_wait}s"
+    log_step_error "Final state: $state, Last IP: ${candidate_ip:-$last_seen_ip} (VMID: $vmid, role: $role)"
+    log_step_trace "wait_for_node_with_rediscovery: Timeout reached, state=$state"
     return 1
 }
 
@@ -2006,6 +2083,7 @@ verify_talos_ready() {
     local vmid="$2"
     local role="${3:-control-plane}"
     local maintenance_grace_period="${4:-45}"
+    log_detail_trace "verify_talos_ready: Checking $ip (VM $vmid, role=$role)"
     [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG
     if run_command timeout 5 talosctl version --nodes "$ip" --endpoints "$ip" --insecure 2>/dev/null; then
         local version_output="$LAST_COMMAND_OUTPUT"
@@ -2064,6 +2142,7 @@ verify_talos_ready() {
 
 rediscover_ip_by_mac() {
     local vmid="$1"
+    log_detail_trace "rediscover_ip_by_mac: Starting for VM $vmid"
     local mac="${MAC_BY_VMID[$vmid]:-}"
     local host_ip="${PROXMOX_NODE_IPS[pve1]:-192.168.1.233}"
     local subnet=$(echo "$host_ip" | cut -d. -f1-3)
@@ -2078,7 +2157,7 @@ rediscover_ip_by_mac() {
             fi
         fi
         if [[ -z "$mac" ]]; then
-            log_detail_debug "Still no MAC for VM $vmid, cannot rediscover"
+            log_detail_warn "Still no MAC for VM $vmid, cannot rediscover"
             return 1
         fi
     fi
@@ -2092,8 +2171,10 @@ rediscover_ip_by_mac() {
     else
         nodes_to_check+=("$(get_node_ip "pve1")")
     fi
+    log_detail_trace "rediscover_ip_by_mac: Checking ${#nodes_to_check[@]} nodes for ARP entries"
     local unique_ips=""
     for node_ip in "${nodes_to_check[@]}"; do
+        log_detail_trace "rediscover_ip_by_mac: Checking node $node_ip"
         run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$node_ip" "ping -c 2 -W 2 ${subnet}.254 >/dev/null 2>&1 || true" || true
         local arp_results=""
         if run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$node_ip" "cat /proc/net/arp | grep -i '$mac' | awk '{print \$1}'"; then
@@ -2130,7 +2211,7 @@ rediscover_ip_by_mac() {
     local responsive_ips=()
     local unresponsive_ips=()
     for candidate_ip in "${all_ips[@]}"; do
-        log_detail_debug "Testing responsiveness of $candidate_ip..."
+        log_detail_trace "rediscover_ip_by_mac: Testing responsiveness of $candidate_ip..."
         if ping -c 1 -W 2 "$candidate_ip" &>/dev/null; then
             responsive_ips+=("$candidate_ip")
         else
@@ -2146,7 +2227,7 @@ rediscover_ip_by_mac() {
             echo "$candidate_ip"
             return 0
         else
-            log_detail_debug "IP $candidate_ip not responding on port 50000, trying next..."
+            log_detail_trace "rediscover_ip_by_mac: IP $candidate_ip not responding on port 50000, trying next..."
         fi
     done
     for candidate_ip in "${ordered_ips[@]}"; do
@@ -2178,6 +2259,7 @@ wait_for_talos_ready_at_ip() {
     [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG
     log_step_debug "Waiting for Talos ready at $ip (VMID: $vmid, role: $role, max: ${max_wait}s)"
     while [[ $waited -lt $max_wait ]]; do
+        log_detail_trace "wait_for_talos_ready_at_ip: Check at ${waited}s for $ip"
         if verify_talos_ready "$ip" "$vmid" "$role"; then
             log_step_info "Node $vmid at $ip is ready (role: $role)"
             return 0
@@ -2222,7 +2304,9 @@ apply_config_with_rediscovery() {
     local subnet="${initial_ip%.*}"
     APPLY_CONFIG_REBOOT_TRIGGERED="false"
     log_step_info "Applying config to $current_ip (VMID: $vmid, role: $role, attempt $attempt/$max_attempts)..."
+    log_step_trace "apply_config_with_rediscovery: Starting with max_attempts=$max_attempts"
     while [[ $attempt -le $max_attempts ]]; do
+        log_detail_trace "apply_config_with_rediscovery: Attempt $attempt/$max_attempts"
         if [[ $attempt -gt 1 ]]; then
             log_step_debug "Rediscovering IP for VM $vmid before attempt $attempt..."
             local fresh_ip=""
@@ -2287,6 +2371,7 @@ apply_config_with_rediscovery() {
             sleep 5
         }
     done
+    log_step_error "Failed to apply config after $max_attempts attempts"
     return 1
 }
 
@@ -2296,6 +2381,7 @@ bootstrap_etcd_at_ip() {
     local max_attempts=3
     local attempt=1
     [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG
+    log_step_trace "bootstrap_etcd_at_ip: Starting for VM $vmid at $ip"
     while [[ $attempt -le $max_attempts ]]; do
         log_step_debug "Attempting etcd bootstrap (attempt $attempt/$max_attempts)..."
         local bootstrap_flags=""
@@ -2316,6 +2402,7 @@ bootstrap_etcd_at_ip() {
         attempt=$((attempt + 1))
         sleep 10
     done
+    log_step_error "Failed to bootstrap etcd after $max_attempts attempts"
     return 1
 }
 
@@ -2327,6 +2414,7 @@ wait_for_etcd_healthy() {
     [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG
     log_step_info "Waiting for etcd to become healthy..."
     while [[ $attempt -le $max_attempts ]]; do
+        log_detail_trace "wait_for_etcd_healthy: Check $attempt/$max_attempts"
         if run_command timeout 10 talosctl etcd members --nodes "$ip" --endpoints "$ip" 2>/dev/null; then
             if echo "$LAST_COMMAND_OUTPUT" | grep -qE '[0-9a-f]{16}'; then
                 local member_count=$(echo "$LAST_COMMAND_OUTPUT" | grep -cE '[0-9a-f]{16}' || echo "0")
@@ -2352,6 +2440,7 @@ wait_for_node_ready() {
 
 update_haproxy_from_state() {
     log_job_info "Updating HAProxy from current state"
+    log_job_trace "update_haproxy_from_state: Starting with ${#DEPLOYED_CP_IPS[@]} control planes"
     local cp_entries=()
     for vmid in "${!DEPLOYED_CP_IPS[@]}"; do
         local ip="${DEPLOYED_CP_IPS[$vmid]}"
@@ -2362,11 +2451,13 @@ update_haproxy_from_state() {
         return 1
     }
     log_step_info "Configuring HAProxy with ${#cp_entries[@]} backends"
+    log_step_trace "update_haproxy_from_state: Backends: ${cp_entries[*]}"
     update_haproxy "${cp_entries[@]}"
 }
 
 update_haproxy() {
     local entries=("$@")
+    log_step_trace "update_haproxy: Starting with ${#entries[@]} entries"
     [[ ${#entries[@]} -eq 0 ]] && {
         log_step_warn "No entries provided to update_haproxy"
         return 1
@@ -2451,6 +2542,7 @@ EOFCFG
         local ip="${entry#*:}"
         local server_name="talos-cp-${vmid}"
         haproxy_content+=$(printf '\n    server %s %s:6443 check' "$server_name" "$ip")
+        log_detail_trace "update_haproxy: Added k8s backend $server_name -> $ip"
     done
     haproxy_content+=$(cat <<EOFCFG
 
@@ -2479,6 +2571,7 @@ EOFCFG
         local ip="${entry#*:}"
         local server_name="talos-cp-${vmid}"
         haproxy_content+=$(printf '\n    server %s %s:50000 check' "$server_name" "$ip")
+        log_detail_trace "update_haproxy: Added talos backend $server_name -> $ip"
     done
     write_file_audited "$haproxy_content" "$haproxy_cfg"
 
@@ -2509,25 +2602,31 @@ EOFCFG
     run_command rm -f "$haproxy_cfg"
     log_step_info "HAProxy updated successfully"
     log_file_only "DEPLOY" "HAPROXY: Updated with ${#entries[@]} backends"
+    log_step_trace "update_haproxy: Completed successfully"
 }
 
 setup_environment() {
     log_stage_info "Environment Setup"
+    log_stage_trace "setup_environment: Starting environment setup"
     init_directories
     detect_environment
     check_prerequisites
     load_desired_state || true
     load_deployed_state
+    log_stage_trace "setup_environment: Completed"
 }
 
 run_discovery() {
     log_stage_info "Node Discovery"
+    log_stage_trace "run_discovery: Starting discovery phase"
     [[ "$SKIP_PREFLIGHT" != "true" ]] && run_preflight_checks
     sync_deployed_ips_with_live_discovery
+    log_stage_trace "run_discovery: Discovery completed"
 }
 
 run_configuration() {
     log_stage_info "Configuration Generation"
+    log_stage_trace "run_configuration: Starting configuration generation"
     [[ ! -f "$SECRETS_DIR/control-plane.yaml" || ! -f "$SECRETS_DIR/worker.yaml" ]] && generate_base_configs
     log_step_info "Generating control plane configurations"
     for vmid in "${!DESIRED_CP_VMIDS[@]}"; do
@@ -2553,17 +2652,22 @@ run_configuration() {
         return 1
     }
     log_step_info "Configuration files ready in $NODES_DIR (${#DESIRED_CP_VMIDS[@]} CPs, ${#DESIRED_WORKER_VMIDS[@]} Workers)"
+    log_stage_trace "run_configuration: Configuration generation completed"
 }
 
 run_execution() {
     log_stage_info "Executing Changes"
+    log_stage_trace "run_execution: Starting execution phase"
     execute_reconcile_plan
+    log_stage_trace "run_execution: Execution completed"
 }
 
 run_finalization() {
     log_stage_info "Finalizing"
+    log_stage_trace "run_finalization: Starting finalization"
     [[ ${#PLAN_ADD_CP[@]} -gt 0 || ${#PLAN_REMOVE_CP[@]} -gt 0 || "$PLAN_NEED_BOOTSTRAP" == "true" ]] && update_kubeconfig
     verify_cluster
+    log_stage_trace "run_finalization: Finalization completed"
 }
 
 run_bootstrap() {
@@ -2576,6 +2680,7 @@ run_bootstrap() {
         return 1
     }
     log_stage_info "Starting cluster bootstrap with IP rediscovery support"
+    log_stage_trace "run_bootstrap: Starting bootstrap with ${#DEPLOYED_CP_IPS[@]} control planes"
     log_step_info "Forcing complete IP rediscovery before bootstrap..."
     MAC_BY_VMID=()
     VMID_BY_MAC=()
@@ -2609,6 +2714,7 @@ run_bootstrap() {
         return 1
     }
     log_step_info "Selected bootstrap node: VMID $bootstrap_vmid at $bootstrap_ip"
+    log_step_trace "run_bootstrap: Bootstrap node selected - VMID $bootstrap_vmid at $bootstrap_ip"
     [[ -z "${MAC_BY_VMID[$bootstrap_vmid]:-}" ]] && {
         log_step_info "Discovering MAC address for VM $bootstrap_vmid..."
         local node_name info
@@ -2636,6 +2742,7 @@ run_bootstrap() {
         [[ -n "$REDISCOVERED_IP" ]] && DEPLOYED_CP_IPS["$bootstrap_vmid"]="$REDISCOVERED_IP"
         save_state
         log_stage_info "Bootstrap completed successfully"
+        log_stage_trace "run_bootstrap: Bootstrap completed successfully"
         return 0
     } || {
         log_stage_error "Bootstrap failed for VM $bootstrap_vmid"
@@ -2645,6 +2752,7 @@ run_bootstrap() {
 
 init_directories() {
     log_job_info "Initialize Directories"
+    log_job_trace "init_directories: Creating directories"
     run_command mkdir -p "$NODES_DIR" "$SECRETS_DIR" "$STATE_DIR" "$PATCH_DIR" "$LOG_DIR" "$CHECKSUM_DIR"
     [[ ! -f "${CLUSTER_DIR}/.gitignore" ]] && {
         local gitignore_content=$(cat <<'EOF'
@@ -2658,10 +2766,12 @@ EOF
         log_detail_debug "Created .gitignore"
     }
     log_file_only "INIT" "Directories initialized"
+    log_job_trace "init_directories: Directories created"
 }
 
 detect_environment() {
     log_job_info "Detect Platform"
+    log_job_trace "detect_environment: Detecting platform"
     if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$MSYSTEM" == "MINGW"* ]] || [[ -n "${WINDIR:-}" ]] || [[ -n "${MINGW_PREFIX:-}" ]] || [[ "$TERM" == "xterm-256color" && -n "${MSYSTEM:-}" ]]; then
         IS_WINDOWS=true
         SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
@@ -2675,10 +2785,12 @@ detect_environment() {
         HOSTS_FILE="/etc/hosts"
         log_step_info "Detected Unix/Linux environment"
     fi
+    log_job_trace "detect_environment: IS_WINDOWS=$IS_WINDOWS"
 }
 
 run_preflight_checks() {
     log_job_info "Pre-flight Checks - Verifying VM readiness"
+    log_job_trace "run_preflight_checks: Starting preflight with max_retries=$PREFLIGHT_MAX_RETRIES"
     local total_vms=${#DESIRED_ALL_VMIDS[@]}
     local ready_vms=0
     local pending_vms=()
@@ -2710,6 +2822,7 @@ run_preflight_checks() {
     done
     [[ $ready_vms -eq $total_vms ]] && {
         log_step_info "All $total_vms VMs are ready"
+        log_job_trace "run_preflight_checks: All VMs ready"
         return 0
     }
     log_step_info "Waiting for ${#pending_vms[@]} VMs to become ready..."
@@ -2789,11 +2902,13 @@ run_preflight_checks() {
             } || log_step_warn "Auto-approve enabled, continuing despite unready VMs"
         }
     }
+    log_job_trace "run_preflight_checks: Completed with $ready_vms/$total_vms ready"
     return 0
 }
 
 update_kubeconfig() {
     log_job_info "Update Kubeconfig"
+    log_job_trace "update_kubeconfig: Starting kubeconfig update"
     [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG
     local updated=0
     for vmid in "${!DEPLOYED_CP_IPS[@]}"; do
@@ -2810,6 +2925,7 @@ update_kubeconfig() {
     local attempt=1
     log_step_info "Waiting for control planes to be ready (this may take 60-90 seconds)..."
     while [[ $attempt -le $max_attempts ]]; do
+        log_detail_trace "update_kubeconfig: Checking control plane readiness (attempt $attempt/$max_attempts)"
         for vmid in "${!DEPLOYED_CP_IPS[@]}"; do
             local ip="${DEPLOYED_CP_IPS[$vmid]}"
             log_step_debug "Checking VMID $vmid at $ip..."
@@ -2876,11 +2992,13 @@ update_kubeconfig() {
         rm -f "$temp_kubeconfig"
         return 1
     }
+    log_job_trace "update_kubeconfig: Kubeconfig update completed"
 }
 
 configure_talosctl_endpoints() {
     local bootstrap_node="$1"
     log_step_info "Configuring talosctl endpoints"
+    log_step_trace "configure_talosctl_endpoints: Setting endpoints to $HAPROXY_IP, node to $bootstrap_node"
     if run_command talosctl config endpoint "$HAPROXY_IP"; then
         log_step_info "Set talosctl endpoint to HAProxy ($HAPROXY_IP)"
         log_file_only "TALOSCONFIG" "Endpoint set to $HAPROXY_IP"
@@ -2900,6 +3018,7 @@ configure_talosctl_endpoints() {
 
 verify_kubernetes_access() {
     log_step_info "Verifying Kubernetes API access..."
+    log_step_trace "verify_kubernetes_access: Testing API connectivity"
     if kubectl cluster-info &>/dev/null; then
         log_step_info "Kubernetes API is accessible"
         log_step_info "Cluster info:"
@@ -2914,6 +3033,7 @@ verify_kubernetes_access() {
 
 verify_cluster() {
     log_job_info "Verify Cluster"
+    log_job_trace "verify_cluster: Starting cluster verification"
     [[ ! -f "$KUBECONFIG_PATH" ]] && {
         log_step_warn "No kubeconfig found, skipping verification"
         return 0
@@ -2927,10 +3047,12 @@ verify_cluster() {
     run_command kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null || true
     log_step_info "etcd members:"
     run_command talosctl etcd members 2>/dev/null || true
+    log_job_trace "verify_cluster: Verification completed"
 }
 
 sync_deployed_ips_with_live_discovery() {
     log_job_info "Synchronizing deployed IPs with live discovery"
+    log_job_trace "sync_deployed_ips_with_live_discovery: Starting sync"
     local updated_count=0
     [[ ${#LIVE_NODE_IPS[@]} -eq 0 ]] && {
         log_step_warn "Live discovery empty, skipping IP sync (will use stored IPs)"
@@ -2960,6 +3082,7 @@ sync_deployed_ips_with_live_discovery() {
         log_step_info "Updated $updated_count IPs from live discovery"
         save_state
     } || log_step_info "All IPs are current (no changes needed)"
+    log_job_trace "sync_deployed_ips_with_live_discovery: Sync completed, updated=$updated_count"
 }
 
 test_port() {
@@ -2969,7 +3092,7 @@ test_port() {
     local vmid="${4:-}"
     local context=""
     [[ -n "$vmid" ]] && context="[VMID:${vmid}] "
-    log_detail_debug "${context}Testing $ip:$port"
+    log_detail_trace "${context}Testing $ip:$port"
     if run_command timeout "$timeout" bash -c "echo >/dev/tcp/$ip/$port" 2>/dev/null; then
         log_detail_trace "${context}$ip:$port is open"
         return 0
@@ -2981,6 +3104,7 @@ test_port() {
 
 run_bootstrap_plan() {
     log_plan_info "Bootstrap Execution"
+    log_plan_trace "run_bootstrap_plan: Starting bootstrap plan execution"
     setup_environment
     run_discovery
     run_configuration
@@ -2992,20 +3116,24 @@ run_bootstrap_plan() {
     log_step_info "Kubeconfig: export KUBECONFIG=$KUBECONFIG_PATH"
     log_step_info "Talos Dashboard: talosctl dashboard --endpoints $HAPROXY_IP"
     log_file_only "COMPLETE" "Bootstrap finished successfully"
+    log_plan_trace "run_bootstrap_plan: Bootstrap plan completed"
 }
 
 run_reconcile_plan() {
     log_plan_info "Reconcile Only"
+    log_plan_trace "run_reconcile_plan: Starting reconcile plan execution"
     setup_environment
     reconcile_cluster
     [[ "$PLAN_MODE" == "true" ]] && return 0
     run_execution
     run_finalization
     log_plan_info "Reconciliation Complete"
+    log_plan_trace "run_reconcile_plan: Reconcile plan completed"
 }
 
 run_status_plan() {
     log_plan_info "Show Status"
+    log_plan_trace "run_status_plan: Displaying cluster status"
     load_desired_state 2>/dev/null || {
         log_step_warn "Could not load desired state from terraform.tfvars"
         log_step_warn "Status will show deployed state only"
@@ -3057,10 +3185,12 @@ run_status_plan() {
     [[ "$BOOTSTRAP_COMPLETED" == "true" ]] && bootstrap_display="${C_TRUE}true${C_RESET}" || bootstrap_display="${C_FALSE}false${C_RESET}"
     print_box_pair "Bootstrap Completed" "$bootstrap_display" "$C_LABEL" ""
     print_box_footer
+    log_plan_trace "run_status_plan: Status display completed"
 }
 
 run_reset_plan() {
     log_plan_info "Full Reset"
+    log_plan_trace "run_reset_plan: Starting full reset"
     log_stage_info "Reset Cluster"
     confirm_proceed "Permanently delete all configs, state, and secrets for cluster ${CLUSTER_NAME}?" || {
         log_step_info "Reset cancelled"
@@ -3071,6 +3201,7 @@ run_reset_plan() {
         log_step_info "Removed cluster directory: $CLUSTER_DIR"
     }
     log_step_info "Reset complete for cluster ${CLUSTER_NAME}"
+    log_plan_trace "run_reset_plan: Reset completed"
 }
 
 apply_config_maintenance() {
@@ -3078,6 +3209,7 @@ apply_config_maintenance() {
     local config_file="$2"
     local max_attempts=5
     local attempt=1
+    log_step_trace "apply_config_maintenance: Starting for $ip with $max_attempts attempts"
     while [[ $attempt -le $max_attempts ]]; do
         log_step_debug "Applying config (attempt $attempt/$max_attempts)..."
         if run_command talosctl apply-config --nodes "$ip" --file "$config_file" --insecure; then
@@ -3093,6 +3225,7 @@ apply_config_maintenance() {
         sleep 5
         attempt=$((attempt + 1))
     done
+    log_step_error "apply_config_maintenance: Failed after $max_attempts attempts"
     return 1
 }
 
@@ -3101,6 +3234,7 @@ attempt_recovery_reapply() {
     local config_file="$2"
     local role="${3:-control-plane}"
     log_step_debug "Attempting recovery re-apply to $ip (role: $role) with insecure mode..."
+    log_step_trace "attempt_recovery_reapply: Starting recovery for $ip"
     if run_command talosctl apply-config --nodes "$ip" --file "$config_file" --insecure; then
         log_step_info "Recovery re-apply succeeded"
         return 0
@@ -3118,17 +3252,20 @@ attempt_recovery_reapply() {
         fi
         return 1
     fi
+    log_step_error "attempt_recovery_reapply: Recovery failed"
     return 1
 }
 
 wait_for_node_after_reboot() {
     local ip="$1"
     local vmid="$2"
+    log_step_trace "wait_for_node_after_reboot: Waiting for VM $vmid at $ip"
     wait_for_node_with_rediscovery "$vmid" "$ip" 120
 }
 
 check_prerequisites() {
     log_job_info "Check Prerequisites"
+    log_job_trace "check_prerequisites: Checking required tools"
     local missing=()
     for cmd in talosctl ssh scp jq; do
         command -v "$cmd" &>/dev/null || missing+=("$cmd")
@@ -3141,6 +3278,7 @@ check_prerequisites() {
         fi
     }
     log_step_info "Prerequisites satisfied"
+    log_job_trace "check_prerequisites: All prerequisites met"
 }
 
 confirm_proceed() {
