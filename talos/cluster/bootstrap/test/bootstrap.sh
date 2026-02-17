@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.11.0"
+readonly VERSION="3.11.1"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
@@ -76,6 +76,7 @@ declare -a PROCESSED_ARGS=()
 BOOTSTRAP_COMPLETED=false
 FIRST_CONTROL_PLANE_VMID=""
 PLAN_NEED_BOOTSTRAP=false
+APPLY_CONFIG_REBOOT_TRIGGERED="false"
 
 TF_PROXMOX_ENDPOINT=""
 TF_PROXMOX_NODE=""
@@ -1917,127 +1918,86 @@ wait_for_node_with_rediscovery() {
     local max_wait="${3:-180}"
     local role="${4:-control-plane}"
     local is_bootstrap="${5:-false}"
+    local config_triggered_reboot="${6:-false}"
     local subnet="${initial_ip%.*}"
     local waited=0
     local check_interval=3
     REDISCOVERED_IP=""
-    log_step_info "Monitoring VM $vmid for reboot completion (initial IP: $initial_ip, role: $role, bootstrap: $is_bootstrap)..."
+    log_step_info "Monitoring VM $vmid (IP: $initial_ip, role: $role, reboot_expected: $config_triggered_reboot)..."
+    if [[ "$config_triggered_reboot" != "true" ]]; then
+        log_step_debug "No reboot expected, verifying node readiness..."
+        local ready_wait=0
+        while [[ $ready_wait -lt 30 ]]; do
+            if verify_talos_ready "$initial_ip" "$vmid" "$role"; then
+                log_step_info "VM $vmid ready at $initial_ip (no reboot needed)"
+                REDISCOVERED_IP="$initial_ip"
+                return 0
+            fi
+            sleep 2
+            ready_wait=$((ready_wait + 2))
+        done
+        log_step_warn "Node not ready after 30s check"
+        return 1
+    fi
     local state="monitoring"
     local last_seen_ip="$initial_ip"
     local candidate_ip=""
     local last_state_change=0
-    local maintenance_stable_start=""
     while [[ $waited -lt $max_wait ]]; do
         case "$state" in
             "monitoring")
                 if ! ping -c 1 -W 2 "$initial_ip" &>/dev/null; then
-                    local downtime_start=$waited
                     state="rebooting"
                     last_state_change=$waited
-                    log_step_info "Node $initial_ip (VMID: $vmid) stopped responding (possible reboot starting)"
+                    log_step_info "Node stopped responding (reboot starting)"
                 else
-                    if test_port "$initial_ip" "50000" "2" "$vmid"; then
-                        if [[ "$is_bootstrap" == "true" && "$role" == "control-plane" ]]; then
-                            if run_command timeout 5 talosctl version --nodes "$initial_ip" --endpoints "$initial_ip" --insecure 2>/dev/null; then
-                                if echo "$LAST_COMMAND_OUTPUT" | grep -q "not implemented in maintenance mode"; then
-                                    log_step_info "Bootstrap: Control plane $vmid responsive in maintenance mode - proceeding"
-                                    REDISCOVERED_IP="$initial_ip"
-                                    return 0
-                                fi
-                            fi
-                        fi
-                        if verify_talos_ready "$initial_ip" "$vmid" "$role"; then
-                            log_step_info "Node $initial_ip (VMID: $vmid) is already ready, no reboot needed"
-                            REDISCOVERED_IP="$initial_ip"
-                            return 0
-                        fi
-                        log_detail_debug "Node still responding at $initial_ip, Talos API up but not ready yet (role: $role)"
-                    else
-                        log_detail_debug "Node pingable but Talos API not responding (reboot may be starting)"
-                    fi
+                    log_detail_debug "Node still responding, waiting for reboot..."
                 fi
                 ;;
             "rebooting")
                 local downtime=$((waited - last_state_change))
                 if [[ $((downtime % 15)) -eq 0 && $downtime -gt 0 ]]; then
-                    log_step_debug "Re-populating ARP tables after ${downtime}s..."
+                    log_step_debug "Refreshing ARP after ${downtime}s..."
                     for node_name in "${!PROXMOX_NODE_IPS[@]}"; do
                         local node_ip="${PROXMOX_NODE_IPS[$node_name]}"
-                        run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$node_ip" "ip -s -s neigh flush all && seq 1 254 | xargs -P 100 -I{} ping -c 1 -W 1 ${subnet}.{} >/dev/null 2>&1 || true" || true
+                        ssh -o ConnectTimeout=3 "${TF_PROXMOX_SSH_USER}@$node_ip" \
+                            "ip neigh flush all && seq 1 254 | xargs -P50 -I{} ping -c1 -W1 ${subnet}.{} &>/dev/null || true" 2>/dev/null || true
                     done
                     sleep 3
                 fi
-                local found_ip=""
-                found_ip=$(rediscover_ip_by_mac "$vmid")
+                local found_ip=$(rediscover_ip_by_mac "$vmid")
                 if [[ -n "$found_ip" ]]; then
                     if [[ "$found_ip" != "$last_seen_ip" ]]; then
-                        log_step_info "IP changed: $last_seen_ip -> $found_ip (reboot confirmed, VMID: $vmid)"
+                        log_step_info "IP changed: $last_seen_ip -> $found_ip"
                         candidate_ip="$found_ip"
                         state="verifying"
                         last_state_change=$waited
-                    else
-                        if ping -c 1 -W 2 "$found_ip" &>/dev/null; then
-                            if test_port "$found_ip" "50000" "3" "$vmid"; then
-                                if [[ "$is_bootstrap" == "true" && "$role" == "control-plane" ]]; then
-                                    log_step_info "Bootstrap: Control plane $vmid back at $found_ip (port 50000 open) - proceeding"
-                                    REDISCOVERED_IP="$found_ip"
-                                    return 0
-                                fi
-                                if verify_talos_ready "$found_ip" "$vmid" "$role"; then
-                                    log_step_info "Node back at same IP $found_ip (VMID: $vmid), appears ready"
-                                    REDISCOVERED_IP="$found_ip"
-                                    return 0
-                                fi
-                            fi
-                        fi
+                    elif ping -c 1 -W 2 "$found_ip" &>/dev/null && \
+                         test_port "$found_ip" "50000" "3" "$vmid"; then
+                        candidate_ip="$found_ip"
+                        state="verifying"
+                        last_state_change=$waited
                     fi
                 fi
-                if [[ $((downtime % 30)) -eq 0 && $downtime -gt 0 ]]; then
-                    log_step_info "Still waiting for VM $vmid to reappear... (${downtime}s downtime)"
-                fi
+                [[ $((downtime % 30)) -eq 0 && $downtime -gt 0 ]] && \
+                    log_step_info "Waiting for VM $vmid... (${downtime}s downtime)"
                 ;;
             "verifying")
                 local verify_time=$((waited - last_state_change))
-                if test_port "$candidate_ip" "50000" "3" "$vmid"; then
-                    # BOOTSTRAP BYPASS: Accept maintenance mode in verifying state
-                    if [[ "$is_bootstrap" == "true" && "$role" == "control-plane" ]]; then
-                        if run_command timeout 5 talosctl version --nodes "$candidate_ip" --endpoints "$candidate_ip" --insecure 2>/dev/null; then
-                            if echo "$LAST_COMMAND_OUTPUT" | grep -q "not implemented in maintenance mode"; then
-                                log_step_info "Bootstrap: Control plane $vmid verified at $candidate_ip in maintenance mode - proceeding"
-                                REDISCOVERED_IP="$candidate_ip"
-                                return 0
-                            fi
-                        fi
-                    fi
-                    if verify_talos_ready "$candidate_ip" "$vmid" "$role"; then
-                        log_step_info "VM $vmid verified ready at $candidate_ip (found after ${verify_time}s)"
-                        REDISCOVERED_IP="$candidate_ip"
-                        return 0
-                    fi
-                    if [[ "$role" == "worker" && $verify_time -gt 60 ]]; then
-                        log_step_warn "Worker $vmid at $candidate_ip - accepting after ${verify_time}s (maintenance mode expected)"
-                        REDISCOVERED_IP="$candidate_ip"
-                        return 0
-                    fi
+                if test_port "$candidate_ip" "50000" "3" "$vmid" && \
+                   verify_talos_ready "$candidate_ip" "$vmid" "$role"; then
+                    log_step_info "VM $vmid ready at $candidate_ip (${verify_time}s)"
+                    REDISCOVERED_IP="$candidate_ip"
+                    return 0
                 fi
-                if [[ $((verify_time % 15)) -eq 0 && $verify_time -gt 0 ]]; then
-                    log_step_info "Waiting for Talos to be ready at $candidate_ip (VMID: $vmid, role: $role)... (${verify_time}s)"
-                fi
-                if [[ $((waited % 20)) -eq 0 ]]; then
-                    local reverify_ip=""
-                    reverify_ip=$(rediscover_ip_by_mac "$vmid")
-                    if [[ -n "$reverify_ip" && "$reverify_ip" != "$candidate_ip" ]]; then
-                        log_step_warn "IP changed again during verification: $candidate_ip -> $reverify_ip"
-                        candidate_ip="$reverify_ip"
-                    fi
-                fi
+                [[ $((verify_time % 15)) -eq 0 && $verify_time -gt 0 ]] && \
+                    log_step_info "Verifying Talos ready... (${verify_time}s)"
                 ;;
         esac
         sleep $check_interval
         waited=$((waited + check_interval))
     done
     log_step_error "Timeout waiting for VM $vmid after ${max_wait}s"
-    log_step_error "Final state: $state, Last IP: ${candidate_ip:-$last_seen_ip} (VMID: $vmid, role: $role)"
     return 1
 }
 
@@ -2235,33 +2195,19 @@ attempt_bootstrap_node() {
     local initial_ip="$2"
     local config_file="$3"
     local current_ip="$initial_ip"
-    local role="control-plane"
-    log_step_info "Bootstrapping control plane VM $vmid (initial IP: $initial_ip)"
-    log_step_info "Forcing fresh IP discovery for VM $vmid before bootstrap..."
-    local fresh_ip=$(rediscover_ip_by_mac "$vmid")
-    if [[ -n "$fresh_ip" && "$fresh_ip" != "$initial_ip" ]]; then
-        log_step_info "IP updated before bootstrap: $initial_ip -> $fresh_ip"
-        current_ip="$fresh_ip"
-        DEPLOYED_CP_IPS["$vmid"]="$current_ip"
-    fi
-    local result_ip=$(apply_config_with_rediscovery "$vmid" "$current_ip" "$config_file" "$role")
-    if [[ $? -ne 0 ]]; then
-        log_step_error "Failed to apply configuration to VM $vmid"
-        return 1
-    fi
+    log_step_info "Bootstrapping VM $vmid (IP: $initial_ip)"
+    local result_ip=$(apply_config_with_rediscovery "$vmid" "$current_ip" "$config_file" "control-plane")
+    [[ $? -ne 0 ]] && return 1
     [[ -n "$result_ip" ]] && current_ip="$result_ip"
-    wait_for_node_with_rediscovery "$vmid" "$current_ip" 120 "$role" "true" || {
-        log_step_error "Node $vmid did not come back after config application"
+    wait_for_node_with_rediscovery "$vmid" "$current_ip" 120 "control-plane" "true" "$APPLY_CONFIG_REBOOT_TRIGGERED" || {
+        log_step_error "Node $vmid failed to become ready"
         return 1
     }
     [[ -n "$REDISCOVERED_IP" ]] && current_ip="$REDISCOVERED_IP"
     DEPLOYED_CP_IPS["$vmid"]="$current_ip"
     save_state
-    bootstrap_etcd_at_ip "$current_ip" "$vmid" || {
-        log_step_error "Failed to bootstrap etcd on VM $vmid"
-        return 1
-    }
-    log_step_info "Successfully bootstrapped control plane VM $vmid at $current_ip"
+    bootstrap_etcd_at_ip "$current_ip" "$vmid" || return 1
+    log_step_info "Successfully bootstrapped VM $vmid at $current_ip"
     return 0
 }
 
@@ -2274,6 +2220,7 @@ apply_config_with_rediscovery() {
     local attempt=1
     local current_ip="$initial_ip"
     local subnet="${initial_ip%.*}"
+    APPLY_CONFIG_REBOOT_TRIGGERED="false"
     log_step_info "Applying config to $current_ip (VMID: $vmid, role: $role, attempt $attempt/$max_attempts)..."
     while [[ $attempt -le $max_attempts ]]; do
         if [[ $attempt -gt 1 ]]; then
@@ -2297,6 +2244,7 @@ apply_config_with_rediscovery() {
         fi
         if run_command talosctl apply-config --nodes "$current_ip" --file "$config_file" --insecure; then
             log_step_info "Configuration applied successfully, node will reboot (VMID: $vmid)"
+            APPLY_CONFIG_REBOOT_TRIGGERED="true"
             echo "$current_ip"
             return 0
         fi
@@ -2323,6 +2271,7 @@ apply_config_with_rediscovery() {
         elif echo "$cleaned_error" | grep -qi "already configured\|certificate required"; then
             log_step_info "Node $current_ip (VMID: $vmid) reports already configured, checking state..."
             if wait_for_talos_ready_at_ip "$current_ip" "$vmid" "$role" 30; then
+              APPLY_CONFIG_REBOOT_TRIGGERED="false"
                 echo "$current_ip"
                 return 0
             fi
