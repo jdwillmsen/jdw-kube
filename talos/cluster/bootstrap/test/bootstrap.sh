@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.12.0"
+readonly VERSION="3.12.1"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
@@ -1017,49 +1017,6 @@ load_deployed_state() {
     local worker_count=${#DEPLOYED_WORKER_IPS[@]}
     log_step_info "Loaded: $cp_count control planes, $worker_count workers"
     log_job_trace "load_deployed_state: CPs=[${!DEPLOYED_CP_IPS[*]}], Workers=[${!DEPLOYED_WORKER_IPS[*]}]"
-}
-
-save_state() {
-    local timestamp=$(date -Iseconds)
-    local cp_array="["
-    local first=true
-    for vmid in "${!DEPLOYED_CP_IPS[@]}"; do
-        [[ "$first" == "true" ]] || cp_array+=","
-        first=false
-        local ip="${DEPLOYED_CP_IPS[$vmid]}"
-        local hash="${DEPLOYED_CONFIG_HASH[$vmid]:-}"
-        cp_array+="{\"vmid\":\"$vmid\",\"ip\":\"${ip:-}\",\"config_hash\":\"${hash:-}\"}"
-    done
-    cp_array+="]"
-    local worker_array="["
-    first=true
-    for vmid in "${!DEPLOYED_WORKER_IPS[@]}"; do
-        [[ "$first" == "true" ]] || worker_array+=","
-        first=false
-        local ip="${DEPLOYED_WORKER_IPS[$vmid]}"
-        local hash="${DEPLOYED_CONFIG_HASH[$vmid]:-}"
-        worker_array+="{\"vmid\":\"$vmid\",\"ip\":\"${ip:-}\",\"config_hash\":\"${hash:-}\"}"
-    done
-    worker_array+="]"
-    cat > "$STATE_FILE" <<EOF
-{
-  "timestamp": "$timestamp",
-  "terraform_hash": "$TERRAFORM_HASH",
-  "cluster_name": "$CLUSTER_NAME",
-  "bootstrap_completed": ${BOOTSTRAP_COMPLETED:-false},
-  "first_control_plane_vmid": "${FIRST_CONTROL_PLANE_VMID:-}",
-  "deployed_state": {
-    "control_planes": $cp_array,
-    "workers": $worker_array
-  },
-  "haproxy_ip": "$HAPROXY_IP",
-  "control_plane_endpoint": "$CONTROL_PLANE_ENDPOINT",
-  "kubernetes_version": "$KUBERNETES_VERSION",
-  "talos_version": "$TALOS_VERSION"
-}
-EOF
-    chmod 600 "$STATE_FILE"
-    log_file_only "STATE" "Saved to $STATE_FILE"
 }
 
 reconcile_cluster() {
