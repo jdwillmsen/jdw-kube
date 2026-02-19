@@ -1450,13 +1450,16 @@ add_control_plane() {
     log_step_info "Discovered IP: $ip"
     config_file="$NODES_DIR/node-control-plane-${vmid}.yaml"
     [[ ! -f "$config_file" ]] && generate_node_config "$vmid" "control-plane"
-    local result_ip=$(apply_config_with_rediscovery "$vmid" "$ip" "$config_file" "control-plane")
+    local apply_output result_ip reboot_triggered
+    apply_output=$(apply_config_with_rediscovery "$vmid" "$ip" "$config_file" "control-plane")
     if [[ $? -ne 0 ]]; then
         log_step_error "Failed to apply config to VM $vmid"
         return 1
     fi
+    result_ip=$(echo "$apply_output" | head -1)
+    reboot_triggered=$(echo "$apply_output" | tail -1)
     [[ -n "$result_ip" ]] && ip="$result_ip"
-    wait_for_node_with_rediscovery "$vmid" "$ip" 120 "control-plane" || {
+    wait_for_node_with_rediscovery "$vmid" "$ip" 120 "control-plane" "false" "$reboot_triggered" || {
         log_step_error "Control plane $vmid did not become ready"
         return 1
     }
@@ -1492,13 +1495,16 @@ add_worker() {
     log_step_info "Discovered IP: $ip"
     config_file="$NODES_DIR/node-worker-${vmid}.yaml"
     [[ ! -f "$config_file" ]] && generate_node_config "$vmid" "worker"
-    local result_ip=$(apply_config_with_rediscovery "$vmid" "$ip" "$config_file" "worker")
+    local apply_output result_ip reboot_triggered
+    apply_output=$(apply_config_with_rediscovery "$vmid" "$ip" "$config_file" "worker")
     if [[ $? -ne 0 ]]; then
         log_step_error "Failed to apply config to VM $vmid"
         return 1
     fi
+    result_ip=$(echo "$apply_output" | head -1)
+    reboot_triggered=$(echo "$apply_output" | tail -1)
     [[ -n "$result_ip" ]] && ip="$result_ip"
-    wait_for_node_with_rediscovery "$vmid" "$ip" 120 "worker" || {
+    wait_for_node_with_rediscovery "$vmid" "$ip" 120 "worker" "false" "$reboot_triggered" || {
         log_step_warn "Worker $vmid did not become ready in expected time, but may join cluster later"
     }
     [[ -n "$REDISCOVERED_IP" ]] && ip="$REDISCOVERED_IP"
@@ -2267,10 +2273,15 @@ attempt_bootstrap_node() {
     local config_file="$3"
     local current_ip="$initial_ip"
     log_step_info "Bootstrapping VM $vmid (IP: $initial_ip)"
-    local result_ip=$(apply_config_with_rediscovery "$vmid" "$current_ip" "$config_file" "control-plane")
-    [[ $? -ne 0 ]] && return 1
+    local apply_output result_ip reboot_triggered
+    apply_output=$(apply_config_with_rediscovery "$vmid" "$current_ip" "$config_file" "control-plane")
+    if [[ $? -ne 0 ]]; then
+        return 1
+    fi
+    result_ip=$(echo "$apply_output" | head -1)
+    reboot_triggered=$(echo "$apply_output" | tail -1)
     [[ -n "$result_ip" ]] && current_ip="$result_ip"
-    wait_for_node_with_rediscovery "$vmid" "$current_ip" 120 "control-plane" "true" "$APPLY_CONFIG_REBOOT_TRIGGERED" || {
+    wait_for_node_with_rediscovery "$vmid" "$current_ip" 120 "control-plane" "true" "$reboot_triggered" || {
         log_step_error "Node $vmid failed to become ready"
         return 1
     }
@@ -2319,6 +2330,7 @@ apply_config_with_rediscovery() {
             log_step_info "Configuration applied successfully, node will reboot (VMID: $vmid)"
             APPLY_CONFIG_REBOOT_TRIGGERED="true"
             echo "$current_ip"
+            echo "true"
             return 0
         fi
         local error_output="$LAST_COMMAND_OUTPUT"
@@ -2344,13 +2356,14 @@ apply_config_with_rediscovery() {
         elif echo "$cleaned_error" | grep -qi "already configured\|certificate required"; then
             log_step_info "Node $current_ip (VMID: $vmid) reports already configured, checking state..."
             if wait_for_talos_ready_at_ip "$current_ip" "$vmid" "$role" 30; then
-              APPLY_CONFIG_REBOOT_TRIGGERED="false"
                 echo "$current_ip"
+                echo "false"
                 return 0
             fi
             log_step_warn "Node $current_ip (VMID: $vmid) partially configured, attempting recovery..."
             if attempt_recovery_reapply "$current_ip" "$config_file" "$role"; then
                 echo "$current_ip"
+                echo "false"
                 return 0
             fi
         fi
