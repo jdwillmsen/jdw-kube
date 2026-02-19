@@ -2964,13 +2964,27 @@ update_kubeconfig() {
     run_command talosctl kubeconfig "$temp_kubeconfig" --nodes "$bootstrap_node" --endpoints "$bootstrap_node" && {
         chmod 600 "$temp_kubeconfig"
         local correct_server="https://${CONTROL_PLANE_ENDPOINT}:6443"
-        log_step_info "Settingkubeconfig server to $correct_server (via HAProxy/control plane endpoint)"
-        KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$CLUSTER_NAME" --server="$correct_server" 2>/dev/null || {
-          sed -i "s|server: https://.*:6443|server: $correct_server|g" "$temp_kubeconfig"
+        log_step_info "Setting kubeconfig server to $correct_server (via HAProxy/control plane endpoint)"
+        local actual_cluster_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.clusters[0].name}' 2>/dev/null || echo "")
+        if [[ -z "$actual_cluster_name" ]]; then
+            log_step_warn "Could not detect cluster name from kubeconfig, falling back to $CLUSTER_NAME"
+            actual_cluster_name="$CLUSTER_NAME"
+        fi
+        log_step_debug "Detected cluster name in kubeconfig: $actual_cluster_name"
+        if ! KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$actual_cluster_name" --server="$correct_server" 2>/dev/null; then
+          sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
           log_step_debug "Used sed fallback to update server URL in kubeconfig"
-        }
+        fi
+        local actual_context_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.contexts[0].name}' 2>/dev/null || echo "")
         local context_name="${CLUSTER_NAME}"
-        KUBECONFIG="$temp_kubeconfig" kubectl config rename-context "admin@${CLUSTER_NAME}" "$context_name" 2>/dev/null || true
+        if [[ -n "$actual_context_name" && "$actual_context_name" != "$context_name" ]]; then
+            log_step_debug "Renaming kubeconfig context from $actual_context_name to $context_name"
+            KUBECONFIG="$temp_kubeconfig" kubectl config rename-context "$actual_context_name" "$context_name" 2>/dev/null || true
+        fi
+        if [[ "$actual_cluster_name" != "$CLUSTER_NAME" ]]; then
+            log_step_debug "Renaming kubeconfig cluster from $actual_cluster_name to $CLUSTER_NAME"
+            sed -i "s|cluster: $actual_cluster_name|cluster: $CLUSTER_NAME|g; s|name: $actual_cluster_name|name: $CLUSTER_NAME|g" "$temp_kubeconfig"
+        fi
         if [[ -f "${HOME}/.kube/config" ]]; then
             log_step_info "Merging with existing kubeconfig at ${HOME}/.kube/config"
             local merged_config
@@ -2996,11 +3010,11 @@ update_kubeconfig() {
         rm -f "$temp_kubeconfig"
         log_step_info "Kubeconfig saved and merged successfully"
         log_step_info "Available contexts:"
-        run_command kubectl config get-contexts 2>/dev/null || true
-        local current_context
-        current_context=$(run_command kubectl config current-context 2>/dev/null || echo "")
-        if [[ -z "$current_context" ]]; then
-            run_command kubectl config use-context "$context_name"
+        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" config get-contexts 2>/dev/null || true
+        local current_context=$(run_command kubectl --kubeconfig "$KUBECONFIG_PATH" config current-context 2>/dev/null || echo "")
+        if [[ -z "$current_context" || "$current_context" != "$context_name" ]]; then
+            run_command kubectl --kubeconfig "$KUBECONFIG_PATH" config use-context "$context_name" 2>/dev/null || true
+            run_command kubectl config use-context "$context_name" 2>/dev/null || true
             log_step_info "Set current context to: $context_name"
         fi
         configure_talosctl_endpoints "$bootstrap_node"
