@@ -896,6 +896,39 @@ load_desired_state() {
     return 0
 }
 
+load_proxmox_tokens_from_terraform() {
+    log_job_trace "load_proxmox_tokens_from_terraform: Checking for tokens in $TERRAFORM_TFVARS"
+    [[ ! -f "$TERRAFORM_TFVARS" ]] && {
+        log_detail_debug "Terraform file not found, skipping token load"
+        return 0
+    }
+    if [[ -z "${PROXMOX_TOKEN_ID:-}" ]]; then
+        local token_id
+        token_id=$(grep -E '^proxmox_api_token_id[[:space:]]*=' "$TERRAFORM_TFVARS" 2>/dev/null | head -1 | sed -E 's/.*=[[:space:]]*"([^"]+)".*/\1/')
+        if [[ -n "$token_id" ]]; then
+            export PROXMOX_TOKEN_ID="$token_id"
+            log_detail_info "Loaded PROXMOX_TOKEN_ID from terraform.tfvars"
+        fi
+    else
+        log_detail_debug "PROXMOX_TOKEN_ID already set in environment"
+    fi
+    if [[ -z "${PROXMOX_TOKEN_SECRET:-}" ]]; then
+        local token_secret
+        token_secret=$(grep -E '^proxmox_api_token_secret[[:space:]]*=' "$TERRAFORM_TFVARS" 2>/dev/null | head -1 | sed -E 's/.*=[[:space:]]*"([^"]+)".*/\1/')
+        if [[ -n "$token_secret" ]]; then
+            export PROXMOX_TOKEN_SECRET="$token_secret"
+            log_detail_info "Loaded PROXMOX_TOKEN_SECRET from terraform.tfvars (masked)"
+        fi
+    else
+        log_detail_debug "PROXMOX_TOKEN_SECRET already set in environment"
+    fi
+    if [[ -n "${PROXMOX_TOKEN_ID:-}" ]]; then
+        log_job_debug "Proxmox API token configured: ${PROXMOX_TOKEN_ID}"
+    else
+        log_job_debug "No Proxmox API token found, will use SSH fallback"
+    fi
+}
+
 parse_terraform_array() {
     local array_name="$1"
     local role="$2"
@@ -2567,6 +2600,7 @@ setup_environment() {
     init_directories
     detect_environment
     check_prerequisites
+    load_proxmox_tokens_from_terraform
     load_desired_state || true
     load_deployed_state
     log_stage_trace "setup_environment: Completed"
