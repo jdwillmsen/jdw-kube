@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.15.0"
+readonly VERSION="3.16.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
@@ -565,6 +565,21 @@ EOF
         log_job_error "Failed to write state file to $STATE_FILE"
         return 1
     fi
+}
+
+arp_repopulate_aggressive() {
+    local subnet="$1"
+    log_step_debug "[ARP-AGGRESSIVE] Repopulating $subnet.0/24..."
+    for node_name in "${!PROXMOX_NODE_IPS[@]}"; do
+        local node_ip="${PROXMOX_NODE_IPS[$node_name]}"
+        (
+            run_command ssh -o ConnectTimeout=2 -o StrictHostKeyChecking=no \
+                "${TF_PROXMOX_SSH_USER}@$node_ip" \
+                "ip -s -s neigh flush all && seq 1 254 | xargs -P 100 -I{} ping -c 1 -W 1 ${subnet}.{} >/dev/null 2>&1 || true" || true
+        ) &
+    done
+    wait
+    sleep 1
 }
 
 flush_arp_cache() {
@@ -1985,7 +2000,7 @@ wait_for_node_with_rediscovery() {
     local config_triggered_reboot="${6:-false}"
     local subnet="${initial_ip%.*}"
     local waited=0
-    local check_interval=3
+    local check_interval=2
     REDISCOVERED_IP=""
     log_step_info "Monitoring VM $vmid (IP: $initial_ip, role: $role, reboot_expected: $config_triggered_reboot)..."
     log_step_trace "wait_for_node_with_rediscovery: max_wait=$max_wait, check_interval=$check_interval"
@@ -1994,8 +2009,8 @@ wait_for_node_with_rediscovery() {
         local ready_wait=0
         while [[ $ready_wait -lt 30 ]]; do
             if verify_talos_ready "$initial_ip" "$vmid" "$role"; then
-                log_step_info "VM $vmid ready at $initial_ip (no reboot needed)"
                 REDISCOVERED_IP="$initial_ip"
+                log_step_info "VM $vmid ready at $initial_ip (no reboot needed)"
                 return 0
             fi
             sleep 2
@@ -2008,59 +2023,57 @@ wait_for_node_with_rediscovery() {
     local last_seen_ip="$initial_ip"
     local candidate_ip=""
     local last_state_change=0
-    local maintenance_stable_start=""
+    local last_arp_repop=0
     while [[ $waited -lt $max_wait ]]; do
         log_detail_trace "wait_for_node_with_rediscovery: State=$state, waited=${waited}s, last_ip=$last_seen_ip"
         case "$state" in
             "monitoring")
-                if ! ping -c 1 -W 2 "$initial_ip" &>/dev/null; then
+                if ! ping -c 1 -W 1 "$initial_ip" &>/dev/null; then
                     local downtime_start=$waited
                     state="rebooting"
                     last_state_change=$waited
                     log_step_info "Node $initial_ip (VMID: $vmid) stopped responding (possible reboot starting)"
-                    log_step_trace "wait_for_node_with_rediscovery: Transition monitoring->rebooting at ${waited}s"
-                else
-                    log_detail_debug "Node still responding, waiting for reboot..."
+                    # OPTIMIZATION: Immediate aggressive ARP repop
+                    log_step_debug "[ARP-AGGRESSIVE] Immediate flush triggered..."
+                    arp_repopulate_aggressive "$subnet"
+                    last_arp_repop=$waited
                 fi
                 ;;
             "rebooting")
                 local downtime=$((waited - last_state_change))
-                if [[ $((downtime % 15)) -eq 0 && $downtime -gt 0 ]]; then
-                    log_step_debug "Re-populating ARP tables after ${downtime}s..."
-                    for node_name in "${!PROXMOX_NODE_IPS[@]}"; do
-                        local node_ip="${PROXMOX_NODE_IPS[$node_name]}"
-                        run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$node_ip" "ip -s -s neigh flush all && seq 1 254 | xargs -P 100 -I{} ping -c 1 -W 1 ${subnet}.{} >/dev/null 2>&1 || true" || true
-                    done
-                    sleep 3
-                fi
-                local found_ip=""
-                found_ip=$(rediscover_ip_by_mac "$vmid")
-                if [[ -n "$found_ip" ]]; then
-                    if [[ "$found_ip" != "$last_seen_ip" ]]; then
+                if [[ $((downtime % 2)) -eq 0 ]]; then
+                    if [[ $((waited - last_arp_repop)) -ge 5 ]]; then
+                        log_step_debug "[ARP-AGGRESSIVE] Repopulating after ${downtime}s..."
+                        arp_repopulate_aggressive "$subnet"
+                        last_arp_repop=$waited
+                    fi
+                    local found_ip=$(rediscover_ip_by_mac "$vmid")
+                    if [[ -n "$found_ip" && "$found_ip" != "$last_seen_ip" ]]; then
                         log_step_info "IP changed: $last_seen_ip -> $found_ip (reboot confirmed, VMID: $vmid)"
                         candidate_ip="$found_ip"
                         state="verifying"
                         last_state_change=$waited
-                    elif ping -c 1 -W 2 "$found_ip" &>/dev/null && \
-                         test_port "$found_ip" "50000" "3" "$vmid"; then
-                        candidate_ip="$found_ip"
-                        state="verifying"
-                        last_state_change=$waited
+                    elif [[ -n "$found_ip" && "$found_ip" == "$last_seen_ip" ]]; then
+                        if test_port "$found_ip" "50000" "2" "$vmid"; then
+                            log_step_info "VM $vmid back at same IP $found_ip"
+                            REDISCOVERED_IP="$found_ip"
+                            return 0
+                        fi
                     fi
                 fi
-                if [[ $((downtime % 30)) -eq 0 && $downtime -gt 0 ]]; then
+                if [[ $((downtime % 10)) -eq 0 && $downtime -gt 0 ]]; then
                     log_step_info "Still waiting for VM $vmid to reappear... (${downtime}s downtime)"
                 fi
                 ;;
             "verifying")
                 local verify_time=$((waited - last_state_change))
-                if test_port "$candidate_ip" "50000" "3" "$vmid" && \
+                if test_port "$candidate_ip" "50000" "2" "$vmid" && \
                    verify_talos_ready "$candidate_ip" "$vmid" "$role"; then
                     log_step_info "VM $vmid ready at $candidate_ip (${verify_time}s)"
                     REDISCOVERED_IP="$candidate_ip"
                     return 0
                 fi
-                [[ $((verify_time % 15)) -eq 0 && $verify_time -gt 0 ]] && \
+                [[ $((verify_time % 5)) -eq 0 && $verify_time -gt 0 ]] && \
                     log_step_info "Verifying Talos ready... (${verify_time}s)"
                 ;;
         esac
@@ -2140,10 +2153,12 @@ rediscover_ip_by_mac() {
     log_detail_trace "rediscover_ip_by_mac: Starting for VM $vmid"
     local mac="${MAC_BY_VMID[$vmid]:-}"
     local host_ip="${PROXMOX_NODE_IPS[pve1]:-192.168.1.233}"
-    local subnet=$(echo "$host_ip" | cut -d. -f1-3)
+    local subnet=$(get_network_subnet "$host_ip")
     if [[ -z "$mac" ]]; then
         log_detail_debug "No MAC cached for VM $vmid, attempting to fetch from Proxmox..."
-        if run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$host_ip" "qm config $vmid | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2"; then
+        if run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
+                "${TF_PROXMOX_SSH_USER}@$host_ip" \
+                "qm config $vmid | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2"; then
             mac=$(echo "$LAST_COMMAND_OUTPUT" | tr -d '\r' | tr '[:lower:]' '[:upper:]')
             if [[ -n "$mac" ]]; then
                 MAC_BY_VMID["$vmid"]="$mac"
@@ -2157,7 +2172,8 @@ rediscover_ip_by_mac() {
         fi
     fi
     log_detail_debug "Looking for MAC $mac (VM $vmid) in ARP tables across all nodes..."
-    local all_ips=()
+    local all_ips=""
+    local found_count=0
     local nodes_to_check=()
     if [[ ${#PROXMOX_NODE_IPS[@]} -gt 0 ]]; then
         for node_name in "${!PROXMOX_NODE_IPS[@]}"; do
@@ -2166,81 +2182,37 @@ rediscover_ip_by_mac() {
     else
         nodes_to_check+=("$(get_node_ip "pve1")")
     fi
-    log_detail_trace "rediscover_ip_by_mac: Checking ${#nodes_to_check[@]} nodes for ARP entries"
-    local unique_ips=""
+    local arp_temp=$(mktemp)
     for node_ip in "${nodes_to_check[@]}"; do
-        log_detail_trace "rediscover_ip_by_mac: Checking node $node_ip"
-        run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$node_ip" "ping -c 2 -W 2 ${subnet}.254 >/dev/null 2>&1 || true" || true
-        local arp_results=""
-        if run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no "${TF_PROXMOX_SSH_USER}@$node_ip" "cat /proc/net/arp | grep -i '$mac' | awk '{print \$1}'"; then
-            arp_results="$LAST_COMMAND_OUTPUT"
-        fi
-        if [[ -n "$arp_results" ]]; then
-            while IFS= read -r ip; do
-                ip=$(echo "$ip" | tr -d '\r\n' | tr '[:lower:]' '[:upper:]')
-                if [[ "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-                    local valid_ip=true
-                    IFS='.' read -ra octets <<< "$ip"
-                    for octet in "${octets[@]}"; do
-                        if [[ "$octet" -gt 255 || "$octet" -lt 0 ]]; then
-                            valid_ip=false
-                            break
-                        fi
-                    done
-                    if [[ "$valid_ip" == true ]]; then
-                        if [[ ! "$unique_ips" =~ (^|[[:space:]])"$ip"($|[[:space:]]) ]]; then
-                            unique_ips+="$ip "
-                            all_ips+=("$ip")
-                            log_detail_debug "Found candidate IP $ip for VM $vmid on node $node_ip"
-                        fi
-                    fi
-                fi
-            done <<< "$arp_results"
-        fi
+        (
+            local result=$(ssh -o ConnectTimeout=2 -o StrictHostKeyChecking=no \
+                "${TF_PROXMOX_SSH_USER}@$node_ip" \
+                "cat /proc/net/arp | grep -i '$mac' | awk '{print \$1}'" 2>/dev/null | tr -d '\r')
+            [[ -n "$result" ]] && echo "$result" >> "$arp_temp"
+        ) &
     done
-    if [[ ${#all_ips[@]} -eq 0 ]]; then
+    wait
+    if [[ -f "$arp_temp" ]]; then
+        all_ips=$(sort -u "$arp_temp" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || true)
+        rm -f "$arp_temp"
+    fi
+    if [[ -z "$all_ips" ]]; then
         log_detail_warn "No IPs found in ARP for MAC $mac (VM $vmid)"
         return 1
     fi
-    log_detail_debug "Found ${#all_ips[@]} unique IP(s) for VM $vmid MAC $mac: ${all_ips[*]}"
-    local responsive_ips=()
-    local unresponsive_ips=()
-    for candidate_ip in "${all_ips[@]}"; do
-        log_detail_trace "rediscover_ip_by_mac: Testing responsiveness of $candidate_ip..."
-        if ping -c 1 -W 2 "$candidate_ip" &>/dev/null; then
-            responsive_ips+=("$candidate_ip")
-        else
-            unresponsive_ips+=("$candidate_ip")
-        fi
-    done
-    local ordered_ips=("${responsive_ips[@]}" "${unresponsive_ips[@]}")
-    for candidate_ip in "${ordered_ips[@]}"; do
+    log_detail_debug "Found IPs for VM $vmid MAC $mac: $(echo $all_ips | tr '\n' ' ')"
+    for candidate_ip in $all_ips; do
         [[ -z "$candidate_ip" ]] && continue
         log_detail_debug "Testing candidate IP $candidate_ip for VM $vmid..."
-        if test_port "$candidate_ip" "50000" "3" "$vmid"; then
+        if test_port "$candidate_ip" "50000" "2" "$vmid"; then
             log_detail_debug "Found responsive Talos API at $candidate_ip for VM $vmid"
             echo "$candidate_ip"
             return 0
-        else
-            log_detail_trace "rediscover_ip_by_mac: IP $candidate_ip not responding on port 50000, trying next..."
         fi
     done
-    for candidate_ip in "${ordered_ips[@]}"; do
-        [[ -z "$candidate_ip" ]] && continue
-        log_detail_debug "Checking $candidate_ip for Kubernetes API (port 6443)..."
-        if test_port "$candidate_ip" "6443" "2" "$vmid"; then
-            log_detail_warn "VM $vmid at $candidate_ip has k8s API but no Talos API - may need secure mode"
-            echo "$candidate_ip"
-            return 0
-        fi
-    done
-    if [[ ${#responsive_ips[@]} -gt 0 ]]; then
-        log_detail_warn "No APIs responding for VM $vmid, returning first responsive IP: ${responsive_ips[0]}"
-        echo "${responsive_ips[0]}"
-        return 0
-    fi
-    log_detail_warn "No responsive IP found for VM $vmid, returning first ARP entry: ${all_ips[0]}"
-    echo "${all_ips[0]}"
+    local first_ip=$(echo "$all_ips" | head -1)
+    log_detail_warn "No responsive IP found for VM $vmid, returning first ARP entry: $first_ip"
+    echo "$first_ip"
     return 0
 }
 
