@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.12.1"
+readonly VERSION="3.12.2"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
@@ -1263,7 +1263,7 @@ build_reconcile_plan() {
         log_step_warn "Will attempt to bootstrap before proceeding with other changes"
         PLAN_NEED_BOOTSTRAP=true
     }
-    log_job_trace "build_reconcile_plan: Plan complete - AddCP:${#PLAN_ADD_CP[@]} AddWorker:${#PLAN_ADD_WORKER[@]} RemoveCP:${#PLAN_REMOVE_CP[@]} RemoveWorker:${#PLAN_REMOVE_WORKER[@]} Update:${#PLAN_UPDATE[@]} Noop:${#PLAN_NOOP[@]}"
+    log_job_trace "build_reconcile_plan: Plan complete - Add CP: ${#PLAN_ADD_CP[@]} Add Worker: ${#PLAN_ADD_WORKER[@]} Remove CP: ${#PLAN_REMOVE_CP[@]} Remove Worker: ${#PLAN_REMOVE_WORKER[@]} Update: ${#PLAN_UPDATE[@]} Noop: ${#PLAN_NOOP[@]}"
     return 0
 }
 
@@ -1779,11 +1779,11 @@ discover_ip_for_vmid() {
             all_ips="$LAST_COMMAND_OUTPUT"
         fi
         if [[ -n "$all_ips" ]]; then
-            log_detail_debug "Found ${#all_ips[@]} ARP entries for VM $vmid MAC $mac"
+            log_detail_debug "Found ARP entries for VM $vmid MAC $mac"
             local ip
             while IFS= read -r ip; do
-                ip=$(echo "$ip" | tr -d '\r' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
-                [[ -z "$ip" ]] && continue
+                ip=$(echo "$ip" | tr -d '\r\n')
+                [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
                 if ping -c 1 -W 2 "$ip" &>/dev/null; then
                     LIVE_NODE_IPS["$vmid"]="$ip"
                     log_detail_debug "Discovered reachable IP via ARP for VM $vmid: $ip"
@@ -1794,7 +1794,7 @@ discover_ip_for_vmid() {
                 fi
             done <<< "$all_ips" || true
             local first_valid_ip
-            first_valid_ip=$(echo "$all_ips" | tr -d '\r' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+            first_valid_ip=$(echo "$all_ips" | tr -d '\r' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
             if [[ -n "$first_valid_ip" ]]; then
                 LIVE_NODE_IPS["$vmid"]="$first_valid_ip"
                 log_detail_warn "No reachable IP found for VM $vmid, using first ARP entry: $first_valid_ip"
@@ -2748,6 +2748,8 @@ detect_environment() {
 run_preflight_checks() {
     log_job_info "Pre-flight Checks - Verifying VM readiness"
     log_job_trace "run_preflight_checks: Starting preflight with max_retries=$PREFLIGHT_MAX_RETRIES"
+    log_job_trace "DESIRED_ALL_VMIDS count: ${#DESIRED_ALL_VMIDS[@]}"
+    log_job_trace "DESIRED_ALL_VMIDS keys: ${!DESIRED_ALL_VMIDS[*]}"
     local total_vms=${#DESIRED_ALL_VMIDS[@]}
     local ready_vms=0
     local pending_vms=()
@@ -2760,8 +2762,9 @@ run_preflight_checks() {
     for vmid in "${!DESIRED_ALL_VMIDS[@]}"; do
         local info name node
         info="${DESIRED_ALL_VMIDS[$vmid]}"
-        name=$(echo "$info" | cut -d'|' -f1)
+        name=$(echo "$info" | cut -d'|' -f2)
         node=$(echo "$info" | cut -d'|' -f3)
+        log_job_trace "Checking VMID $vmid (name=$name, node=$node)"
         local ip=""
         ip=$(discover_ip_for_vmid "$vmid" 2>/dev/null) || {
             log_detail_debug "VMID $vmid ($name): IP not yet discoverable (VM may still be booting)"
@@ -2789,7 +2792,13 @@ run_preflight_checks() {
         still_pending=()
         local newly_ready=0
         local rediscovered_count=0
-
+        if [[ $((attempt % 5)) -eq 0 ]]; then
+            log_step_debug "Refreshing ARP tables (attempt $attempt)..."
+            for node_name in "${!PROXMOX_NODE_IPS[@]}"; do
+                local node_ip="${PROXMOX_NODE_IPS[$node_name]}"
+                populate_arp_table "$node_ip" || true
+            done
+        fi
         for entry in "${pending_vms[@]}"; do
             local vmid name node old_ip new_ip
             vmid=$(echo "$entry" | cut -d':' -f1)
