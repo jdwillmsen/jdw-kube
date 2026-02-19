@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.12.2"
+readonly VERSION="3.13.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
@@ -9,7 +9,6 @@ CLUSTER_DIR="${SCRIPT_DIR}/clusters/${CLUSTER_NAME}"
 NODES_DIR="${CLUSTER_DIR}/nodes"
 SECRETS_DIR="${CLUSTER_DIR}/secrets"
 STATE_DIR="${CLUSTER_DIR}/state"
-PATCH_DIR="${CLUSTER_DIR}/patches"
 LOG_DIR="${SCRIPT_DIR}/logs"
 CHECKSUM_DIR="${NODES_DIR}/.checksums"
 
@@ -2710,7 +2709,7 @@ run_bootstrap() {
 init_directories() {
     log_job_info "Initialize Directories"
     log_job_trace "init_directories: Creating directories"
-    run_command mkdir -p "$NODES_DIR" "$SECRETS_DIR" "$STATE_DIR" "$PATCH_DIR" "$LOG_DIR" "$CHECKSUM_DIR"
+    run_command mkdir -p "$NODES_DIR" "$SECRETS_DIR" "$STATE_DIR" "$LOG_DIR" "$CHECKSUM_DIR"
     [[ ! -f "${CLUSTER_DIR}/.gitignore" ]] && {
         local gitignore_content=$(cat <<'EOF'
 /nodes/
@@ -2876,7 +2875,7 @@ update_kubeconfig() {
     log_job_info "Update Kubeconfig"
     log_job_trace "update_kubeconfig: Starting kubeconfig update"
     [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG
-    local updated=0
+    local updated_count=0
     for vmid in "${!DEPLOYED_CP_IPS[@]}"; do
         local live_ip="${LIVE_NODE_IPS[$vmid]:-}"
         [[ -n "$live_ip" && "$live_ip" != "${DEPLOYED_CP_IPS[$vmid]}" ]] && {
@@ -3280,9 +3279,11 @@ Options:
   --dry-run            -d                 Simulate operations without making changes
   --skip-preflight     -s                 Skip pre-flight connectivity checks
   --force-reconfigure  -f                 Regenerate all configs even if unchanged
+  --log-level          -l <level>         Set log level (FATAL, ERROR, WARN, INFO, DEBUG, TRACE)
   --help               -h                 Show this help message
 
   Combined short flags are supported: -pas is equivalent to -p -a -s
+  Note: -l requires an argument, so place it last in combined flags: -pasl DEBUG
 
 Environment Variables:
   CLUSTER_NAME              Cluster name (default: proxmox-talos-test)
@@ -3301,6 +3302,7 @@ Examples:
   $0 reconcile -p -a -s           # Same as above, separate flags
   $0 reconcile --auto-approve     # Apply changes without prompting
   $0 status                       # Show current cluster state
+  $0 status -l DEBUG              # Show status with debug logging
   LOG_LEVEL=TRACE $0 status       # Show detailed trace logging
 
 Directory Structure:
@@ -3308,8 +3310,7 @@ Directory Structure:
     ├── nodes/          # Generated node configs (VMID-based naming)
     │   └── .checksums/ # Config hashes for drift detection
     ├── secrets/        # Sensitive files (persistent)
-    ├── state/          # Deployment state (persistent)
-    └── patches/        # Custom Talos patches (optional)
+    └── state/          # Deployment state (persistent)
 
 Log Files:
   logs/YYYY-MM-DD/run-YYYYMMDD_HHMMSS/
