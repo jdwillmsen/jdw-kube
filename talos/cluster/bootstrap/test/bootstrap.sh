@@ -3130,11 +3130,16 @@ run_reconcile_plan() {
     log_plan_info "Reconcile Only"
     log_plan_trace "run_reconcile_plan: Starting reconcile plan execution"
     setup_environment
+    run_discovery
+    run_configuration
     reconcile_cluster
     [[ "$PLAN_MODE" == "true" ]] && return 0
     run_execution
     run_finalization
     log_plan_info "Reconciliation Complete"
+    log_step_info "Kubeconfig: export KUBECONFIG=$KUBECONFIG_PATH"
+    log_step_info "Talos Dashboard: talosctl dashboard --endpoints $HAPROXY_IP"
+    log_file_only "COMPLETE" "Reconcile finished successfully"
     log_plan_trace "run_reconcile_plan: Reconcile plan completed"
 }
 
