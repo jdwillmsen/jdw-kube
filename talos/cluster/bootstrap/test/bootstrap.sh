@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.14.0"
+readonly VERSION="3.15.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
@@ -2909,7 +2909,7 @@ update_kubeconfig() {
     log_job_info "Update Kubeconfig"
     log_job_trace "update_kubeconfig: Starting kubeconfig update"
     [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG
-    local updated_count=0
+    local updated=0
     for vmid in "${!DEPLOYED_CP_IPS[@]}"; do
         local live_ip="${LIVE_NODE_IPS[$vmid]:-}"
         [[ -n "$live_ip" && "$live_ip" != "${DEPLOYED_CP_IPS[$vmid]}" ]] && {
