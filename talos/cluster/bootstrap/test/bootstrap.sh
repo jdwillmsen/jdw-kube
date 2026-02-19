@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.13.0"
+readonly VERSION="3.14.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
@@ -2916,6 +2916,12 @@ update_kubeconfig() {
     temp_kubeconfig=$(mktemp)
     run_command talosctl kubeconfig "$temp_kubeconfig" --nodes "$bootstrap_node" --endpoints "$bootstrap_node" && {
         chmod 600 "$temp_kubeconfig"
+        local correct_server="https://${CONTROL_PLANE_ENDPOINT}:6443"
+        log_step_info "Settingkubeconfig server to $correct_server (via HAProxy/control plane endpoint)"
+        KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$CLUSTER_NAME" --server="$correct_server" 2>/dev/null || {
+          sed -i "s|server: https://.*:6443|server: $correct_server|g" "$temp_kubeconfig"
+          log_step_debug "Used sed fallback to update server URL in kubeconfig"
+        }
         local context_name="${CLUSTER_NAME}"
         KUBECONFIG="$temp_kubeconfig" kubectl config rename-context "admin@${CLUSTER_NAME}" "$context_name" 2>/dev/null || true
         if [[ -f "${HOME}/.kube/config" ]]; then
@@ -2984,15 +2990,17 @@ configure_talosctl_endpoints() {
 verify_kubernetes_access() {
     log_step_info "Verifying Kubernetes API access..."
     log_step_trace "verify_kubernetes_access: Testing API connectivity"
-    if kubectl cluster-info &>/dev/null; then
+    local kube_args=()
+    [[ -f "$KUBECONFIG_PATH" ]] && kube_args+=(--kubeconfig "$KUBECONFIG_PATH")
+    if kubectl "${kube_args[@]}" cluster-info &>/dev/null; then
         log_step_info "Kubernetes API is accessible"
         log_step_info "Cluster info:"
-        run_command kubectl cluster-info 2>/dev/null | head -5 || true
+        run_command kubectl "${kube_args[@]}" cluster-info 2>/dev/null | head -5 || true
         log_step_info "Node status:"
-        run_command kubectl get nodes -o wide 2>/dev/null || log_step_warn "Could not retrieve node list (may still be joining)"
+        run_command kubectl "${kube_args[@]}" get nodes -o wide 2>/dev/null || log_step_warn "Could not retrieve node list (may still be joining)"
     else
         log_step_warn "Kubernetes API not yet ready (nodes may still be joining)"
-        log_step_info "Try: kubectl cluster-info"
+        log_step_info "Try: kubectl --kubeconfig $KUBECONFIG_PATH cluster-info"
     fi
 }
 
@@ -3157,10 +3165,14 @@ run_reset_plan() {
     log_plan_info "Full Reset"
     log_plan_trace "run_reset_plan: Starting full reset"
     log_stage_info "Reset Cluster"
-    confirm_proceed "Permanently delete all configs, state, and secrets for cluster ${CLUSTER_NAME}?" || {
-        log_step_info "Reset cancelled"
-        exit 0
-    }
+    if [[ "$AUTO_APPROVE" != "true" ]]; then
+        confirm_proceed "Permanently delete all configs, state, and secrets for cluster ${CLUSTER_NAME}?" || {
+            log_step_info "Reset cancelled"
+            exit 0
+        }
+    else
+        log_step_warn "Auto-approve enabled, skipping confirmation for reset"
+    fi
     [[ -d "$CLUSTER_DIR" ]] && {
         run_command rm -rf "${CLUSTER_DIR:?}"
         log_step_info "Removed cluster directory: $CLUSTER_DIR"
