@@ -1541,6 +1541,7 @@ remove_control_plane() {
     local ip="${DEPLOYED_CP_IPS[$vmid]:-}"
     log_step_info "Removing control plane VM $vmid"
     log_step_trace "remove_control_plane: Starting for VM $vmid"
+    [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG
     [[ -z "$ip" ]] && {
         log_step_warn "No IP recorded for VM $vmid, attempting discovery"
         ip=$(discover_ip_for_vmid "$vmid" 2>/dev/null || echo "")
@@ -1629,6 +1630,7 @@ remove_worker() {
     local ip="${DEPLOYED_WORKER_IPS[$vmid]:-}"
     log_step_info "Removing worker VM $vmid"
     log_step_trace "remove_worker: Starting for VM $vmid"
+    [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG
     [[ -z "$ip" ]] && ip=$(discover_ip_for_vmid "$vmid" 2>/dev/null || echo "")
     [[ "$DRY_RUN" == "true" ]] && {
         log_step_info "[DRY-RUN] Would remove VM $vmid from cluster"
