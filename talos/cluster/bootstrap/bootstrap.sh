@@ -1561,8 +1561,8 @@ remove_control_plane() {
     local desired_cp_count=${#DESIRED_CP_VMIDS[@]}
     local min_quorum=$(( (current_cp_count / 2) + 1 ))
     local healthy_members=0
-    if run_command talosctl etcd memebers --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip"; then
-      healthy_members=$(echo "$LAST_COMMAND_OUTPUT" | grep -ci "HEALTHY" || echo "0")
+    if run_command talosctl etcd members --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip"; then
+      healthy_members=$(echo "$LAST_COMMAND_OUTPUT" | grep -ci "HEALTHY" || true)
       healthy_members=$((healthy_members + 0))
     else
       log_step_warn "Failed to query etcd members for quorum check, assuming $current_cp_count healthy members"
