@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.16.0"
+readonly VERSION="3.16.1"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
@@ -1545,10 +1545,29 @@ remove_control_plane() {
         log_step_warn "No IP recorded for VM $vmid, attempting discovery"
         ip=$(discover_ip_for_vmid "$vmid" 2>/dev/null || echo "")
     }
+    local surviving_cp_ip=""
+    for cp_vmid in "${!DEPLOYED_CP_IPS[@]}"; do
+        [[ "$cp_vmid" != "$vmid" && -n "${DEPLOYED_CP_IPS[$cp_vmid]:-}" ]] && {
+            surviving_cp_ip="${DEPLOYED_CP_IPS[$cp_vmid]}"
+            break
+        }
+    done
+    if [[ -z "$surviving_cp_ip" ]]; then
+        log_step_error "Cannot remove VM $vmid: no other control plane IP available for quorum check"
+        log_step_error "This appears to be the last control plane. Remove skipped to avoid potential cluster disruption."
+        return 1
+    fi
     local current_cp_count=${#DEPLOYED_CP_IPS[@]}
     local desired_cp_count=${#DESIRED_CP_VMIDS[@]}
-    local min_quorum=$(( (desired_cp_count / 2) + 1 ))
-    local healthy_members=$(run_command talosctl etcd members 2>/dev/null | grep -c "Healthy" || echo "0")
+    local min_quorum=$(( (current_cp_count / 2) + 1 ))
+    local healthy_members=0
+    if run_command talosctl etcd memebers --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip"; then
+      healthy_members=$(echo "$LAST_COMMAND_OUTPUT" | grep -ci "HEALTHY" || echo "0")
+      healthy_members=$((healthy_members + 0))
+    else
+      log_step_warn "Failed to query etcd members for quorum check, assuming $current_cp_count healthy members"
+      healthy_members=$current_cp_count
+    fi
     local after_removal=$((healthy_members - 1))
     [[ $after_removal -lt $min_quorum ]] && {
         log_step_error "Cannot remove VM $vmid: would violate etcd quorum"
@@ -1569,16 +1588,30 @@ remove_control_plane() {
         return 0
     }
     local node_name=""
-    [[ -n "$ip" && -f "$KUBECONFIG_PATH" ]] && node_name=$(run_command kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null | grep "$ip" | awk '{print $1}')
+    if [[ -n "$ip" && -f "$KUBECONFIG_PATH" ]]; then
+        if run_command kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide; then
+            node_name=$(echo "$LAST_COMMAND_OUTPUT" | grep "$ip" | awk '{print $1}')
+        fi
+    fi
     [[ -n "$node_name" ]] && {
         log_step_info "Draining node $node_name..."
         run_command kubectl --kubeconfig "$KUBECONFIG_PATH" cordon "$node_name" || true
         run_command kubectl --kubeconfig "$KUBECONFIG_PATH" drain "$node_name" --ignore-daemonsets --delete-emptydir-data --timeout=300s || log_step_warn "Drain incomplete"
     }
-    [[ -n "$ip" ]] && {
+    if [[ -n "$ip" ]]; then
         log_step_info "Removing from etcd..."
-        run_command talosctl etcd remove-member --nodes "$ip" 2>/dev/null || log_step_warn "etcd remove failed (may already be removed)"
-    }
+        local member_id=""
+        if run_command talosctl etcd members --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip"; then
+            member_id=$(echo "$LAST_COMMAND_OUTPUT" | grep "$ip" | awk '{print $1}')
+        fi
+        if [[ -n "$member_id" ]]; then
+            log_step_debug "Removing etcd member ID $member_id for IP $ip (VMID: $vmid) using surviving control plane IP $surviving_cp_ip"
+            run_command talosctl etcd remove-member --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip" "$member_id" 2>/dev/null || log_step_warn "etcd remove failed (may already be removed)"
+        else
+             log_step_warn "Could not find etcd member ID for IP $ip, skipping etcd removal"
+             log_step_warn "You may need to manually remove the etcd member after VM deletion using: talosctl etcd remove-member <member-id>"
+        fi
+    fi
     [[ -n "$node_name" ]] && {
         log_step_info "Removing from Kubernetes..."
         run_command kubectl --kubeconfig "$KUBECONFIG_PATH" delete node "$node_name" --timeout=60s || true
