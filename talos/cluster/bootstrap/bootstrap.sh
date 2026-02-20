@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.16.1"
+readonly VERSION="3.16.2"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-CLUSTER_NAME="${CLUSTER_NAME:-proxmox-talos-test}"
+CLUSTER_NAME="${CLUSTER_NAME:-cluster1-test}"
 CLUSTER_DIR="${SCRIPT_DIR}/clusters/${CLUSTER_NAME}"
 NODES_DIR="${CLUSTER_DIR}/nodes"
 SECRETS_DIR="${CLUSTER_DIR}/secrets"
@@ -1563,7 +1563,7 @@ remove_control_plane() {
     local min_quorum=$(( (current_cp_count / 2) + 1 ))
     local healthy_members=0
     if run_command talosctl etcd members --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip"; then
-      healthy_members=$(echo "$LAST_COMMAND_OUTPUT" | grep -ci "HEALTHY" || true)
+      healthy_members=$(echo "$LAST_COMMAND_OUTPUT" | grep -cE '[0-9a-f]{16}' || true)
       healthy_members=$((healthy_members + 0))
     else
       log_step_warn "Failed to query etcd members for quorum check, assuming $current_cp_count healthy members"
@@ -1771,6 +1771,10 @@ cluster:
     - https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
   allowSchedulingOnControlPlanes: false
   apiServer:
+    certSANs:
+      - ${CONTROL_PLANE_ENDPOINT}
+      - ${HAPROXY_IP}
+      - 127.0.0.1
     admissionControl:
       - name: PodSecurity
         configuration:
