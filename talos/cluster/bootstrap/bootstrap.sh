@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.19.3"
+readonly VERSION="3.20.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster}"
@@ -1440,55 +1440,92 @@ display_reconcile_plan() {
 execute_reconcile_plan() {
     log_job_info "Executing Reconciliation Plan"
     log_job_trace "execute_reconcile_plan: Starting execution"
+    local overall_exit=0
     [[ "$DRY_RUN" == "true" ]] && log_step_info "Dry run mode - simulating operations"
     [[ "$PLAN_NEED_BOOTSTRAP" == "true" ]] && {
         run_bootstrap || {
             log_stage_error "Bootstrap failed, but configs are applied"
             log_stage_error "You can retry with: ./bootstrap.sh bootstrap"
+            overall_exit=1
         }
     }
     [[ ${#PLAN_REMOVE_WORKER[@]} -gt 0 ]] && {
         log_stage_info "Phase 1a: Removing Workers"
-        for vmid in "${PLAN_REMOVE_WORKER[@]}"; do remove_worker "$vmid"; done
+        for vmid in "${PLAN_REMOVE_WORKER[@]}"; do
+            remove_worker "$vmid" || {
+                log_step_warn "Failed to remove worker VM $vmid"
+                overall_exit=1
+            }
+        done
     }
     [[ ${#PLAN_REMOVE_CP[@]} -gt 0 ]] && {
         log_stage_info "Phase 1b: Removing Control Planes"
-        for vmid in "${PLAN_REMOVE_CP[@]}"; do remove_control_plane "$vmid"; done
+        for vmid in "${PLAN_REMOVE_CP[@]}"; do
+            remove_control_plane "$vmid" || {
+                log_step_error "Failed to remove control plane VM $vmid - stopping reconciliation"
+                overall_exit=1
+                break
+            }
+        done
     }
+    if [[ $overall_exit -ne 0 ]]; then
+        log_stage_error "Control plane removal phase failed - skipping remaining phases"
+        save_state
+        log_plan_error "Reconciliation completed with errors"
+        return 1
+    fi
     [[ ${#PLAN_UPDATE[@]} -gt 0 ]] && {
         log_stage_info "Phase 2: Updating Node Configurations"
         for entry in "${PLAN_UPDATE[@]}"; do
             local vmid role
             vmid=$(echo "$entry" | cut -d':' -f1)
             role=$(echo "$entry" | cut -d':' -f2)
-            update_node_config "$vmid" "$role"
+            update_node_config "$vmid" "$role" || {
+                log_step_warn "Failed to update config for VM $vmid"
+                overall_exit=1
+            }
         done
     }
     [[ ${#PLAN_ADD_CP[@]} -gt 0 ]] && {
         log_stage_info "Phase 3a: Adding Control Planes"
         for vmid in "${PLAN_ADD_CP[@]}"; do
-            add_control_plane "$vmid" || log_step_warn "Failed to add control plane VM $vmid, continuing with others..."
+            add_control_plane "$vmid" || {
+                log_step_warn "Failed to add control plane VM $vmid, continuing with others..."
+                overall_exit=1
+            }
         done
     }
     [[ ${#PLAN_ADD_WORKER[@]} -gt 0 ]] && {
         log_stage_info "Phase 3b: Adding Workers"
         for vmid in "${PLAN_ADD_WORKER[@]}"; do
-            add_worker "$vmid" || log_step_warn "Failed to add worker VM $vmid, continuing with others..."
+            add_worker "$vmid" || {
+                log_step_warn "Failed to add worker VM $vmid, continuing with others..."
+                overall_exit=1
+            }
         done
     }
     [[ ${#PLAN_ADD_CP[@]} -gt 0 || ${#PLAN_REMOVE_CP[@]} -gt 0 || ${#PLAN_UPDATE[@]} -gt 0 ]] && {
         log_stage_info "Phase 4: Updating HAProxy Configuration"
-        update_haproxy_from_state
+        update_haproxy_from_state || {
+            log_step_warn "Failed to update HAProxy configuration"
+            overall_exit=1
+        }
     }
     [[ ${#PLAN_ADD_CP[@]} -gt 0 && "$BOOTSTRAP_COMPLETED" != "true" ]] && {
         run_bootstrap || {
             log_stage_error "Bootstrap failed after adding control planes"
             log_stage_error "You can retry with: ./bootstrap.sh bootstrap"
+            overall_exit=1
         }
     }
     save_state
-    log_plan_info "Reconciliation complete"
-    log_job_trace "execute_reconcile_plan: Execution completed"
+    if [[ $overall_exit -eq 0 ]]; then
+        log_plan_info "Reconciliation complete"
+    else
+        log_plan_error "Reconciliation completed with errors"
+    fi
+    log_job_trace "execute_reconcile_plan: Execution completed with exit=$overall_exit"
+    return $overall_exit
 }
 
 add_control_plane() {
@@ -1603,18 +1640,34 @@ remove_control_plane() {
         return 1
     fi
     local current_cp_count=${#DEPLOYED_CP_IPS[@]}
-    local desired_cp_count=${#DESIRED_CP_VMIDS[@]}
     local min_quorum=$(( (current_cp_count / 2) + 1 ))
     local healthy_members=0
+    local etcd_check_failed=false
     if run_command timeout 15 talosctl etcd members --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip" 2>/dev/null; then
         healthy_members=$(echo "$LAST_COMMAND_OUTPUT" | grep -cE '"[0-9a-f]{16}"' || true)
         healthy_members=$((healthy_members + 0))
         log_step_debug "Found $healthy_members healthy etcd members"
     else
-        log_step_warn "Failed to query etcd members for quorum check, assuming $current_cp_count healthy members"
+        log_step_warn "Failed to query etcd members for quorum check"
+        etcd_check_failed=true
+    fi
+    if [[ "$etcd_check_failed" == "true" ]] || [[ $healthy_members -eq 0 ]]; then
+        log_step_warn "Cannot verify etcd health - quorum check inconclusive"
+        log_step_warn "Current CP count: $current_cp_count, min_quorum: $min_quorum"
+        if [[ $current_cp_count -le 3 ]]; then
+            log_step_error "Cannot remove VM $vmid: etcd health check failed and cluster is too small to risk removal"
+            log_step_error "Please ensure etcd is healthy before removing control planes"
+            return 1
+        fi
         healthy_members=$current_cp_count
+        log_step_warn "Assuming $healthy_members members (deployed count) for quorum calculation"
     fi
     local after_removal=$((healthy_members - 1))
+    if [[ $after_removal -lt 1 ]]; then
+        log_step_error "Cannot remove VM $vmid: would leave cluster with no etcd members"
+        log_step_error "Current healthy: $healthy_members, after removal: $after_removal"
+        return 1
+    fi
     [[ $after_removal -lt $min_quorum ]] && {
         log_step_error "Cannot remove VM $vmid: would violate etcd quorum"
         log_step_error "Current healthy: $healthy_members, after removal: $after_removal, required: $min_quorum"
@@ -1680,6 +1733,7 @@ remove_control_plane() {
     log_step_info "Control plane VM $vmid removed"
     log_file_only "DEPLOY" "REMOVED: CP $vmid"
     log_step_trace "remove_control_plane: Completed for VM $vmid"
+    return 0
 }
 
 remove_worker() {
@@ -2755,9 +2809,40 @@ run_execution() {
 run_finalization() {
     log_stage_info "Finalizing"
     log_stage_trace "run_finalization: Starting finalization"
-    [[ ${#PLAN_ADD_CP[@]} -gt 0 || ${#PLAN_REMOVE_CP[@]} -gt 0 || "$PLAN_NEED_BOOTSTRAP" == "true" ]] && update_kubeconfig
-    verify_cluster
+    [[ ${#PLAN_ADD_CP[@]} -gt 0 || ${#PLAN_REMOVE_CP[@]} -gt 0 || "$PLAN_NEED_BOOTSTRAP" == "true" ]] && {
+        update_kubeconfig || {
+            log_stage_error "Failed to update kubeconfig"
+            return 1
+        }
+    }
+    verify_cluster || {
+        log_stage_warn "Cluster verification had issues, but bootstrap may still be usable"
+    }
+    if [[ -f "$KUBECONFIG_PATH" ]]; then
+        local cluster_context
+        cluster_context=$(kubectl --kubeconfig "$KUBECONFIG_PATH" config current-context 2>/dev/null || echo "$CLUSTER_NAME")
+        print_border top
+        print_box_header "BOOTSTRAP SUCCESSFUL"
+        print_box_pair "Cluster" "$CLUSTER_NAME"
+        print_box_pair "Context" "$cluster_context"
+        print_box_pair "Kubeconfig" "$KUBECONFIG_PATH"
+        print_box_pair "Talos Endpoint" "$HAPROXY_IP"
+        print_border divider
+        print_box_section "QUICK START COMMANDS"
+        print_box_item "" "export KUBECONFIG=$KUBECONFIG_PATH"
+        print_box_item "" "kubectl get nodes"
+        print_box_item "" "talosctl dashboard --endpoints $HAPROXY_IP"
+        print_box_item "" "talosctl etcd members --endpoints $HAPROXY_IP"
+        print_border divider
+        print_box_section "NEXT STEPS"
+        print_box_wrapped "" "1. Verify nodes are Ready: kubectl get nodes"
+        print_box_wrapped "" "2. Check etcd health: talosctl etcd members --endpoints $HAPROXY_IP"
+        print_box_wrapped "" "3. Deploy workloads: kubectl apply -f your-app.yaml"
+        print_box_footer
+        log_step_info "Cluster is ready for workloads"
+    fi
     log_stage_trace "run_finalization: Finalization completed"
+    return 0
 }
 
 run_bootstrap() {
@@ -3337,38 +3422,38 @@ test_port() {
     fi
 }
 
-run_bootstrap_plan() {
-    log_plan_info "Bootstrap Execution"
-    log_plan_trace "run_bootstrap_plan: Starting bootstrap plan execution"
+run_execution_plan() {
+    local plan_type="$1"
+    log_plan_info "${plan_type^} Execution"
+    log_plan_trace "run_execution_plan: Starting $plan_type execution"
     setup_environment
     run_discovery
     run_configuration
     reconcile_cluster
     [[ "$PLAN_MODE" == "true" ]] && return 0
-    run_execution
-    run_finalization
-    log_plan_info "Bootstrap Complete"
+    execute_reconcile_plan || {
+        local exit_code=$?
+        log_plan_error "${plan_type^} execution failed with exit code $exit_code"
+        exit $exit_code
+    }
+    run_finalization || {
+        local exit_code=$?
+        log_plan_error "Finalization failed with exit code $exit_code"
+        exit $exit_code
+    }
+    log_plan_info "${plan_type^} Complete"
     log_step_info "Kubeconfig: export KUBECONFIG=$KUBECONFIG_PATH"
     log_step_info "Talos Dashboard: talosctl dashboard --endpoints $HAPROXY_IP"
-    log_file_only "COMPLETE" "Bootstrap finished successfully"
-    log_plan_trace "run_bootstrap_plan: Bootstrap plan completed"
+    log_file_only "COMPLETE" "${plan_type^} finished successfully"
+    log_plan_trace "run_execution_plan: $plan_type completed"
+}
+
+run_bootstrap_plan() {
+    run_execution_plan "bootstrap"
 }
 
 run_reconcile_plan() {
-    log_plan_info "Reconcile Only"
-    log_plan_trace "run_reconcile_plan: Starting reconcile plan execution"
-    setup_environment
-    run_discovery
-    run_configuration
-    reconcile_cluster
-    [[ "$PLAN_MODE" == "true" ]] && return 0
-    run_execution
-    run_finalization
-    log_plan_info "Reconciliation Complete"
-    log_step_info "Kubeconfig: export KUBECONFIG=$KUBECONFIG_PATH"
-    log_step_info "Talos Dashboard: talosctl dashboard --endpoints $HAPROXY_IP"
-    log_file_only "COMPLETE" "Reconcile finished successfully"
-    log_plan_trace "run_reconcile_plan: Reconcile plan completed"
+    run_execution_plan "reconcile"
 }
 
 run_status_plan() {
