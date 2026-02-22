@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.16.3"
+readonly VERSION="3.16.4"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster1-test}"
@@ -869,7 +869,7 @@ load_desired_state() {
     log_detail_debug "Terraform hash: ${TERRAFORM_HASH:0:16}..."
     TF_PROXMOX_ENDPOINT=$(grep -E '^proxmox_endpoint[[:space:]]*=' "$TERRAFORM_TFVARS" 2>/dev/null | head -1 | cut -d'"' -f2)
     if [[ -n "$TF_PROXMOX_ENDPOINT" ]]; then
-        TF_PROXMOX_SSH_HOST=$(echo "$TF_PROXMOX_ENDPOINT" | sed -E 's|https?://||' | cut -d':' -f1)
+        TF_PROXMOX_SSH_HOST=$(echo "$TF_PROXMOX_ENDPOINT" | sed -E 's|https?://||' | cut -d'/' -f1 | cut -d':' -f1)
         log_detail_debug "Proxmox endpoint: $TF_PROXMOX_ENDPOINT"
         log_detail_debug "SSH host: $TF_PROXMOX_SSH_HOST"
     fi
