@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.18.0"
+readonly VERSION="3.18.1"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster1-test}"
@@ -362,6 +362,14 @@ log_config_generated() {
             echo "[$(date "$LOG_TIMESTAMP_FORMAT")] [CONFIG-PREVIEW] $(head -1 "$file_path")" >> "$ALL_LOGS_FILE"
         }
     fi
+}
+
+log_command_output() {
+    local output="$1"
+    local IFS=$'\n'
+    for line in $output; do
+        log_output "${C_VALUE}${line}${C_RESET}" "true" "true"
+    done
 }
 
 run_command() {
@@ -3193,16 +3201,16 @@ verify_cluster() {
     }
     log_step_info "Node status:"
     if run_command kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null; then
-        echo "$LAST_COMMAND_OUTPUT"
+        log_command_output "$LAST_COMMAND_OUTPUT"
     else
         log_step_warn "Failed to get node status"
     fi
     log_step_info "etcd members:"
     if [[ -n "$bootstrap_node" ]]; then
         if run_command talosctl etcd members --nodes "$bootstrap_node" --endpoints "$bootstrap_node" 2>/dev/null; then
-            echo "$LAST_COMMAND_OUTPUT"
+            log_command_output "$LAST_COMMAND_OUTPUT"
         else
-            log_step_warn "Failed to get etcd members (command failed)"
+            log_step_warn "Failed to get etcd members"
         fi
     else
         log_step_warn "No responsive control plane found for etcd check"
