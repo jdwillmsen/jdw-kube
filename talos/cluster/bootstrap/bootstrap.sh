@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.17.0"
+readonly VERSION="3.17.1"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster1-test}"
@@ -3077,18 +3077,21 @@ ensure_control_plane_endpoint_resolves() {
             log_step_warn "Please ensure that $CONTROL_PLANE_ENDPOINT resolves to $HAPROXY_IP (e.g. by adding to /etc/hosts or configuring DNS)"
         fi
     fi
+    local escaped_endpoint=$(printf '%s\n' "$CONTROL_PLANE_ENDPOINT" | sed 's/[]\/$*.^|[]/\\&/g')
     log_step_info "Adding entry to hosts file $HOSTS_FILE: $HAPROXY_IP $CONTROL_PLANE_ENDPOINT"
     if [[ -w "$HOSTS_FILE" ]] || [[ -w "$(dirname "$HOSTS_FILE")" ]]; then
-        if grep -q "$CONTROL_PLANE_ENDPOINT" "$HOSTS_FILE" 2>/dev/null; then
-            sed -i "s/^.*${CONTROL_PLANE_ENDPOINT}.*$/${HAPROXY_IP} ${CONTROL_PLANE_ENDPOINT}/" "$HOSTS_FILE"
+        if grep -qF "$CONTROL_PLANE_ENDPOINT" "$HOSTS_FILE" 2>/dev/null; then
+            sed -i "/[[:space:]]${escaped_endpoint}\$/d" "$HOSTS_FILE"
+            echo "$HAPROXY_IP $CONTROL_PLANE_ENDPOINT" >> "$HOSTS_FILE"
             log_step_info "Updated existing entry for $CONTROL_PLANE_ENDPOINT in hosts file to IP $HAPROXY_IP"
         else
             echo "$HAPROXY_IP $CONTROL_PLANE_ENDPOINT" >> "$HOSTS_FILE"
             log_step_info "Added new entry to hosts file: $HAPROXY_IP $CONTROL_PLANE_ENDPOINT"
         fi
     elif command -v sudo &>/dev/null; then
-        if grep -q "$CONTROL_PLANE_ENDPOINT" "$HOSTS_FILE" 2>/dev/null; then
-            sudo sed -i "s/^.*${CONTROL_PLANE_ENDPOINT}.*$/${HAPROXY_IP} ${CONTROL_PLANE_ENDPOINT}/" "$HOSTS_FILE"
+        if grep -qF "$CONTROL_PLANE_ENDPOINT" "$HOSTS_FILE" 2>/dev/null; then
+            sed -i "/[[:space:]]${escaped_endpoint}\$/d" "$HOSTS_FILE"
+            echo "$HAPROXY_IP $CONTROL_PLANE_ENDPOINT" | sudo tee -a "$HOSTS_FILE" > /dev/null
             log_step_info "Updated existing entry for $CONTROL_PLANE_ENDPOINT in hosts file to IP $HAPROXY_IP"
         else
             echo "$HAPROXY_IP $CONTROL_PLANE_ENDPOINT" | sudo tee -a "$HOSTS_FILE" > /dev/null
@@ -3100,9 +3103,15 @@ ensure_control_plane_endpoint_resolves() {
         return 1
     fi
     if getent hosts "$CONTROL_PLANE_ENDPOINT" &>/dev/null; then
-        log_step_info "Control plane endpoint $CONTROL_PLANE_ENDPOINT now resolves to HAProxy IP $HAPROXY_IP"
+        local verified_ip=$(getent hosts "$CONTROL_PLANE_ENDPOINT" | awk '{ print $1 }' | head -n 1)
+        if [[ "$verified_ip" == "$HAPROXY_IP" ]]; then
+          log_step_info "Verified that control plane endpoint $CONTROL_PLANE_ENDPOINT now resolves to HAProxy IP $HAPROXY_IP"
+        else
+          log_step_warn "After update, control plane endpoint $CONTROL_PLANE_ENDPOINT resolves to $verified_ip instead of HAProxy IP $HAPROXY_IP. Please check your hosts file or DNS configuration."
+          return 1
+        fi
     else
-        log_step_warn "Failed to verify that control plane endpoint $CONTROL_PLANE_ENDPOINT resolves to HAProxy IP $HAPROXY_IP after update. Please check your hosts file or DNS configuration."
+        log_step_warn "Failed to verify that control plane endpoint $CONTROL_PLANE_ENDPOINT resolves after update. Please check your hosts file or DNS configuration."
         return 1
     fi
     return 0
