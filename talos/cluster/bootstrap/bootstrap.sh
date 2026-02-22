@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.19.1"
+readonly VERSION="3.19.2"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster}"
@@ -1606,12 +1606,13 @@ remove_control_plane() {
     local desired_cp_count=${#DESIRED_CP_VMIDS[@]}
     local min_quorum=$(( (current_cp_count / 2) + 1 ))
     local healthy_members=0
-    if run_command talosctl etcd members --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip"; then
-      healthy_members=$(echo "$LAST_COMMAND_OUTPUT" | grep -cE '[0-9a-f]{16}' || true)
-      healthy_members=$((healthy_members + 0))
+    if run_command timeout 15 talosctl etcd members --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip" 2>/dev/null; then
+        healthy_members=$(echo "$LAST_COMMAND_OUTPUT" | grep -cE '"[0-9a-f]{16}"' || true)
+        healthy_members=$((healthy_members + 0))
+        log_step_debug "Found $healthy_members healthy etcd members"
     else
-      log_step_warn "Failed to query etcd members for quorum check, assuming $current_cp_count healthy members"
-      healthy_members=$current_cp_count
+        log_step_warn "Failed to query etcd members for quorum check, assuming $current_cp_count healthy members"
+        healthy_members=$current_cp_count
     fi
     local after_removal=$((healthy_members - 1))
     [[ $after_removal -lt $min_quorum ]] && {
@@ -1634,24 +1635,36 @@ remove_control_plane() {
     }
     local node_name=""
     if [[ -n "$ip" && -f "$KUBECONFIG_PATH" ]]; then
-        if run_command kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide; then
-            node_name=$(echo "$LAST_COMMAND_OUTPUT" | grep "$ip" | awk '{print $1}')
+        log_step_debug "Looking up node name for IP $ip..."
+        if run_command timeout 30 kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null; then
+            node_name=$(echo "$LAST_COMMAND_OUTPUT" | grep -E "\s${ip}\s" | awk '{print $1}')
+            [[ -n "$node_name" ]] && log_step_debug "Found node name: $node_name"
+        else
+            log_step_warn "kubectl get nodes failed or timed out"
         fi
     fi
     [[ -n "$node_name" ]] && {
         log_step_info "Draining node $node_name..."
-        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" cordon "$node_name" || true
-        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" drain "$node_name" --ignore-daemonsets --delete-emptydir-data --timeout=300s || log_step_warn "Drain incomplete"
+        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" cordon "$node_name" 2>/dev/null || true
+        if run_command timeout 60 kubectl --kubeconfig "$KUBECONFIG_PATH" drain "$node_name" --ignore-daemonsets --delete-emptydir-data --timeout=30s 2>/dev/null; then
+            log_step_info "Node $node_name drained successfully"
+        else
+            log_step_warn "Drain incomplete or timed out for $node_name, forcing removal..."
+        fi
     }
     if [[ -n "$ip" ]]; then
         log_step_info "Removing from etcd..."
         local member_id=""
-        if run_command talosctl etcd members --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip"; then
+        if run_command timeout 15 talosctl etcd members --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip" 2>/dev/null; then
             member_id=$(echo "$LAST_COMMAND_OUTPUT" | grep "$ip" | awk '{print $1}')
         fi
         if [[ -n "$member_id" ]]; then
             log_step_debug "Removing etcd member ID $member_id for IP $ip (VMID: $vmid) using surviving control plane IP $surviving_cp_ip"
-            run_command talosctl etcd remove-member --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip" "$member_id" 2>/dev/null || log_step_warn "etcd remove failed (may already be removed)"
+            if run_command timeout 15 talosctl etcd remove-member --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip" "$member_id" 2>/dev/null; then
+                log_step_info "Successfully removed etcd member $member_id"
+            else
+                log_step_warn "etcd remove failed (may already be removed)"
+            fi
         else
              log_step_warn "Could not find etcd member ID for IP $ip, skipping etcd removal"
              log_step_warn "You may need to manually remove the etcd member after VM deletion using: talosctl etcd remove-member <member-id>"
@@ -1659,7 +1672,7 @@ remove_control_plane() {
     fi
     [[ -n "$node_name" ]] && {
         log_step_info "Removing from Kubernetes..."
-        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" delete node "$node_name" --timeout=60s || true
+        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" delete node "$node_name" --timeout=30s 2>/dev/null || log_step_warn "Failed to delete node $node_name (may already be removed)"
     }
     unset DEPLOYED_CP_IPS["$vmid"]
     unset DEPLOYED_CONFIG_HASH["$vmid"]
@@ -1681,17 +1694,35 @@ remove_worker() {
         return 0
     }
     local node_name=""
-    [[ -n "$ip" && -f "$KUBECONFIG_PATH" ]] && node_name=$(run_command kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null | grep "$ip" | awk '{print $1}')
+    if [[ -n "$ip" && -f "$KUBECONFIG_PATH" ]]; then
+        log_step_debug "Looking up node name for IP $ip in Kubernetes..."
+        if run_command timeout 30 kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null; then
+            node_name=$(echo "$LAST_COMMAND_OUTPUT" | grep -E "\s${ip}\s" | awk '{print $1}')
+            if [[ -n "$node_name" ]]; then
+                log_step_debug "Found node name: $node_name"
+            else
+                log_step_warn "Could not find node with IP $ip in cluster (may already be removed)"
+            fi
+        else
+            log_step_warn "kubectl get nodes failed or timed out - proceeding with local state removal only"
+        fi
+    else
+        log_step_warn "No IP or kubeconfig available for VM $vmid - proceeding with local state removal only"
+    fi
     [[ -n "$node_name" ]] && {
         log_step_info "Draining worker node $node_name..."
-        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" cordon "$node_name" || true
-        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" drain "$node_name" --ignore-daemonsets --delete-emptydir-data --timeout=180s || log_step_warn "Drain incomplete"
-        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" delete node "$node_name" || true
+        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" cordon "$node_name" 2>/dev/null || true
+        if run_command timeout 60 kubectl --kubeconfig "$KUBECONFIG_PATH" drain "$node_name" --ignore-daemonsets --delete-emptydir-data --timeout=30s 2>/dev/null; then
+            log_step_info "Node $node_name drained successfully"
+        else
+            log_step_warn "Drain incomplete or timed out for $node_name, forcing removal..."
+        fi
+        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" delete node "$node_name" --timeout=30s 2>/dev/null || log_step_warn "Failed to delete node $node_name from Kubernetes (may already be removed)"
     }
     unset DEPLOYED_WORKER_IPS["$vmid"]
     unset DEPLOYED_CONFIG_HASH["$vmid"]
     run_command rm -f "$CHECKSUM_DIR/worker-${vmid}.sha256"
-    log_step_info "Worker VM $vmid removed"
+    log_step_info "Worker VM $vmid removed from local state"
     log_file_only "DEPLOY" "REMOVED: Worker $vmid"
     log_step_trace "remove_worker: Completed for VM $vmid"
 }
@@ -1713,7 +1744,7 @@ update_node_config() {
         log_step_info "[DRY-RUN] Would reapply config to VM $vmid"
         return 0
     }
-    if run_command talosctl apply-config --nodes "$ip" --file "$config_file"; then
+    if run_command timeout 90 talosctl apply-config --nodes "$ip" --file "$config_file"; then
         log_step_info "Configuration updated for VM $vmid"
         run_command sha256sum "$config_file"
         new_hash=$(echo "$LAST_COMMAND_OUTPUT" | cut -d' ' -f1)
@@ -2013,7 +2044,7 @@ apply_config_to_node() {
     }
     while [[ $attempt -le $max_attempts ]]; do
         log_detail_trace "apply_config_to_node: Attempt $attempt/$max_attempts (maintenance mode)"
-        if run_command talosctl apply-config --nodes "$ip" --file "$config_file" --insecure; then
+        if run_command timeout 90 talosctl apply-config --nodes "$ip" --file "$config_file" --insecure; then
             log_step_info "Config applied successfully in maintenance mode (VMID: $vmid)"
             wait_for_node_ready "$ip" "$vmid"
             return 0
@@ -2022,7 +2053,7 @@ apply_config_to_node() {
         local cleaned_error=$(echo "$error_output" | tr -d '\r')
         echo "$cleaned_error" | grep -qi "certificate required" && {
             log_step_info "Node reports certificate required - already configured, trying secure mode"
-            run_command talosctl apply-config --nodes "$ip" --endpoints "$ip" --file "$config_file" && {
+            run_command timeout 90 talosctl apply-config --nodes "$ip" --endpoints "$ip" --file "$config_file" && {
                 log_step_info "Config applied successfully in secure mode (VMID: $vmid)"
                 return 0
             }
@@ -2381,7 +2412,7 @@ apply_config_with_rediscovery() {
                 fi
             fi
         fi
-        if run_command talosctl apply-config --nodes "$current_ip" --file "$config_file" --insecure; then
+        if run_command timeout 90 talosctl apply-config --nodes "$current_ip" --file "$config_file" --insecure; then
             log_step_info "Configuration applied successfully, node will reboot (VMID: $vmid)"
             APPLY_CONFIG_REBOOT_TRIGGERED="true"
             echo "$current_ip"
@@ -3426,7 +3457,7 @@ apply_config_maintenance() {
     log_step_trace "apply_config_maintenance: Starting for $ip with $max_attempts attempts"
     while [[ $attempt -le $max_attempts ]]; do
         log_step_debug "Applying config (attempt $attempt/$max_attempts)..."
-        if run_command talosctl apply-config --nodes "$ip" --file "$config_file" --insecure; then
+        if run_command timeout 90 talosctl apply-config --nodes "$ip" --file "$config_file" --insecure; then
             log_step_info "Configuration applied successfully"
             return 0
         fi
@@ -3449,7 +3480,7 @@ attempt_recovery_reapply() {
     local role="${3:-control-plane}"
     log_step_debug "Attempting recovery re-apply to $ip (role: $role) with insecure mode..."
     log_step_trace "attempt_recovery_reapply: Starting recovery for $ip"
-    if run_command talosctl apply-config --nodes "$ip" --file "$config_file" --insecure; then
+    if run_command timeout 90 talosctl apply-config --nodes "$ip" --file "$config_file" --insecure; then
         log_step_info "Recovery re-apply succeeded"
         return 0
     fi
