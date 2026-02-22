@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.16.2"
+readonly VERSION="3.16.3"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster1-test}"
@@ -19,7 +19,7 @@ TALOSCONFIG="${TALOSCONFIG:-${SECRETS_DIR}/talosconfig}"
 KUBECONFIG_PATH="${HOME}/.kube/config-${CLUSTER_NAME}"
 
 CONTROL_PLANE_ENDPOINT="${CONTROL_PLANE_ENDPOINT:-$CLUSTER_NAME.jdwkube.com}"
-HAPROXY_IP="${HAPROXY_IP:-192.168.1.237}"
+HAPROXY_IP="${HAPROXY_IP:-192.168.1.199}"
 HAPROXY_LOGIN_USERNAME="${HAPROXY_LOGIN_USERNAME:-jake}"
 HAPROXY_STATS_USERNAME="${HAPROXY_STATS_USERNAME:-admin}"
 HAPROXY_STATS_PASSWORD="${HAPROXY_STATS_PASSWORD:-admin}"
@@ -64,10 +64,10 @@ declare -a PLAN_UPDATE=()
 declare -a PLAN_NOOP=()
 
 declare -gA PROXMOX_NODE_IPS=(
-    [pve1]="192.168.1.233"
-    [pve2]="192.168.1.222"
-    [pve3]="192.168.1.221"
-    [pve4]="192.168.1.223"
+    [pve1]="192.168.1.200"
+    [pve2]="192.168.1.201"
+    [pve3]="192.168.1.202"
+    [pve4]="192.168.1.203"
 )
 
 declare -a PROCESSED_ARGS=()
@@ -80,7 +80,7 @@ APPLY_CONFIG_REBOOT_TRIGGERED="false"
 TF_PROXMOX_ENDPOINT=""
 TF_PROXMOX_NODE=""
 TF_PROXMOX_SSH_USER="root"
-TF_PROXMOX_SSH_HOST=""
+TF_PROXMOX_SSH_HOST="${TF_PROXMOX_SSH_HOST:-192.168.1.200}"
 TERRAFORM_HASH=""
 
 IS_WINDOWS=false
@@ -833,7 +833,7 @@ get_node_ip() {
     [[ ${#PROXMOX_NODE_IPS[@]} -gt 0 ]] && {
         echo "${PROXMOX_NODE_IPS[$node_name]:-$node_name}"
     } || {
-        [[ "$node_name" == "pve1" ]] && echo "${TF_PROXMOX_SSH_HOST:-192.168.1.233}" || echo "$node_name"
+        [[ "$node_name" == "pve1" ]] && echo "${TF_PROXMOX_SSH_HOST}" || echo "$node_name"
     }
 }
 
