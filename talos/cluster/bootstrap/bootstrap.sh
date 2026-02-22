@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.18.1"
+readonly VERSION="3.19.1"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-CLUSTER_NAME="${CLUSTER_NAME:-cluster1-test}"
+CLUSTER_NAME="${CLUSTER_NAME:-cluster}"
 CLUSTER_DIR="${SCRIPT_DIR}/clusters/${CLUSTER_NAME}"
 NODES_DIR="${CLUSTER_DIR}/nodes"
 SECRETS_DIR="${CLUSTER_DIR}/secrets"
@@ -949,6 +949,42 @@ load_proxmox_tokens_from_terraform() {
         log_job_debug "Proxmox API token configured: ${PROXMOX_TOKEN_ID}"
     else
         log_job_debug "No Proxmox API token found, will use SSH fallback"
+    fi
+}
+
+load_cluster_name_from_terraform() {
+    log_job_trace "load_cluster_name_from_terraform: Checking for cluster_name in $TERRAFORM_TFVARS"
+    [[ ! -f "$TERRAFORM_TFVARS" ]] && {
+        log_detail_debug "Terraform file not found, using default cluster name: $CLUSTER_NAME"
+        return 0
+    }
+    local tf_cluster_name
+    tf_cluster_name=$(grep -E '^cluster_name[[:space:]]*=' "$TERRAFORM_TFVARS" 2>/dev/null | head -1 | sed -E 's/.*=[[:space:]]*"([^"]+)".*/\1/')
+    if [[ -n "$tf_cluster_name" ]]; then
+        if [[ "$tf_cluster_name" != "$CLUSTER_NAME" ]]; then
+            log_step_info "Loaded cluster_name from terraform.tfvars: $tf_cluster_name"
+            log_state_change "CLUSTER_NAME" "$CLUSTER_NAME" "$tf_cluster_name"
+            CLUSTER_NAME="$tf_cluster_name"
+            CLUSTER_DIR="${SCRIPT_DIR}/clusters/${CLUSTER_NAME}"
+            NODES_DIR="${CLUSTER_DIR}/nodes"
+            SECRETS_DIR="${CLUSTER_DIR}/secrets"
+            STATE_DIR="${CLUSTER_DIR}/state"
+            CHECKSUM_DIR="${NODES_DIR}/.checksums"
+            KUBECONFIG_PATH="${HOME}/.kube/config-${CLUSTER_NAME}"
+            SECRETS_FILE="${SECRETS_DIR}/secrets.yaml"
+            STATE_FILE="${STATE_DIR}/bootstrap-state.json"
+            TALOSCONFIG="${SECRETS_DIR}/talosconfig"
+            if [[ "$CONTROL_PLANE_ENDPOINT" == "${CLUSTER_NAME}.jdwkube.com" ]]; then
+                CONTROL_PLANE_ENDPOINT="${CLUSTER_NAME}.jdwkube.com"
+            fi
+            log_detail_debug "Updated paths for cluster '$CLUSTER_NAME':"
+            log_detail_debug "  CLUSTER_DIR: $CLUSTER_DIR"
+            log_detail_debug "  KUBECONFIG_PATH: $KUBECONFIG_PATH"
+        else
+            log_detail_debug "Cluster name from terraform.tfvars matches current: $CLUSTER_NAME"
+        fi
+    else
+        log_detail_debug "No cluster_name found in terraform.tfvars, using: $CLUSTER_NAME"
     fi
 }
 
@@ -2629,10 +2665,11 @@ EOFCFG
 setup_environment() {
     log_stage_info "Environment Setup"
     log_stage_trace "setup_environment: Starting environment setup"
-    init_directories
     detect_environment
     check_prerequisites
     load_proxmox_tokens_from_terraform
+    load_cluster_name_from_terraform
+    init_directories
     load_desired_state || true
     load_deployed_state
     log_stage_trace "setup_environment: Completed"
