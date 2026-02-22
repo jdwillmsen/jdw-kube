@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.16.7"
+readonly VERSION="3.17.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster1-test}"
@@ -86,7 +86,7 @@ TERRAFORM_HASH=""
 IS_WINDOWS=false
 SSH_OPTS=""
 PING_CMD=""
-HOSTS_FILE=""
+HOSTS_FILE="${HOSTS_FILE:-/etc/hosts}"
 
 AUTO_APPROVE="${AUTO_APPROVE:-false}"
 DRY_RUN="${DRY_RUN:-false}"
@@ -3059,21 +3059,78 @@ configure_talosctl_endpoints() {
     export TALOSCONFIG
 }
 
+ensure_control_plane_endpoint_resolves() {
+    log_step_info "Ensuring control plane endpoint $CONTROL_PLANE_ENDPOINT resolves to HAProxy IP $HAPROXY_IP"
+    log_step_trace "ensure_control_plane_endpoint_resolves: Checking DNS resolution for $CONTROL_PLANE_ENDPOINT"
+    if [[ "$CONTROL_PLANE_ENDPOINT" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        log_step_info "Control plane endpoint is an IP address, skipping DNS resolution check"
+        return 0
+    fi
+    if getent hosts "$CONTROL_PLANE_ENDPOINT" &>/dev/null; then
+        local resolved_ip
+        resolved_ip=$(getent hosts "$CONTROL_PLANE_ENDPOINT" | awk '{ print $1 }' | head -n 1)
+        if [[ "$resolved_ip" == "$HAPROXY_IP" ]]; then
+            log_step_info "Control plane endpoint $CONTROL_PLANE_ENDPOINT correctly resolves to HAProxy IP $HAPROXY_IP"
+            return 0
+        else
+            log_step_warn "Control plane endpoint $CONTROL_PLANE_ENDPOINT resolves to $resolved_ip instead of HAProxy IP $HAPROXY_IP"
+            log_step_warn "Please ensure that $CONTROL_PLANE_ENDPOINT resolves to $HAPROXY_IP (e.g. by adding to /etc/hosts or configuring DNS)"
+        fi
+    fi
+    log_step_info "Adding entry to hosts file $HOSTS_FILE: $HAPROXY_IP $CONTROL_PLANE_ENDPOINT"
+    if [[ -w "$HOSTS_FILE" ]] || [[ -w "$(dirname "$HOSTS_FILE")" ]]; then
+        if grep -q "$CONTROL_PLANE_ENDPOINT" "$HOSTS_FILE" 2>/dev/null; then
+            sed -i "s/^.*${CONTROL_PLANE_ENDPOINT}.*$/${HAPROXY_IP} ${CONTROL_PLANE_ENDPOINT}/" "$HOSTS_FILE"
+            log_step_info "Updated existing entry for $CONTROL_PLANE_ENDPOINT in hosts file to IP $HAPROXY_IP"
+        else
+            echo "$HAPROXY_IP $CONTROL_PLANE_ENDPOINT" >> "$HOSTS_FILE"
+            log_step_info "Added new entry to hosts file: $HAPROXY_IP $CONTROL_PLANE_ENDPOINT"
+        fi
+    elif command -v sudo &>/dev/null; then
+        if grep -q "$CONTROL_PLANE_ENDPOINT" "$HOSTS_FILE" 2>/dev/null; then
+            sudo sed -i "s/^.*${CONTROL_PLANE_ENDPOINT}.*$/${HAPROXY_IP} ${CONTROL_PLANE_ENDPOINT}/" "$HOSTS_FILE"
+            log_step_info "Updated existing entry for $CONTROL_PLANE_ENDPOINT in hosts file to IP $HAPROXY_IP"
+        else
+            echo "$HAPROXY_IP $CONTROL_PLANE_ENDPOINT" | sudo tee -a "$HOSTS_FILE" > /dev/null
+            log_step_info "Added new entry to hosts file: $HAPROXY_IP $CONTROL_PLANE_ENDPOINT"
+        fi
+    else
+        log_step_warn "Cannot write to hosts file $HOSTS_FILE and sudo is not available. Please add the following entry manually:"
+        log_step_warn "  $HAPROXY_IP $CONTROL_PLANE_ENDPOINT"
+        return 1
+    fi
+    if getent hosts "$CONTROL_PLANE_ENDPOINT" &>/dev/null; then
+        log_step_info "Control plane endpoint $CONTROL_PLANE_ENDPOINT now resolves to HAProxy IP $HAPROXY_IP"
+    else
+        log_step_warn "Failed to verify that control plane endpoint $CONTROL_PLANE_ENDPOINT resolves to HAProxy IP $HAPROXY_IP after update. Please check your hosts file or DNS configuration."
+        return 1
+    fi
+    return 0
+}
+
 verify_kubernetes_access() {
     log_step_info "Verifying Kubernetes API access..."
     log_step_trace "verify_kubernetes_access: Testing API connectivity"
+    ensure_control_plane_endpoint_resolves
     local kube_args=()
     [[ -f "$KUBECONFIG_PATH" ]] && kube_args+=(--kubeconfig "$KUBECONFIG_PATH")
-    if kubectl "${kube_args[@]}" cluster-info &>/dev/null; then
-        log_step_info "Kubernetes API is accessible"
-        log_step_info "Cluster info:"
-        run_command kubectl "${kube_args[@]}" cluster-info 2>/dev/null | head -5 || true
-        log_step_info "Node status:"
-        run_command kubectl "${kube_args[@]}" get nodes -o wide 2>/dev/null || log_step_warn "Could not retrieve node list (may still be joining)"
-    else
-        log_step_warn "Kubernetes API not yet ready (nodes may still be joining)"
-        log_step_info "Try: kubectl --kubeconfig $KUBECONFIG_PATH cluster-info"
-    fi
+    local max_attempts=$((API_READY_WAIT / 5))
+    local attempt=1
+    while [[ $attempt -le $max_attempts ]]; do
+        if kubectl "${kube_args[@]}" cluster-info &>/dev/null; then
+            log_step_info "Kubernetes API is accessible"
+            log_step_info "Cluster info:"
+            run_command kubectl "${kube_args[@]}" cluster-info 2>/dev/null | head -5 || true
+            log_step_info "Node status:"
+            run_command kubectl "${kube_args[@]}" get nodes -o wide 2>/dev/null || log_step_warn "Failed to get node status, but API is accessible"
+            return 0
+        else
+            log_step_debug "Attempt $attempt/$max_attempts: Kubernetes API not accessible yet, retrying..."
+            sleep 5
+            attempt=$((attempt + 1))
+        fi
+    done
+    log_step_error "Failed to access Kubernetes API after $API_READY_WAIT seconds"
 }
 
 verify_cluster() {
@@ -3083,9 +3140,23 @@ verify_cluster() {
         log_step_warn "No kubeconfig found, skipping verification"
         return 0
     }
+    ensure_control_plane_endpoint_resolves
     log_step_info "Checking Kubernetes API"
-    run_command kubectl --kubeconfig "$KUBECONFIG_PATH" cluster-info &>/dev/null && log_step_info "Kubernetes API is ready" || {
-        log_step_warn "Kubernetes API not yet ready"
+    local max_attempts=$((API_READY_WAIT / 5))
+    local attempt=1
+    local api_ready=false
+    while [[ $attempt -le $max_attempts ]]; do
+        if kubectl --kubeconfig "$KUBECONFIG_PATH" cluster-info &>/dev/null; then
+            log_step_info "Kubernetes API is ready"
+            api_ready=true
+            break
+        fi
+        log_step_debug "Attempt $attempt/$max_attempts: Kubernetes API not ready yet, retrying..."
+        sleep 5
+        attempt=$((attempt + 1))
+    done
+    [[ "$api_ready" == "false" ]] && {
+        log_step_error "Kubernetes API did not become ready after $API_READY_WAIT seconds"
         return 0
     }
     log_step_info "Node status:"
