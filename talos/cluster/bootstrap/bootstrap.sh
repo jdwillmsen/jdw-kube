@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.17.1"
+readonly VERSION="3.18.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster1-test}"
@@ -3066,32 +3066,41 @@ ensure_control_plane_endpoint_resolves() {
         log_step_info "Control plane endpoint is an IP address, skipping DNS resolution check"
         return 0
     fi
-    if getent hosts "$CONTROL_PLANE_ENDPOINT" &>/dev/null; then
-        local resolved_ip
-        resolved_ip=$(getent hosts "$CONTROL_PLANE_ENDPOINT" | awk '{ print $1 }' | head -n 1)
+    local resolved_ip=""
+    if command -v getent &>/dev/null; then
+        resolved_ip=$(getent hosts "$CONTROL_PLANE_ENDPOINT" 2>/dev/null | awk '{ print $1 }' | head -n 1)
+    fi
+    if [[ -z "$resolved_ip" ]]; then
+        log_step_debug "getent not available, using ping-based resolution"
+        local ping_output
+        if ping_output=$(ping -c 1 -W 2 "$CONTROL_PLANE_ENDPOINT" 2>/dev/null); then
+            resolved_ip=$(echo "$ping_output" | grep -oE '\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)' | head -1 | tr -d '()')
+        elif ping_output=$(ping -n 1 -w 2 "$CONTROL_PLANE_ENDPOINT" 2>/dev/null); then
+            resolved_ip=$(echo "$ping_output" | grep -oE 'Reply from [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 | awk '{print $3}' | tr -d ':')
+        fi
+    fi
+    if [[ -n "$resolved_ip" ]]; then
         if [[ "$resolved_ip" == "$HAPROXY_IP" ]]; then
             log_step_info "Control plane endpoint $CONTROL_PLANE_ENDPOINT correctly resolves to HAProxy IP $HAPROXY_IP"
             return 0
         else
             log_step_warn "Control plane endpoint $CONTROL_PLANE_ENDPOINT resolves to $resolved_ip instead of HAProxy IP $HAPROXY_IP"
-            log_step_warn "Please ensure that $CONTROL_PLANE_ENDPOINT resolves to $HAPROXY_IP (e.g. by adding to /etc/hosts or configuring DNS)"
         fi
+    else
+        log_step_warn "Could not resolve $CONTROL_PLANE_ENDPOINT to an IP address"
     fi
-    local escaped_endpoint=$(printf '%s\n' "$CONTROL_PLANE_ENDPOINT" | sed 's/[]\/$*.^|[]/\\&/g')
     log_step_info "Adding entry to hosts file $HOSTS_FILE: $HAPROXY_IP $CONTROL_PLANE_ENDPOINT"
     if [[ -w "$HOSTS_FILE" ]] || [[ -w "$(dirname "$HOSTS_FILE")" ]]; then
-        if grep -qF "$CONTROL_PLANE_ENDPOINT" "$HOSTS_FILE" 2>/dev/null; then
-            sed -i "/[[:space:]]${escaped_endpoint}\$/d" "$HOSTS_FILE"
-            echo "$HAPROXY_IP $CONTROL_PLANE_ENDPOINT" >> "$HOSTS_FILE"
+        if grep -q "$CONTROL_PLANE_ENDPOINT" "$HOSTS_FILE" 2>/dev/null; then
+            sed -i "s/^.*${CONTROL_PLANE_ENDPOINT}.*$/${HAPROXY_IP} ${CONTROL_PLANE_ENDPOINT}/" "$HOSTS_FILE"
             log_step_info "Updated existing entry for $CONTROL_PLANE_ENDPOINT in hosts file to IP $HAPROXY_IP"
         else
             echo "$HAPROXY_IP $CONTROL_PLANE_ENDPOINT" >> "$HOSTS_FILE"
             log_step_info "Added new entry to hosts file: $HAPROXY_IP $CONTROL_PLANE_ENDPOINT"
         fi
     elif command -v sudo &>/dev/null; then
-        if grep -qF "$CONTROL_PLANE_ENDPOINT" "$HOSTS_FILE" 2>/dev/null; then
-            sed -i "/[[:space:]]${escaped_endpoint}\$/d" "$HOSTS_FILE"
-            echo "$HAPROXY_IP $CONTROL_PLANE_ENDPOINT" | sudo tee -a "$HOSTS_FILE" > /dev/null
+        if grep -q "$CONTROL_PLANE_ENDPOINT" "$HOSTS_FILE" 2>/dev/null; then
+            sudo sed -i "s/^.*${CONTROL_PLANE_ENDPOINT}.*$/${HAPROXY_IP} ${CONTROL_PLANE_ENDPOINT}/" "$HOSTS_FILE"
             log_step_info "Updated existing entry for $CONTROL_PLANE_ENDPOINT in hosts file to IP $HAPROXY_IP"
         else
             echo "$HAPROXY_IP $CONTROL_PLANE_ENDPOINT" | sudo tee -a "$HOSTS_FILE" > /dev/null
@@ -3102,18 +3111,22 @@ ensure_control_plane_endpoint_resolves() {
         log_step_warn "  $HAPROXY_IP $CONTROL_PLANE_ENDPOINT"
         return 1
     fi
-    if getent hosts "$CONTROL_PLANE_ENDPOINT" &>/dev/null; then
-        local verified_ip=$(getent hosts "$CONTROL_PLANE_ENDPOINT" | awk '{ print $1 }' | head -n 1)
-        if [[ "$verified_ip" == "$HAPROXY_IP" ]]; then
-          log_step_info "Verified that control plane endpoint $CONTROL_PLANE_ENDPOINT now resolves to HAProxy IP $HAPROXY_IP"
-        else
-          log_step_warn "After update, control plane endpoint $CONTROL_PLANE_ENDPOINT resolves to $verified_ip instead of HAProxy IP $HAPROXY_IP. Please check your hosts file or DNS configuration."
-          return 1
-        fi
-    else
-        log_step_warn "Failed to verify that control plane endpoint $CONTROL_PLANE_ENDPOINT resolves after update. Please check your hosts file or DNS configuration."
-        return 1
+    log_step_debug "Re-verifying resolution after hosts file update..."
+    sleep 1
+    local verify_ip=""
+    local verify_ping
+    if verify_ping=$(ping -c 1 -W 2 "$CONTROL_PLANE_ENDPOINT" 2>/dev/null); then
+        verify_ip=$(echo "$verify_ping" | grep -oE '\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)' | head -1 | tr -d '()')
+    elif verify_ping=$(ping -n 1 -w 2 "$CONTROL_PLANE_ENDPOINT" 2>/dev/null); then
+        verify_ip=$(echo "$verify_ping" | grep -oE 'Reply from [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 | awk '{print $3}' | tr -d ':')
     fi
+    if [[ -n "$verify_ip" && "$verify_ip" == "$HAPROXY_IP" ]]; then
+        log_step_info "Control plane endpoint $CONTROL_PLANE_ENDPOINT now resolves to HAProxy IP $HAPROXY_IP"
+        return 0
+    fi
+    log_step_warn "Failed to verify that control plane endpoint $CONTROL_PLANE_ENDPOINT resolves after update."
+    log_step_warn "On Windows/Git Bash, hosts file changes may require a new shell session to take effect."
+    log_step_warn "Please verify manually: ping $CONTROL_PLANE_ENDPOINT should show $HAPROXY_IP"
     return 0
 }
 
@@ -3150,10 +3163,20 @@ verify_cluster() {
         return 0
     }
     ensure_control_plane_endpoint_resolves
+    [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG
     log_step_info "Checking Kubernetes API"
     local max_attempts=$((API_READY_WAIT / 5))
     local attempt=1
     local api_ready=false
+    local bootstrap_node=""
+    for vmid in "${!DEPLOYED_CP_IPS[@]}"; do
+        local ip="${DEPLOYED_CP_IPS[$vmid]}"
+        if run_command talosctl version --nodes "$ip" --endpoints "$ip" 2>/dev/null; then
+            bootstrap_node="$ip"
+            log_step_debug "Using control plane $ip (VMID $vmid) for talosctl commands"
+            break
+        fi
+    done
     while [[ $attempt -le $max_attempts ]]; do
         if kubectl --kubeconfig "$KUBECONFIG_PATH" cluster-info &>/dev/null; then
             log_step_info "Kubernetes API is ready"
@@ -3169,9 +3192,21 @@ verify_cluster() {
         return 0
     }
     log_step_info "Node status:"
-    run_command kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null || true
+    if run_command kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide 2>/dev/null; then
+        echo "$LAST_COMMAND_OUTPUT"
+    else
+        log_step_warn "Failed to get node status"
+    fi
     log_step_info "etcd members:"
-    run_command talosctl etcd members 2>/dev/null || true
+    if [[ -n "$bootstrap_node" ]]; then
+        if run_command talosctl etcd members --nodes "$bootstrap_node" --endpoints "$bootstrap_node" 2>/dev/null; then
+            echo "$LAST_COMMAND_OUTPUT"
+        else
+            log_step_warn "Failed to get etcd members (command failed)"
+        fi
+    else
+        log_step_warn "No responsive control plane found for etcd check"
+    fi
     log_job_trace "verify_cluster: Verification completed"
 }
 
