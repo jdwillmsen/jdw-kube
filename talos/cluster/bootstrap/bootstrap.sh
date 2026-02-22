@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.16.4"
+readonly VERSION="3.16.5"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster1-test}"
@@ -882,7 +882,7 @@ load_desired_state() {
     if [[ -n "${ALL_LOGS_FILE:-}" ]]; then
         {
             echo "[$(date "$LOG_TIMESTAMP_FORMAT")] [TERRAFORM-PREVIEW]"
-            grep -E '^(proxmox_|talos_iso|control_plane|cluster|endpoint)[[:space:]]*=' "$TERRAFORM_TFVARS" 2>/dev/null | head -20 || true
+            grep -E '^(proxmox_|talos_|storage_pool)[[:space:]]*=' "$TERRAFORM_TFVARS" 2>/dev/null | head -20 || true
             echo ""
             echo "# Array configurations detected:"
             grep -E '^(talos_control_configuration|talos_worker_configuration)[[:space:]]*=' "$TERRAFORM_TFVARS" 2>/dev/null || true
@@ -3351,8 +3351,25 @@ confirm_proceed() {
 
 show_help() {
     local help_text
-    read -r -d '' help_text <<'EOF' || true
-Usage: $0 {bootstrap|reconcile|status|reset|help} [options]
+    # Build dynamic defaults section
+    local env_defaults="Environment Variables (Current Defaults):
+  CLUSTER_NAME              Cluster name (default: ${CLUSTER_NAME})
+  TERRAFORM_TFVARS          Path to terraform.tfvars (default: ${TERRAFORM_TFVARS})
+  CONTROL_PLANE_ENDPOINT    DNS endpoint (default: ${CONTROL_PLANE_ENDPOINT})
+  HAPROXY_IP                HAProxy IP (default: ${HAPROXY_IP})
+  KUBERNETES_VERSION        K8s version (default: ${KUBERNETES_VERSION})
+  TALOS_VERSION             Talos version (default: ${TALOS_VERSION})
+  INSTALLER_IMAGE           Talos installer image (default: ${INSTALLER_IMAGE})
+  DEFAULT_NETWORK_INTERFACE Network interface (default: ${DEFAULT_NETWORK_INTERFACE})
+  DEFAULT_DISK              Install disk (default: ${DEFAULT_DISK})
+  LOG_LEVEL                 Log level (default: ${LOG_LEVEL})
+  AUTO_APPROVE              Skip confirmations (default: ${AUTO_APPROVE})
+  DRY_RUN                   Simulate only (default: ${DRY_RUN})
+  SKIP_PREFLIGHT            Skip connectivity checks (default: ${SKIP_PREFLIGHT})
+  FORCE_RECONFIGURE         Force config regeneration (default: ${FORCE_RECONFIGURE})"
+
+    read -r -d '' help_text <<EOF || true
+Usage: \$(basename "\$0") {bootstrap|reconcile|status|reset|help} [options]
 
 Commands:
   bootstrap    Full bootstrap with reconciliation (initial deployment)
@@ -3374,28 +3391,21 @@ Options:
   Combined short flags are supported: -pas is equivalent to -p -a -s
   Note: -l requires an argument, so place it last in combined flags: -pasl DEBUG
 
-Environment Variables:
-  CLUSTER_NAME              Cluster name (default: proxmox-talos-test)
-  TERRAFORM_TFVARS          Path to terraform.tfvars (required)
-  CONTROL_PLANE_ENDPOINT    DNS endpoint (default: $CLUSTER_NAME.jdwkube.com)
-  HAPROXY_IP                HAProxy IP (default: 192.168.1.237)
-  KUBERNETES_VERSION        K8s version (default: v1.35.0)
-  TALOS_VERSION             Talos version (default: v1.12.3)
-  LOG_LEVEL                 Log level: FATAL, ERROR, WARN, INFO, DEBUG, TRACE
+${env_defaults}
 
 Examples:
-  $0 bootstrap                    # Initial deployment
-  $0 reconcile --plan             # Preview changes from terraform.tfvars
-  $0 reconcile -p                 # Same as above using short flag
-  $0 reconcile -pas               # Combined: plan + auto-approve + skip-preflight
-  $0 reconcile -p -a -s           # Same as above, separate flags
-  $0 reconcile --auto-approve     # Apply changes without prompting
-  $0 status                       # Show current cluster state
-  $0 status -l DEBUG              # Show status with debug logging
-  LOG_LEVEL=TRACE $0 status       # Show detailed trace logging
+  \$(basename "\$0") bootstrap                    # Initial deployment
+  \$(basename "\$0") reconcile --plan             # Preview changes from terraform.tfvars
+  \$(basename "\$0") reconcile -p                 # Same as above using short flag
+  \$(basename "\$0") reconcile -pas               # Combined: plan + auto-approve + skip-preflight
+  \$(basename "\$0") reconcile -p -a -s           # Same as above, separate flags
+  \$(basename "\$0") reconcile --auto-approve     # Apply changes without prompting
+  \$(basename "\$0") status                       # Show current cluster state
+  \$(basename "\$0") status -l DEBUG              # Show status with debug logging
+  LOG_LEVEL=TRACE \$(basename "\$0") status       # Show detailed trace logging
 
 Directory Structure:
-  clusters/${CLUSTER_NAME}/
+  clusters/\${CLUSTER_NAME}/
     ├── nodes/          # Generated node configs (VMID-based naming)
     │   └── .checksums/ # Config hashes for drift detection
     ├── secrets/        # Sensitive files (persistent)
@@ -3407,6 +3417,8 @@ Log Files:
     ├── structured.log  # Clean text output (no colors)
     ├── audit.log       # Complete command audit trail
     └── SUMMARY.txt     # Run summary and statistics
+
+Version: ${VERSION}
 EOF
     log_output "$help_text" "false" "false"
 }
