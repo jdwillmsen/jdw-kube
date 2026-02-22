@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.19.2"
+readonly VERSION="3.19.3"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster}"
@@ -3058,19 +3058,17 @@ update_kubeconfig() {
             actual_cluster_name="$CLUSTER_NAME"
         fi
         log_step_debug "Detected cluster name in kubeconfig: $actual_cluster_name"
-        if ! KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$actual_cluster_name" --server="$correct_server" 2>/dev/null; then
+        local effective_cluster_name="$actual_cluster_name"
+        local context_name="$effective_cluster_name"
+        local effective_kubeconfig_path="${HOME}/.kube/config-${effective_cluster_name}"
+        if ! KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$effective_cluster_name" --server="$correct_server" 2>/dev/null; then
           sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
           log_step_debug "Used sed fallback to update server URL in kubeconfig"
         fi
         local actual_context_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.contexts[0].name}' 2>/dev/null || echo "")
-        local context_name="${CLUSTER_NAME}"
         if [[ -n "$actual_context_name" && "$actual_context_name" != "$context_name" ]]; then
             log_step_debug "Renaming kubeconfig context from $actual_context_name to $context_name"
             KUBECONFIG="$temp_kubeconfig" kubectl config rename-context "$actual_context_name" "$context_name" 2>/dev/null || true
-        fi
-        if [[ "$actual_cluster_name" != "$CLUSTER_NAME" ]]; then
-            log_step_debug "Renaming kubeconfig cluster from $actual_cluster_name to $CLUSTER_NAME"
-            sed -i "s|cluster: $actual_cluster_name|cluster: $CLUSTER_NAME|g; s|name: $actual_cluster_name|name: $CLUSTER_NAME|g" "$temp_kubeconfig"
         fi
         if [[ -f "${HOME}/.kube/config" ]]; then
             log_step_info "Merging with existing kubeconfig at ${HOME}/.kube/config"
@@ -3083,19 +3081,20 @@ update_kubeconfig() {
                 log_step_info "Backed up existing kubeconfig to $backup_name"
                 mv "$merged_config" "${HOME}/.kube/config"
                 chmod 600 "${HOME}/.kube/config"
-                cp "${HOME}/.kube/config" "$KUBECONFIG_PATH"
+                cp "${HOME}/.kube/config" "$effective_kubeconfig_path"
             else
                 log_step_warn "Merge failed, using cluster-specific config only"
-                mv "$temp_kubeconfig" "$KUBECONFIG_PATH"
+                mv "$temp_kubeconfig" "$effective_kubeconfig_path"
             fi
             rm -f "$merged_config"
         else
             mv "$temp_kubeconfig" "${HOME}/.kube/config"
             chmod 600 "${HOME}/.kube/config"
-            cp "${HOME}/.kube/config" "$KUBECONFIG_PATH"
+            cp "${HOME}/.kube/config" "$effective_kubeconfig_path"
         fi
         rm -f "$temp_kubeconfig"
-        log_step_info "Kubeconfig saved and merged successfully"
+        KUBECONFIG_PATH="$effective_kubeconfig_path"
+        log_step_info "Kubeconfig saved to $effective_kubeconfig_path"
         log_step_info "Available contexts:"
         run_command kubectl --kubeconfig "$KUBECONFIG_PATH" config get-contexts 2>/dev/null || true
         local current_context=$(run_command kubectl --kubeconfig "$KUBECONFIG_PATH" config current-context 2>/dev/null || echo "")
