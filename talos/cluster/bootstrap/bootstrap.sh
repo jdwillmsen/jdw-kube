@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.16.5"
+readonly VERSION="3.16.7"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster1-test}"
@@ -2786,7 +2786,7 @@ EOF
 detect_environment() {
     log_job_info "Detect Platform"
     log_job_trace "detect_environment: Detecting platform"
-    if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$MSYSTEM" == "MINGW"* ]] || [[ -n "${WINDIR:-}" ]] || [[ -n "${MINGW_PREFIX:-}" ]] || [[ "$TERM" == "xterm-256color" && -n "${MSYSTEM:-}" ]]; then
+    if [[ "${OSTYPE:-}" == "msys" ]] || [[ "${OSTYPE:-}" == "cygwin" ]] || [[ "${MSYSTEM:-}" == "MINGW"* ]] || [[ -n "${WINDIR:-}" ]] || [[ -n "${MINGW_PREFIX:-}" ]] || [[ "${TERM:-}" == "xterm-256color" && -n "${MSYSTEM:-}" ]]; then
         IS_WINDOWS=true
         SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
         PING_CMD="ping -n 1 -w 2000"
@@ -3351,7 +3351,6 @@ confirm_proceed() {
 
 show_help() {
     local help_text
-    # Build dynamic defaults section
     local env_defaults="Environment Variables (Current Defaults):
   CLUSTER_NAME              Cluster name (default: ${CLUSTER_NAME})
   TERRAFORM_TFVARS          Path to terraform.tfvars (default: ${TERRAFORM_TFVARS})
@@ -3367,7 +3366,6 @@ show_help() {
   DRY_RUN                   Simulate only (default: ${DRY_RUN})
   SKIP_PREFLIGHT            Skip connectivity checks (default: ${SKIP_PREFLIGHT})
   FORCE_RECONFIGURE         Force config regeneration (default: ${FORCE_RECONFIGURE})"
-
     read -r -d '' help_text <<EOF || true
 Usage: \$(basename "\$0") {bootstrap|reconcile|status|reset|help} [options]
 
