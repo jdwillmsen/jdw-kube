@@ -284,7 +284,7 @@ log() {
         STEP)   hier_num=3 ;;
         DETAIL) hier_num=4 ;;
     esac
-    [[ ${SEV_LEVELS[$severity]} -gt ${SEV_LEVELS[$normalized_log_level]} ]] && return
+    [[ ${SEV_LEVELS[$severity]} -gt ${SEV_LEVELS[$normalized_log_level]} ]] && return 0
     [[ $hier_num -gt $LOG_DEPTH ]] && return 0
     local output=""
     [[ "$LOG_TIMESTAMPS" == "1" ]] && output+="${C_TIMESTAMP}[$(date '+%H:%M:%S')]${C_RESET} "
@@ -976,6 +976,7 @@ load_cluster_name_from_terraform() {
             log_detail_debug "Updated paths for cluster '$CLUSTER_NAME':"
             log_detail_debug "  CLUSTER_DIR: $CLUSTER_DIR"
             log_detail_debug "  KUBECONFIG_PATH: $KUBECONFIG_PATH"
+            log_detail_debug "  TALOSCONFIG: $TALOSCONFIG"
         else
             log_detail_debug "Cluster name from terraform.tfvars matches current: $CLUSTER_NAME"
         fi
@@ -3521,6 +3522,7 @@ run_reset_plan() {
     else
         log_step_warn "Auto-approve enabled, skipping confirmation for reset"
     fi
+    load_cluster_name_from_terraform
     [[ -d "$CLUSTER_DIR" ]] && {
         run_command rm -rf "${CLUSTER_DIR:?}"
         log_step_info "Removed cluster directory: $CLUSTER_DIR"
