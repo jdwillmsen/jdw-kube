@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.20.0"
+readonly VERSION="3.21.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster}"
@@ -219,30 +219,28 @@ print_box_wrapped() {
     local prefix_color="${3:-$C_LABEL}"
     local text_color="${4:-$C_VALUE}"
     local prefix_len=${#prefix}
-    local max_content=61
-    local available=$((max_content - prefix_len - 2))
+    local max_content=59
+    local available=$((max_content - prefix_len))
     [[ $available -lt 10 ]] && available=10
     _print_wrapped_line() {
         local p="$1"
         local t="$2"
         print_box_line "  ${prefix_color}${p}${text_color}${t}${C_RESET}"
     }
-    if [[ ${#text} -le $available ]]; then
-        _print_wrapped_line "$prefix" "$text"
+    if [[ -z "$text" ]]; then
+        _print_wrapped_line "$prefix" ""
         return 0
     fi
-    local current_pos=0
-    local total_len=${#text}
-    local is_first_line=true
-    local indent_spaces=""
-    for ((i=0; i<prefix_len; i++)); do indent_spaces+=" "; done
-    while [[ $current_pos -lt $total_len ]]; do
-        local remaining=$((total_len - current_pos))
-        local chunk_len=$((available < remaining ? available : remaining))
-        local chunk="${text:$current_pos:$chunk_len}"
-        if [[ $((current_pos + chunk_len)) -lt $total_len ]]; then
-            local next_char="${text:$((current_pos + chunk_len)):1}"
-            if [[ "$next_char" != " " ]]; then
+    local is_first=true
+    local IFS=$'\n'
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        local current_pos=0
+        local total_len=${#line}
+        while [[ $current_pos -lt $total_len ]]; do
+            local remaining=$((total_len - current_pos))
+            local chunk_len=$((available < remaining ? available : remaining))
+            local chunk="${line:$current_pos:$chunk_len}"
+            if [[ $((current_pos + chunk_len)) -lt $total_len ]]; then
                 local last_space=-1
                 for ((i=chunk_len-1; i>=0; i--)); do
                     if [[ "${chunk:$i:1}" == " " ]]; then
@@ -252,22 +250,22 @@ print_box_wrapped() {
                 done
                 if [[ $last_space -gt 0 ]]; then
                     chunk_len=$last_space
-                    chunk="${text:$current_pos:$chunk_len}"
+                    chunk="${line:$current_pos:$chunk_len}"
                 fi
             fi
-        fi
-        chunk="${chunk% }"
-        if [[ "$is_first_line" == true ]]; then
-            _print_wrapped_line "$prefix" "$chunk"
-            is_first_line=false
-        else
-            _print_wrapped_line "$indent_spaces" "$chunk"
-        fi
-        current_pos=$((current_pos + chunk_len))
-        while [[ $current_pos -lt $total_len && "${text:$current_pos:1}" == " " ]]; do
-            current_pos=$((current_pos + 1))
+            chunk="${chunk% }"
+            if [[ "$is_first" == true ]]; then
+                _print_wrapped_line "$prefix" "$chunk"
+                is_first=false
+            else
+                _print_wrapped_line "" "$chunk"
+            fi
+            current_pos=$((current_pos + chunk_len))
+            while [[ $current_pos -lt $total_len && "${line:$current_pos:1}" == " " ]]; do
+                current_pos=$((current_pos + 1))
+            done
         done
-    done
+    done <<< "$text"
 }
 
 log() {
@@ -974,9 +972,7 @@ load_cluster_name_from_terraform() {
             SECRETS_FILE="${SECRETS_DIR}/secrets.yaml"
             STATE_FILE="${STATE_DIR}/bootstrap-state.json"
             TALOSCONFIG="${SECRETS_DIR}/talosconfig"
-            if [[ "$CONTROL_PLANE_ENDPOINT" == "${CLUSTER_NAME}.jdwkube.com" ]]; then
-                CONTROL_PLANE_ENDPOINT="${CLUSTER_NAME}.jdwkube.com"
-            fi
+            CONTROL_PLANE_ENDPOINT="${CLUSTER_NAME}.jdwkube.com"
             log_detail_debug "Updated paths for cluster '$CLUSTER_NAME':"
             log_detail_debug "  CLUSTER_DIR: $CLUSTER_DIR"
             log_detail_debug "  KUBECONFIG_PATH: $KUBECONFIG_PATH"
@@ -2821,23 +2817,23 @@ run_finalization() {
     if [[ -f "$KUBECONFIG_PATH" ]]; then
         local cluster_context
         cluster_context=$(kubectl --kubeconfig "$KUBECONFIG_PATH" config current-context 2>/dev/null || echo "$CLUSTER_NAME")
-        print_border top
         print_box_header "BOOTSTRAP SUCCESSFUL"
         print_box_pair "Cluster" "$CLUSTER_NAME"
         print_box_pair "Context" "$cluster_context"
-        print_box_pair "Kubeconfig" "$KUBECONFIG_PATH"
-        print_box_pair "Talos Endpoint" "$HAPROXY_IP"
+        print_box_wrapped "Kubeconfig: " "$KUBECONFIG_PATH" "$C_LABEL" "$C_VALUE"
+        print_box_pair "Talos Endpoint" "$HAPROXY_IP" "$C_LABEL" "$C_IP"
         print_border divider
         print_box_section "QUICK START COMMANDS"
-        print_box_item "" "export KUBECONFIG=$KUBECONFIG_PATH"
+        print_box_wrapped "" "   export KUBECONFIG=\"$KUBECONFIG_PATH\"" "$C_VALUE" "$C_VALUE"
         print_box_item "" "kubectl get nodes"
-        print_box_item "" "talosctl dashboard --endpoints $HAPROXY_IP"
-        print_box_item "" "talosctl etcd members --endpoints $HAPROXY_IP"
+        print_box_item "" "talosctl dashboard --endpoints ${C_IP}${HAPROXY_IP}${C_RESET}"
+        print_box_item "" "talosctl etcd members --endpoints ${C_IP}${HAPROXY_IP}${C_RESET}"
         print_border divider
         print_box_section "NEXT STEPS"
-        print_box_wrapped "" "1. Verify nodes are Ready: kubectl get nodes"
-        print_box_wrapped "" "2. Check etcd health: talosctl etcd members --endpoints $HAPROXY_IP"
-        print_box_wrapped "" "3. Deploy workloads: kubectl apply -f your-app.yaml"
+        print_box_item "" "1. Verify nodes are Ready: kubectl get nodes"
+        print_box_wrapped "" "   2. Check etcd health: talosctl health --endpoints" "$C_VALUE" "$C_VALUE"
+        print_box_wrapped "" "   192.168.1.199" "$C_IP" "$C_IP"
+        print_box_item "" "3. Deploy workloads: kubectl apply -f your-app.yaml"
         print_box_footer
         log_step_info "Cluster is ready for workloads"
     fi
@@ -3146,20 +3142,20 @@ update_kubeconfig() {
         local effective_cluster_name="$actual_cluster_name"
         local context_name="$effective_cluster_name"
         local effective_kubeconfig_path="${HOME}/.kube/config-${effective_cluster_name}"
-        if ! KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$effective_cluster_name" --server="$correct_server" 2>/dev/null; then
+        if ! KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$effective_cluster_name" --server="$correct_server" >/dev/null 2>&1; then
           sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
           log_step_debug "Used sed fallback to update server URL in kubeconfig"
         fi
         local actual_context_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.contexts[0].name}' 2>/dev/null || echo "")
         if [[ -n "$actual_context_name" && "$actual_context_name" != "$context_name" ]]; then
             log_step_debug "Renaming kubeconfig context from $actual_context_name to $context_name"
-            KUBECONFIG="$temp_kubeconfig" kubectl config rename-context "$actual_context_name" "$context_name" 2>/dev/null || true
+            KUBECONFIG="$temp_kubeconfig" kubectl config rename-context "$actual_context_name" "$context_name" >/dev/null 2>&1 || true
         fi
         if [[ -f "${HOME}/.kube/config" ]]; then
             log_step_info "Merging with existing kubeconfig at ${HOME}/.kube/config"
             local merged_config
             merged_config=$(mktemp)
-            KUBECONFIG="${HOME}/.kube/config:${temp_kubeconfig}" kubectl config view --flatten > "$merged_config"
+            KUBECONFIG="${HOME}/.kube/config:${temp_kubeconfig}" kubectl config view --flatten 2>/dev/null > "$merged_config"
             if [[ -s "$merged_config" ]]; then
                 local backup_name="${HOME}/.kube/config.backup.$(date +%Y%m%d_%H%M%S)"
                 cp "${HOME}/.kube/config" "$backup_name"
@@ -3181,11 +3177,11 @@ update_kubeconfig() {
         KUBECONFIG_PATH="$effective_kubeconfig_path"
         log_step_info "Kubeconfig saved to $effective_kubeconfig_path"
         log_step_info "Available contexts:"
-        run_command kubectl --kubeconfig "$KUBECONFIG_PATH" config get-contexts 2>/dev/null || true
-        local current_context=$(run_command kubectl --kubeconfig "$KUBECONFIG_PATH" config current-context 2>/dev/null || echo "")
+        KUBECONFIG="$KUBECONFIG_PATH" kubectl config get-contexts -o name 2>/dev/null | head -10 || true
+        local current_context=$(KUBECONFIG="$KUBECONFIG_PATH" kubectl config current-context 2>/dev/null || echo "")
         if [[ -z "$current_context" || "$current_context" != "$context_name" ]]; then
-            run_command kubectl --kubeconfig "$KUBECONFIG_PATH" config use-context "$context_name" 2>/dev/null || true
-            run_command kubectl config use-context "$context_name" 2>/dev/null || true
+            KUBECONFIG="$KUBECONFIG_PATH" kubectl config use-context "$context_name" >/dev/null 2>&1 || true
+            kubectl config use-context "$context_name" >/dev/null 2>&1 || true
             log_step_info "Set current context to: $context_name"
         fi
         configure_talosctl_endpoints "$bootstrap_node"
