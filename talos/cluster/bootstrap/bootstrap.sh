@@ -3090,7 +3090,7 @@ run_preflight_checks() {
 update_kubeconfig() {
     log_job_info "Update Kubeconfig"
     log_job_trace "update_kubeconfig: Starting kubeconfig update"
-    [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG
+    [[ -f "$TALOSCONFIG" ]] && export TALOSCONFIG && log_job_trace "update_kubeconfig: Using TALOSCONFIG at $TALOSCONFIG"
     local updated=0
     for vmid in "${!DEPLOYED_CP_IPS[@]}"; do
         local live_ip="${LIVE_NODE_IPS[$vmid]:-}"
@@ -3128,8 +3128,8 @@ update_kubeconfig() {
     }
     log_step_info "Retrieving kubeconfig from $bootstrap_node"
     run_command mkdir -p "$(dirname "$KUBECONFIG_PATH")"
-    local temp_kubeconfig
-    temp_kubeconfig=$(mktemp)
+    local temp_kubeconfig=$(mktemp)
+    log_step_debug "Fetching kubeconfig using talosctl from bootstrap node $bootstrap_node to temporary file $temp_kubeconfig"
     run_command talosctl kubeconfig "$temp_kubeconfig" --nodes "$bootstrap_node" --endpoints "$bootstrap_node" && {
         chmod 600 "$temp_kubeconfig"
         local correct_server="https://${CONTROL_PLANE_ENDPOINT}:6443"
@@ -3334,8 +3334,10 @@ verify_cluster() {
             break
         fi
     done
+    log_step_trace "verify_cluster: Using bootstrap node $bootstrap_node for API checks, max_attempts=$max_attempts, API_READY_WAIT=$API_READY_WAIT, kubeconfig=$KUBECONFIG_PATH"
     while [[ $attempt -le $max_attempts ]]; do
-        if kubectl --kubeconfig "$KUBECONFIG_PATH" cluster-info &>/dev/null; then
+        log_detail_trace "verify_cluster: Checking Kubernetes API readiness (attempt $attempt/$max_attempts)"
+        if run_command kubectl --kubeconfig "$KUBECONFIG_PATH" cluster-info &>/dev/null; then
             log_step_info "Kubernetes API is ready"
             api_ready=true
             break
@@ -3456,6 +3458,7 @@ run_reconcile_plan() {
 run_status_plan() {
     log_plan_info "Show Status"
     log_plan_trace "run_status_plan: Displaying cluster status"
+    load_cluster_name_from_terraform
     load_desired_state 2>/dev/null || {
         log_step_warn "Could not load desired state from terraform.tfvars"
         log_step_warn "Status will show deployed state only"
