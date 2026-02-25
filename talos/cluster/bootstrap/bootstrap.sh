@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.22.0"
+readonly VERSION="3.22.1"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster}"
@@ -1017,12 +1017,12 @@ parse_terraform_array() {
                 local temp_file
                 temp_file=$(mktemp)
                 echo "$current_block" > "$temp_file"
-                vmid=$(grep -E 'vmid[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | grep -oE '[0-9]+' 2>/dev/null) || vmid=""
-                name=$(grep -E 'vm_name[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | cut -d'"' -f2 2>/dev/null) || name=""
-                node=$(grep -E 'node_name[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | cut -d'"' -f2 2>/dev/null) || node=""
-                cpu=$(grep -E 'cpu_cores[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | grep -oE '[0-9]+' 2>/dev/null) || cpu=""
-                memory=$(grep -E 'memory[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | grep -oE '[0-9]+' 2>/dev/null) || memory=""
-                disk=$(grep -E 'disk_size[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | grep -oE '[0-9]+' 2>/dev/null) || disk=""
+                vmid=$(grep -E 'vmid[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | grep -oE '[0-9]+' 2>/dev/null | tr -d '\r') || vmid=""
+                name=$(grep -E 'vm_name[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | cut -d'"' -f2 2>/dev/null | tr -d '\r') || name=""
+                node=$(grep -E 'node_name[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | cut -d'"' -f2 2>/dev/null | tr -d '\r') || node=""
+                cpu=$(grep -E 'cpu_cores[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | grep -oE '[0-9]+' 2>/dev/null | tr -d '\r') || cpu=""
+                memory=$(grep -E 'memory[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | grep -oE '[0-9]+' 2>/dev/null | tr -d '\r') || memory=""
+                disk=$(grep -E 'disk_size[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | grep -oE '[0-9]+' 2>/dev/null | tr -d '\r') || disk=""
                 rm -f "$temp_file"
                 if [[ -n "$vmid" && -n "$name" ]]; then
                     local value="${name}|${node:-pve1}|${cpu:-4}|${memory:-4096}|${disk:-100}"
