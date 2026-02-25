@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.21.0"
+readonly VERSION="3.22.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster}"
@@ -1706,18 +1706,45 @@ remove_control_plane() {
         log_step_info "Removing from etcd..."
         local member_id=""
         if run_command timeout 15 talosctl etcd members --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip" 2>/dev/null; then
-            member_id=$(echo "$LAST_COMMAND_OUTPUT" | grep "$ip" | awk '{print $1}')
+            member_id=$(echo "$LAST_COMMAND_OUTPUT" | grep -E "https?://$ip:" | awk '{print $2}')
+            if [[ -n "$member_id" && "$member_id" =~ ^[0-9a-f]{16}$ ]]; then
+                log_step_debug "Found valid etcd member ID: $member_id for IP $ip"
+            else
+                log_step_warn "Could not find valid etcd member ID for IP $ip (got: ${member_id:-empty})"
+                member_id=""
+            fi
         fi
         if [[ -n "$member_id" ]]; then
             log_step_debug "Removing etcd member ID $member_id for IP $ip (VMID: $vmid) using surviving control plane IP $surviving_cp_ip"
             if run_command timeout 15 talosctl etcd remove-member --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip" "$member_id" 2>/dev/null; then
                 log_step_info "Successfully removed etcd member $member_id"
             else
-                log_step_warn "etcd remove failed (may already be removed)"
+                log_step_warn "etcd remove failed for member $member_id"
+                if run_command timeout 10 talosctl etcd members --nodes "$surviving_cp_ip" --endpoints "$surviving_cp_ip" 2>/dev/null; then
+                    if echo "$LAST_COMMAND_OUTPUT" | grep -q "$member_id"; then
+                        log_step_error "etcd member $member_id still exists after removal attempt"
+                    else
+                        log_step_info "etcd member $member_id no longer appears in member list (may have been removed)"
+                    fi
+                fi
             fi
         else
              log_step_warn "Could not find etcd member ID for IP $ip, skipping etcd removal"
              log_step_warn "You may need to manually remove the etcd member after VM deletion using: talosctl etcd remove-member <member-id>"
+        fi
+    fi
+    if [[ -n "$ip" ]]; then
+        log_step_info "Resetting Talos node $ip (removing from Talos cluster)..."
+        if run_command timeout 60 talosctl reset --nodes "$ip" --endpoints "$ip" --system-labels-to-wipe STATE --system-labels-to-wipe EPHEMERAL --graceful=false 2>/dev/null; then
+            log_step_info "Talos node $ip reset successfully"
+        else
+            log_step_warn "Graceful reset failed, attempting insecure reset..."
+            if run_command timeout 60 talosctl reset --nodes "$ip" --endpoints "$ip" --system-labels-to-wipe STATE --system-labels-to-wipe EPHEMERAL --graceful=false --insecure 2>/dev/null; then
+                log_step_info "Talos node $ip reset successfully (insecure mode)"
+            else
+                log_step_warn "Talos reset failed for $ip - node may need manual cleanup or may already be reset"
+                log_step_warn "Manual command: talosctl reset --nodes $ip --endpoints $ip --system-labels-to-wipe STATE --system-labels-to-wipe EPHEMERAL"
+            fi
         fi
     fi
     [[ -n "$node_name" ]] && {
@@ -1770,6 +1797,20 @@ remove_worker() {
         fi
         run_command kubectl --kubeconfig "$KUBECONFIG_PATH" delete node "$node_name" --timeout=30s 2>/dev/null || log_step_warn "Failed to delete node $node_name from Kubernetes (may already be removed)"
     }
+    if [[ -n "$ip" ]]; then
+        log_step_info "Resetting Talos worker node $ip (removing from Talos cluster)..."
+        if run_command timeout 60 talosctl reset --nodes "$ip" --endpoints "$ip" --system-labels-to-wipe STATE --system-labels-to-wipe EPHEMERAL --graceful=false 2>/dev/null; then
+            log_step_info "Talos worker node $ip reset successfully"
+        else
+            log_step_warn "Graceful reset failed, attempting insecure reset..."
+            if run_command timeout 60 talosctl reset --nodes "$ip" --endpoints "$ip" --system-labels-to-wipe STATE --system-labels-to-wipe EPHEMERAL --graceful=false --insecure 2>/dev/null; then
+                log_step_info "Talos worker node $ip reset successfully (insecure mode)"
+            else
+                log_step_warn "Talos reset failed for $ip - node may need manual cleanup"
+                log_step_warn "Manual command: talosctl reset --nodes $ip --endpoints $ip --system-labels-to-wipe STATE --system-labels-to-wipe EPHEMERAL"
+            fi
+        fi
+    fi
     unset DEPLOYED_WORKER_IPS["$vmid"]
     unset DEPLOYED_CONFIG_HASH["$vmid"]
     run_command rm -f "$CHECKSUM_DIR/worker-${vmid}.sha256"
