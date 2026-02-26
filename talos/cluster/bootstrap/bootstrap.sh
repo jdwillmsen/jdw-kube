@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.22.1"
+readonly VERSION="3.22.2"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster}"
@@ -1000,30 +1000,48 @@ parse_terraform_array() {
     fi
     local line
     while IFS= read -r line || [[ -n "$line" ]]; do
-        [[ "$line" =~ ^[[:space:]]*# ]] && continue
-        if [[ "$line" =~ ${array_name}[[:space:]]*=[[:space:]]*\[ ]]; then
+        line="${line%\r}"
+        if [[ "$line" =~ ^([^#]*)(#.*)?$ ]]; then
+            line="${BASH_REMATCH[1]}"
+        fi
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        [[ -z "$line" ]] && continue
+        if [[ "$line" =~ ^[[:space:]]*${array_name}[[:space:]]*=[[:space:]]*\[ ]]; then
             in_array=true
             log_detail_debug "Found array start: $array_name"
             continue
         fi
         [[ "$in_array" != true ]] && continue
-        [[ "$line" =~ ^[[:space:]]*\][[:space:]]*$ ]] && break
-        current_block+="$line"$'\n'
-        [[ "$line" =~ \{ ]] && brace_count=$((brace_count + 1))
+        [[ "$line" == "]" || "$line" =~ ^[[:space:]]*\][[:space:]]*$ ]] && break
+        if [[ "$line" =~ \{ ]]; then
+            brace_count=$((brace_count + 1))
+        fi
+        if [[ $brace_count -gt 0 ]]; then
+            current_block+="$line"$'\n'
+        fi
         if [[ "$line" =~ \} ]]; then
             brace_count=$((brace_count - 1))
             if [[ $brace_count -eq 0 ]]; then
                 local vmid="" name="" node="" cpu="" memory="" disk=""
-                local temp_file
-                temp_file=$(mktemp)
-                echo "$current_block" > "$temp_file"
-                vmid=$(grep -E 'vmid[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | grep -oE '[0-9]+' 2>/dev/null | tr -d '\r') || vmid=""
-                name=$(grep -E 'vm_name[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | cut -d'"' -f2 2>/dev/null | tr -d '\r') || name=""
-                node=$(grep -E 'node_name[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | cut -d'"' -f2 2>/dev/null | tr -d '\r') || node=""
-                cpu=$(grep -E 'cpu_cores[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | grep -oE '[0-9]+' 2>/dev/null | tr -d '\r') || cpu=""
-                memory=$(grep -E 'memory[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | grep -oE '[0-9]+' 2>/dev/null | tr -d '\r') || memory=""
-                disk=$(grep -E 'disk_size[[:space:]]*=' "$temp_file" 2>/dev/null | head -1 | grep -oE '[0-9]+' 2>/dev/null | tr -d '\r') || disk=""
-                rm -f "$temp_file"
+                if [[ "$current_block" =~ vmid[[:space:]]*=[[:space:]]*([0-9]+) ]]; then
+                    vmid="${BASH_REMATCH[1]}"
+                fi
+                if [[ "$current_block" =~ vm_name[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
+                    name="${BASH_REMATCH[1]}"
+                fi
+                if [[ "$current_block" =~ node_name[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
+                    node="${BASH_REMATCH[1]}"
+                fi
+                if [[ "$current_block" =~ cpu_cores[[:space:]]*=[[:space:]]*([0-9]+) ]]; then
+                    cpu="${BASH_REMATCH[1]}"
+                fi
+                if [[ "$current_block" =~ memory[[:space:]]*=[[:space:]]*([0-9]+) ]]; then
+                    memory="${BASH_REMATCH[1]}"
+                fi
+                if [[ "$current_block" =~ disk_size[[:space:]]*=[[:space:]]*([0-9]+) ]]; then
+                    disk="${BASH_REMATCH[1]}"
+                fi
                 if [[ -n "$vmid" && -n "$name" ]]; then
                     local value="${name}|${node:-pve1}|${cpu:-4}|${memory:-4096}|${disk:-100}"
                     if [[ "$role" == "control-plane" ]]; then
@@ -1035,7 +1053,8 @@ parse_terraform_array() {
                     log_detail_debug "Parsed ${role}: $name (VMID: $vmid)"
                     parsed_count=$((parsed_count + 1))
                 else
-                    log_detail_warn "Skipped incomplete block (vmid: ${vmid:-none}, name: ${name:-none})"
+                    log_detail_warn "Failed to parse block: vmid=${vmid:-empty}, name=${name:-empty}"
+                    log_detail_debug "Block content was: ${current_block:0:200}"
                 fi
                 current_block=""
             fi
