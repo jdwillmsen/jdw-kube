@@ -3274,18 +3274,23 @@ update_kubeconfig() {
         return 1
     fi
     chmod 600 "$temp_kubeconfig"
+    ensure_control_plane_endpoint_resolves
     log_step_debug "Verifying fetched kubeconfig works..."
     local correct_server="https://${CONTROL_PLANE_ENDPOINT}:6443"
+    local verify_server="https://${HAPROXY_IP}:6443"
     local kube_cluster_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.clusters[0].name}' 2>/dev/null || echo "")
+    log_step_debug "Kubeconfig cluster name: $kube_cluster_name, correct_server: $correct_server, verify_server: $verify_server"
     if [[ -n "$kube_cluster_name" ]]; then
-        KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$kube_cluster_name" --server="$correct_server" >/dev/null 2>&1 || \
-            sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
+        KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$kube_cluster_name" --server="$verify_server" >/dev/null 2>&1 || \
+            sed -i "s|server: https://[^[:space:]]*|server: $verify_server|g" "$temp_kubeconfig"
     else
         log_step_debug "Using sed fallback to update server URL"
-        sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
+        sed -i "s|server: https://[^[:space:]]*|server: $verify_server|g" "$temp_kubeconfig"
     fi
-    if ! timeout 30 bash -c "KUBECONFIG='$temp_kubeconfig' kubectl cluster-info >/dev/null 2>&1"; then
-        log_step_warn "Fresh kubeconfig failed initial test, may need certificate regeneration"
+    log_step_debug "Testing kubeconfig with verify_server $verify_server..."
+    local verify_output
+    if ! verify_output=$(timeout 30 bash -c "KUBECONFIG='$temp_kubeconfig' kubectl cluster-info >/dev/null 2>&1"); then
+        log_step_warn "Fresh kubeconfig failed initial test via HAPROXY IP: $(echo "$verify_output" | head -3)"
         log_step_debug "Attempting to fetch with force-update to regenerate certificates..."
         rm -f "$temp_kubeconfig"
         if ! run_command talosctl kubeconfig "$temp_kubeconfig" --nodes "$bootstrap_node" --endpoints "$bootstrap_node" --force; then
@@ -3296,16 +3301,23 @@ update_kubeconfig() {
         chmod 600 "$temp_kubeconfig"
         kube_cluster_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.clusters[0].name}' 2>/dev/null || echo "")
         if [[ -n "$kube_cluster_name" ]]; then
-            KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$kube_cluster_name" --server="$correct_server" >/dev/null 2>&1 || \
-                sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
+            KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$kube_cluster_name" --server="$verify_server" >/dev/null 2>&1 || \
+                sed -i "s|server: https://[^[:space:]]*|server: $verify_server|g" "$temp_kubeconfig"
         else
-            sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
+            sed -i "s|server: https://[^[:space:]]*|server: $verify_server|g" "$temp_kubeconfig"
         fi
-        if ! timeout 30 bash -c "KUBECONFIG='$temp_kubeconfig' kubectl cluster-info >/dev/null 2>&1"; then
-            log_step_error "Kubeconfig with force update still failed verification"
+        if ! verify_output=$(timeout 30 bash -c "KUBECONFIG='$temp_kubeconfig' kubectl cluster-info >/dev/null 2>&1"); then
+            log_step_error "Kubeconfig with force update still failed verification via HAPROXY IP: $(echo "$verify_output" | head -3)"
             rm -f "$temp_kubeconfig"
             return 1
         fi
+    fi
+    log_step_info "Kubeconfig verified via HAPROXY IP successfully, setting final server URL to $correct_server"
+    if [[ -n "$kube_cluster_name" ]]; then
+        KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$kube_cluster_name" --server="$correct_server" >/dev/null 2>&1 || \
+            sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
+    else
+        sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
     fi
     log_step_info "Fetched kubeconfig verified successfully"
     local actual_cluster_name
