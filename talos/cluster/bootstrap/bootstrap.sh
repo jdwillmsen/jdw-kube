@@ -748,7 +748,7 @@ fetch_proxmox_node_ips() {
     log_job_trace "fetch_proxmox_node_ips: Starting with TF_PROXMOX_ENDPOINT=${TF_PROXMOX_ENDPOINT:-empty}"
     local api_url
     if [[ -n "${TF_PROXMOX_ENDPOINT:-}" ]]; then
-        api_url="${TF_PROXMOX_ENDPOINT}/api2/json"
+        api_url="${TF_PROXMOX_ENDPOINT%/api2/json}/api2/json"
     else
         local first_node_ip=$(get_node_ip "pve1")
         api_url="https://${first_node_ip}:8006/api2/json"
@@ -2929,6 +2929,10 @@ run_finalization() {
        [[ ${#PLAN_ADD_CP[@]} -gt 0 ]] || \
        [[ ${#PLAN_REMOVE_CP[@]} -gt 0 ]] || \
        [[ "$PLAN_NEED_BOOTSTRAP" == "true" ]]; then
+        if [[ "$needs_kubeconfig_update" == "true" && ${#DEPLOYED_CP_IPS[@]} -gt 0 ]]; then
+            log_step_info "Updating kubeconfig due to missing/invalid config and available control planes"
+            update_haproxy_from_state || log_step_warn "Failed to update HAProxy during kubeconfig update, but will attempt to proceed"
+        fi
         update_kubeconfig || {
             log_stage_error "Failed to update kubeconfig"
             return 1
@@ -3272,11 +3276,16 @@ update_kubeconfig() {
     chmod 600 "$temp_kubeconfig"
     log_step_debug "Verifying fetched kubeconfig works..."
     local correct_server="https://${CONTROL_PLANE_ENDPOINT}:6443"
-    if ! KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "temp-cluster" --server="$correct_server" >/dev/null 2>&1; then
+    local kube_cluster_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || echo "")
+    if [[ "$kube_cluster_name" != "$correct_server" ]]; then
+        KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$kube_cluster_name" --server="$correct_server" >/dev/null 2>&1 && \
+            sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig" || \
+             log_step_warn "Failed to update server URL in kubeconfig, may need manual correction"
+    else
         log_step_debug "Using sed fallback to update server URL"
         sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
     fi
-    if ! KUBECONFIG="$temp_kubeconfig" kubectl cluster-info >/dev/null 2>&1; then
+    if ! timeout 30 bash -c "KUBECONFIG='$temp_kubeconfig' kubectl cluster-info >/dev/null 2>&1"; then
         log_step_warn "Fresh kubeconfig failed initial test, may need certificate regeneration"
         log_step_debug "Attempting to fetch with force-update to regenerate certificates..."
         rm -f "$temp_kubeconfig"
@@ -3286,10 +3295,15 @@ update_kubeconfig() {
             return 1
         fi
         chmod 600 "$temp_kubeconfig"
-        KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "temp-cluster" --server="$correct_server" >/dev/null 2>&1 || \
+        kube_cluster_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || echo "")
+        if [[ "$kube_cluster_name" != "$correct_server" ]]; then
+            KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$kube_cluster_name" --server="$correct_server" >/dev/null 2>&1 || \
+                sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
+        else
             sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
-        if ! KUBECONFIG="$temp_kubeconfig" kubectl cluster-info >/dev/null 2>&1; then
-            log_step_error "Kubeconfig verification failed even after force update - cluster certificates may be corrupted"
+        fi
+        if ! timeout 30 bash -c "KUBECONFIG='$temp_kubeconfig' kubectl cluster-info >/dev/null 2>&1"; then
+            log_step_error "Kubeconfig with force update still failed verification"
             rm -f "$temp_kubeconfig"
             return 1
         fi
