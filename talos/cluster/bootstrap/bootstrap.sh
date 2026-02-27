@@ -3276,11 +3276,10 @@ update_kubeconfig() {
     chmod 600 "$temp_kubeconfig"
     log_step_debug "Verifying fetched kubeconfig works..."
     local correct_server="https://${CONTROL_PLANE_ENDPOINT}:6443"
-    local kube_cluster_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || echo "")
-    if [[ "$kube_cluster_name" != "$correct_server" ]]; then
-        KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$kube_cluster_name" --server="$correct_server" >/dev/null 2>&1 && \
-            sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig" || \
-             log_step_warn "Failed to update server URL in kubeconfig, may need manual correction"
+    local kube_cluster_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.clusters[0].name}' 2>/dev/null || echo "")
+    if [[ -n "$kube_cluster_name" ]]; then
+        KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$kube_cluster_name" --server="$correct_server" >/dev/null 2>&1 || \
+            sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
     else
         log_step_debug "Using sed fallback to update server URL"
         sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
@@ -3295,8 +3294,8 @@ update_kubeconfig() {
             return 1
         fi
         chmod 600 "$temp_kubeconfig"
-        kube_cluster_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || echo "")
-        if [[ "$kube_cluster_name" != "$correct_server" ]]; then
+        kube_cluster_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.clusters[0].name}' 2>/dev/null || echo "")
+        if [[ -n "$kube_cluster_name" ]]; then
             KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$kube_cluster_name" --server="$correct_server" >/dev/null 2>&1 || \
                 sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
         else
