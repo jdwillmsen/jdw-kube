@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.22.3"
+readonly VERSION="3.23.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster}"
@@ -739,7 +739,7 @@ print_banner() {
     log_output "${C_VALUE}  ░ ▓██▓ ░ ░██▄▄▄▄██ ▒██░     ░██  █▀ ░  ▒   ██▒${C_RESET}"
     log_output "${C_VALUE}    ▒██▒ ░  ▓█   ▓██▒░██████▒░▒███▒█▄ ▒██████▒▒${C_RESET}"
     log_output "${C_VALUE}    ▒ ░░    ▒▒   ▓▒█░░ ▒░▓  ░░░ ▒▒░ ▒ ▒ ▒▓▒ ▒ ░${C_RESET}"
-    log_output "${C_HEADER}            SMART RECONCILIATION v$VERSION${C_RESET}"
+    log_output "${C_HEADER}           SMART RECONCILIATION v$VERSION${C_RESET}"
     log_output "${C_BORDER}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
 }
 
