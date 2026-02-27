@@ -1,5 +1,5 @@
 ========================================
-Talos Bootstrap Log Started: Fri, Feb 27, 2026 12:36:19 AM
+Talos Bootstrap Log Started: Fri, Feb 27, 2026  1:31:19 AM
 Version: 3.22.3
 Script: bootstrap.sh
 User: jdwil
@@ -18,7 +18,7 @@ Environment:
   PLAN_MODE=false
   SKIP_PREFLIGHT=false
   FORCE_RECONFIGURE=false
-  LOG_LEVEL=DEBUG
+  LOG_LEVEL=TRACE
 ========================================
 
 [SYSTEM] Bash version: 5.2.37(1)-release
@@ -30,30 +30,30 @@ Environment:
 === COMPLETE COMMAND AUDIT TRAIL BELOW ===
 
 
-[2026-02-27 00:36:20] [CMD-START] talosctl version --client
-[2026-02-27 00:36:20] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:20] [CMD-OUTPUT]
+[2026-02-27 01:31:21] [CMD-START] talosctl version --client
+[2026-02-27 01:31:21] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:31:21] [CMD-OUTPUT]
 Client:
 	Tag:         v1.12.3
 	SHA:         6d6471f6
 	Built:       
 	Go version:  go1.25.7
 	OS/Arch:     windows/amd64
-[2026-02-27 00:36:20] [CMD-EXIT] 0 [DURATION: 204ms]
-[2026-02-27 00:36:21] [STATE-CHANGE] CLUSTER_NAME: [cluster] -> [core]
+[2026-02-27 01:31:21] [CMD-EXIT] 0 [DURATION: 295ms]
+[2026-02-27 01:31:22] [STATE-CHANGE] CLUSTER_NAME: [cluster] -> [core]
 
-[2026-02-27 00:36:22] [CMD-START] mkdir -p /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/secrets /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/logs /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums
-[2026-02-27 00:36:22] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:22] [CMD-EXIT] 0 [DURATION: 149ms]
-[2026-02-27 00:36:22] [INIT] Directories initialized
-[2026-02-27 00:36:22] [TERRAFORM] File: /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/terraform.tfvars, Size: 1822 bytes, Lines: 81, Hash: ...
+[2026-02-27 01:31:22] [CMD-START] mkdir -p /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/secrets /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/logs /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums
+[2026-02-27 01:31:22] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:31:22] [CMD-EXIT] 0 [DURATION: 174ms]
+[2026-02-27 01:31:22] [INIT] Directories initialized
+[2026-02-27 01:31:23] [TERRAFORM] File: /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/terraform.tfvars, Size: 1822 bytes, Lines: 81, Hash: ...
 
-[2026-02-27 00:36:22] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/terraform.tfvars
-[2026-02-27 00:36:22] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:22] [CMD-OUTPUT]
+[2026-02-27 01:31:23] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/terraform.tfvars
+[2026-02-27 01:31:23] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:31:23] [CMD-OUTPUT]
 55c6c6fc61d53d6276d5ecc1c0663147f5d7656ccbb06375e82d71dab25f1f1a */f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/terraform.tfvars
-[2026-02-27 00:36:22] [CMD-EXIT] 0 [DURATION: 116ms]
-[2026-02-27 00:36:24] [TERRAFORM-PREVIEW]
+[2026-02-27 01:31:23] [CMD-EXIT] 0 [DURATION: 178ms]
+[2026-02-27 01:31:25] [TERRAFORM-PREVIEW]
 storage_pool = "local-lvm"
 
 # Array configurations detected:
@@ -69,161 +69,161 @@ talos_worker_configuration = [
 #   VMID 300: worker|talos-worker-01|pve1
 #   VMID 301: worker|talos-worker-02|pve2
 #   ... and 2 more
-[2026-02-27 00:36:24] [TERRAFORM] Hash: 55c6c6fc61d53d6276d5ecc1c0663147f5d7656ccbb06375e82d71dab25f1f1a, CP: 3, Workers: 4
+[2026-02-27 01:31:25] [TERRAFORM] Hash: 55c6c6fc61d53d6276d5ecc1c0663147f5d7656ccbb06375e82d71dab25f1f1a, CP: 3, Workers: 4
 
-[2026-02-27 00:36:24] [CMD-START] jq empty /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
-[2026-02-27 00:36:24] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:25] [CMD-EXIT] 0 [DURATION: 209ms]
+[2026-02-27 01:31:25] [CMD-START] jq empty /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
+[2026-02-27 01:31:25] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:31:25] [CMD-EXIT] 0 [DURATION: 219ms]
 
-[2026-02-27 00:36:29] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 qm config 201 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
-[2026-02-27 00:36:29] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:30] [CMD-OUTPUT]
+[2026-02-27 01:31:30] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 qm config 201 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
+[2026-02-27 01:31:30] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:31:32] [CMD-OUTPUT]
 BC:24:11:CA:E2:65
-[2026-02-27 00:36:30] [CMD-EXIT] 0 [DURATION: 1642ms]
+[2026-02-27 01:31:32] [CMD-EXIT] 0 [DURATION: 1722ms]
 
-[2026-02-27 00:36:30] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
-[2026-02-27 00:36:30] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:36] [CMD-EXIT] 0 [DURATION: 5383ms]
+[2026-02-27 01:31:32] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
+[2026-02-27 01:31:32] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:31:37] [CMD-EXIT] 0 [DURATION: 5459ms]
 
-[2026-02-27 00:36:38] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 cat /proc/net/arp | grep -i 'BC:24:11:CA:E2:65' | awk '{print $1}'
-[2026-02-27 00:36:38] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:38] [CMD-OUTPUT]
+[2026-02-27 01:31:40] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 cat /proc/net/arp | grep -i 'BC:24:11:CA:E2:65' | awk '{print $1}'
+[2026-02-27 01:31:40] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:31:40] [CMD-OUTPUT]
 192.168.1.145
-[2026-02-27 00:36:39] [CMD-EXIT] 0 [DURATION: 373ms]
+[2026-02-27 01:31:40] [CMD-EXIT] 0 [DURATION: 373ms]
 
-[2026-02-27 00:36:39] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.145/50000
-[2026-02-27 00:36:39] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:39] [CMD-EXIT] 0 [DURATION: 209ms]
+[2026-02-27 01:31:40] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.145/50000
+[2026-02-27 01:31:40] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:31:41] [CMD-EXIT] 0 [DURATION: 214ms]
 
-[2026-02-27 00:36:40] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 qm config 200 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
-[2026-02-27 00:36:40] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:41] [CMD-OUTPUT]
+[2026-02-27 01:31:41] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 qm config 200 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
+[2026-02-27 01:31:41] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:31:43] [CMD-OUTPUT]
 BC:24:11:FD:8A:4A
-[2026-02-27 00:36:41] [CMD-EXIT] 0 [DURATION: 1328ms]
+[2026-02-27 01:31:43] [CMD-EXIT] 0 [DURATION: 1302ms]
 
-[2026-02-27 00:36:41] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
-[2026-02-27 00:36:41] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:47] [CMD-EXIT] 0 [DURATION: 5399ms]
+[2026-02-27 01:31:43] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
+[2026-02-27 01:31:43] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:31:48] [CMD-EXIT] 0 [DURATION: 5422ms]
 
-[2026-02-27 00:36:49] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 cat /proc/net/arp | grep -i 'BC:24:11:FD:8A:4A' | awk '{print $1}'
-[2026-02-27 00:36:49] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:49] [CMD-OUTPUT]
+[2026-02-27 01:31:51] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 cat /proc/net/arp | grep -i 'BC:24:11:FD:8A:4A' | awk '{print $1}'
+[2026-02-27 01:31:51] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:31:51] [CMD-OUTPUT]
 192.168.1.213
-[2026-02-27 00:36:49] [CMD-EXIT] 0 [DURATION: 318ms]
+[2026-02-27 01:31:51] [CMD-EXIT] 0 [DURATION: 395ms]
 
-[2026-02-27 00:36:50] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.213/50000
-[2026-02-27 00:36:50] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:50] [CMD-EXIT] 0 [DURATION: 161ms]
+[2026-02-27 01:31:52] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.213/50000
+[2026-02-27 01:31:52] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:31:52] [CMD-EXIT] 0 [DURATION: 218ms]
 
-[2026-02-27 00:36:50] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 qm config 202 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
-[2026-02-27 00:36:50] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:52] [CMD-OUTPUT]
+[2026-02-27 01:31:53] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 qm config 202 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
+[2026-02-27 01:31:53] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:31:54] [CMD-OUTPUT]
 BC:24:11:08:72:3A
-[2026-02-27 00:36:52] [CMD-EXIT] 0 [DURATION: 1616ms]
+[2026-02-27 01:31:54] [CMD-EXIT] 0 [DURATION: 1701ms]
 
-[2026-02-27 00:36:52] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
-[2026-02-27 00:36:52] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:36:57] [CMD-EXIT] 0 [DURATION: 5351ms]
+[2026-02-27 01:31:55] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
+[2026-02-27 01:31:55] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:00] [CMD-EXIT] 0 [DURATION: 5421ms]
 
-[2026-02-27 00:37:00] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 cat /proc/net/arp | grep -i 'BC:24:11:08:72:3A' | awk '{print $1}'
-[2026-02-27 00:37:00] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:00] [CMD-OUTPUT]
+[2026-02-27 01:32:02] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 cat /proc/net/arp | grep -i 'BC:24:11:08:72:3A' | awk '{print $1}'
+[2026-02-27 01:32:02] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:03] [CMD-OUTPUT]
 192.168.1.195
-[2026-02-27 00:37:00] [CMD-EXIT] 0 [DURATION: 317ms]
+[2026-02-27 01:32:03] [CMD-EXIT] 0 [DURATION: 370ms]
 
-[2026-02-27 00:37:00] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.195/50000
-[2026-02-27 00:37:00] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:00] [CMD-EXIT] 0 [DURATION: 162ms]
+[2026-02-27 01:32:03] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.195/50000
+[2026-02-27 01:32:03] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:03] [CMD-EXIT] 0 [DURATION: 203ms]
 
-[2026-02-27 00:37:01] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 qm config 300 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
-[2026-02-27 00:37:01] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:02] [CMD-OUTPUT]
+[2026-02-27 01:32:04] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 qm config 300 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
+[2026-02-27 01:32:04] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:05] [CMD-OUTPUT]
 BC:24:11:1B:01:90
-[2026-02-27 00:37:02] [CMD-EXIT] 0 [DURATION: 834ms]
+[2026-02-27 01:32:05] [CMD-EXIT] 0 [DURATION: 865ms]
 
-[2026-02-27 00:37:02] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
-[2026-02-27 00:37:02] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:07] [CMD-EXIT] 0 [DURATION: 5323ms]
+[2026-02-27 01:32:05] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
+[2026-02-27 01:32:05] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:11] [CMD-EXIT] 0 [DURATION: 5357ms]
 
-[2026-02-27 00:37:09] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 cat /proc/net/arp | grep -i 'BC:24:11:1B:01:90' | awk '{print $1}'
-[2026-02-27 00:37:09] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:10] [CMD-OUTPUT]
+[2026-02-27 01:32:13] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 cat /proc/net/arp | grep -i 'BC:24:11:1B:01:90' | awk '{print $1}'
+[2026-02-27 01:32:13] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:13] [CMD-OUTPUT]
 192.168.1.104
-[2026-02-27 00:37:10] [CMD-EXIT] 0 [DURATION: 288ms]
+[2026-02-27 01:32:13] [CMD-EXIT] 0 [DURATION: 356ms]
 
-[2026-02-27 00:37:10] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.104/50000
-[2026-02-27 00:37:10] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:10] [CMD-EXIT] 0 [DURATION: 148ms]
+[2026-02-27 01:32:14] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.104/50000
+[2026-02-27 01:32:14] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:14] [CMD-EXIT] 0 [DURATION: 210ms]
 
-[2026-02-27 00:37:11] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 qm config 301 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
-[2026-02-27 00:37:11] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:12] [CMD-OUTPUT]
+[2026-02-27 01:32:15] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 qm config 301 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
+[2026-02-27 01:32:15] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:16] [CMD-OUTPUT]
 BC:24:11:9D:45:97
-[2026-02-27 00:37:12] [CMD-EXIT] 0 [DURATION: 1276ms]
+[2026-02-27 01:32:16] [CMD-EXIT] 0 [DURATION: 1352ms]
 
-[2026-02-27 00:37:12] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
-[2026-02-27 00:37:12] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:17] [CMD-EXIT] 0 [DURATION: 5350ms]
+[2026-02-27 01:32:16] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
+[2026-02-27 01:32:16] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:22] [CMD-EXIT] 0 [DURATION: 5412ms]
 
-[2026-02-27 00:37:20] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 cat /proc/net/arp | grep -i 'BC:24:11:9D:45:97' | awk '{print $1}'
-[2026-02-27 00:37:20] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:20] [CMD-OUTPUT]
+[2026-02-27 01:32:24] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 cat /proc/net/arp | grep -i 'BC:24:11:9D:45:97' | awk '{print $1}'
+[2026-02-27 01:32:24] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:24] [CMD-OUTPUT]
 192.168.1.143
-[2026-02-27 00:37:20] [CMD-EXIT] 0 [DURATION: 310ms]
+[2026-02-27 01:32:24] [CMD-EXIT] 0 [DURATION: 375ms]
 
-[2026-02-27 00:37:20] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.143/50000
-[2026-02-27 00:37:20] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:20] [CMD-EXIT] 0 [DURATION: 148ms]
+[2026-02-27 01:32:25] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.143/50000
+[2026-02-27 01:32:25] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:25] [CMD-EXIT] 0 [DURATION: 222ms]
 
-[2026-02-27 00:37:21] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 qm config 302 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
-[2026-02-27 00:37:21] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:22] [CMD-OUTPUT]
+[2026-02-27 01:32:26] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 qm config 302 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
+[2026-02-27 01:32:26] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:28] [CMD-OUTPUT]
 BC:24:11:E5:8D:9E
-[2026-02-27 00:37:22] [CMD-EXIT] 0 [DURATION: 1594ms]
+[2026-02-27 01:32:28] [CMD-EXIT] 0 [DURATION: 1684ms]
 
-[2026-02-27 00:37:23] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
-[2026-02-27 00:37:23] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:28] [CMD-EXIT] 0 [DURATION: 5349ms]
+[2026-02-27 01:32:28] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
+[2026-02-27 01:32:28] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:33] [CMD-EXIT] 0 [DURATION: 5415ms]
 
-[2026-02-27 00:37:30] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 cat /proc/net/arp | grep -i 'BC:24:11:E5:8D:9E' | awk '{print $1}'
-[2026-02-27 00:37:30] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:30] [CMD-OUTPUT]
+[2026-02-27 01:32:35] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 cat /proc/net/arp | grep -i 'BC:24:11:E5:8D:9E' | awk '{print $1}'
+[2026-02-27 01:32:35] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:36] [CMD-OUTPUT]
 192.168.1.110
-[2026-02-27 00:37:30] [CMD-EXIT] 0 [DURATION: 315ms]
+[2026-02-27 01:32:36] [CMD-EXIT] 0 [DURATION: 377ms]
 
-[2026-02-27 00:37:31] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.110/50000
-[2026-02-27 00:37:31] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:31] [CMD-EXIT] 0 [DURATION: 149ms]
+[2026-02-27 01:32:36] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.110/50000
+[2026-02-27 01:32:36] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:37] [CMD-EXIT] 0 [DURATION: 208ms]
 
-[2026-02-27 00:37:31] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 qm config 303 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
-[2026-02-27 00:37:31] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:33] [CMD-OUTPUT]
+[2026-02-27 01:32:37] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 qm config 303 | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2
+[2026-02-27 01:32:37] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:39] [CMD-OUTPUT]
 BC:24:11:42:33:CC
-[2026-02-27 00:37:33] [CMD-EXIT] 0 [DURATION: 1569ms]
+[2026-02-27 01:32:39] [CMD-EXIT] 0 [DURATION: 1705ms]
 
-[2026-02-27 00:37:33] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
-[2026-02-27 00:37:33] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:39] [CMD-EXIT] 0 [DURATION: 5355ms]
+[2026-02-27 01:32:39] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 seq 1 254 | xargs -P 50 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
+[2026-02-27 01:32:39] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:45] [CMD-EXIT] 0 [DURATION: 5420ms]
 
-[2026-02-27 00:37:41] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 cat /proc/net/arp | grep -i 'BC:24:11:42:33:CC' | awk '{print $1}'
-[2026-02-27 00:37:41] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:41] [CMD-OUTPUT]
+[2026-02-27 01:32:47] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 cat /proc/net/arp | grep -i 'BC:24:11:42:33:CC' | awk '{print $1}'
+[2026-02-27 01:32:47] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:47] [CMD-OUTPUT]
 192.168.1.109
-[2026-02-27 00:37:41] [CMD-EXIT] 0 [DURATION: 310ms]
+[2026-02-27 01:32:47] [CMD-EXIT] 0 [DURATION: 372ms]
 
-[2026-02-27 00:37:41] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.109/50000
-[2026-02-27 00:37:41] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:42] [CMD-EXIT] 0 [DURATION: 155ms]
+[2026-02-27 01:32:48] [CMD-START] timeout 3 bash -c echo >/dev/tcp/192.168.1.109/50000
+[2026-02-27 01:32:48] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:48] [CMD-EXIT] 0 [DURATION: 202ms]
 
-[2026-02-27 00:37:43] [CMD-START] bash -c eval "curl -s -k --connect-timeout 10 -H 'Authorization: PVEAPIToken=terraform@pve!cluster=9c85e97c-ec5e-43e1-b6ad-a0b46268a600'" "https://192.168.1.200:8006/api2/json/api2/json/cluster/status"
-[2026-02-27 00:37:43] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:43] [CMD-OUTPUT]
-{"data":null,"message":"Method 'GET /api2/json/cluster/status' not implemented"}
-[2026-02-27 00:37:43] [CMD-EXIT] 0 [DURATION: 194ms]
+[2026-02-27 01:32:50] [CMD-START] bash -c eval "curl -s -k --connect-timeout 10 -H 'Authorization: PVEAPIToken=terraform@pve!cluster=9c85e97c-ec5e-43e1-b6ad-a0b46268a600'" "https://192.168.1.200:8006/api2/json/cluster/status"
+[2026-02-27 01:32:50] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:50] [CMD-OUTPUT]
+{"data":[{"version":10,"id":"cluster","type":"cluster","nodes":4,"quorate":1,"name":"pve-cluster-1"},{"type":"node","id":"node/pve2","ip":"192.168.1.201","level":"","online":1,"nodeid":4,"name":"pve2","local":0},{"local":0,"name":"pve4","online":1,"level":"","nodeid":3,"ip":"192.168.1.203","type":"node","id":"node/pve4"},{"name":"pve1","local":1,"level":"","online":1,"nodeid":1,"ip":"192.168.1.200","type":"node","id":"node/pve1"},{"ip":"192.168.1.202","id":"node/pve3","type":"node","local":0,"name":"pve3","nodeid":2,"online":1,"level":""}]}
+[2026-02-27 01:32:50] [CMD-EXIT] 0 [DURATION: 261ms]
 
-[2026-02-27 00:37:44] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 echo '===VMID:201==='; qm config 201 2>/dev/null || echo 'NOT_FOUND'
-[2026-02-27 00:37:44] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:46] [CMD-OUTPUT]
+[2026-02-27 01:32:52] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 echo '===VMID:201==='; qm config 201 2>/dev/null || echo 'NOT_FOUND'
+[2026-02-27 01:32:52] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:53] [CMD-OUTPUT]
 ===VMID:201===
 acpi: 1
 agent: enabled=1,fstrim_cloned_disks=1,type=virtio
@@ -252,11 +252,11 @@ tablet: 1
 tags: controlplane;kubernetes;talos
 template: 0
 vmgenid: 4aca28e7-b43a-4eb5-80d3-f42e4792ac86
-[2026-02-27 00:37:46] [CMD-EXIT] 0 [DURATION: 1654ms]
+[2026-02-27 01:32:54] [CMD-EXIT] 0 [DURATION: 1694ms]
 
-[2026-02-27 00:37:46] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 echo '===VMID:200==='; qm config 200 2>/dev/null || echo 'NOT_FOUND'
-[2026-02-27 00:37:46] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:47] [CMD-OUTPUT]
+[2026-02-27 01:32:54] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 echo '===VMID:200==='; qm config 200 2>/dev/null || echo 'NOT_FOUND'
+[2026-02-27 01:32:54] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:55] [CMD-OUTPUT]
 ===VMID:200===
 acpi: 1
 agent: enabled=1,fstrim_cloned_disks=1,type=virtio
@@ -285,11 +285,11 @@ tablet: 1
 tags: controlplane;kubernetes;talos
 template: 0
 vmgenid: 722e592a-89b4-4308-a9b8-4781587e5a4f
-[2026-02-27 00:37:47] [CMD-EXIT] 0 [DURATION: 1280ms]
+[2026-02-27 01:32:55] [CMD-EXIT] 0 [DURATION: 1341ms]
 
-[2026-02-27 00:37:48] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 echo '===VMID:202==='; qm config 202 2>/dev/null || echo 'NOT_FOUND'
-[2026-02-27 00:37:48] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:49] [CMD-OUTPUT]
+[2026-02-27 01:32:56] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 echo '===VMID:202==='; qm config 202 2>/dev/null || echo 'NOT_FOUND'
+[2026-02-27 01:32:56] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:57] [CMD-OUTPUT]
 ===VMID:202===
 acpi: 1
 agent: enabled=1,fstrim_cloned_disks=1,type=virtio
@@ -318,11 +318,11 @@ tablet: 1
 tags: controlplane;kubernetes;talos
 template: 0
 vmgenid: 322102b1-edc8-4fe2-98d0-f801f2572b25
-[2026-02-27 00:37:49] [CMD-EXIT] 0 [DURATION: 1263ms]
+[2026-02-27 01:32:57] [CMD-EXIT] 0 [DURATION: 1301ms]
 
-[2026-02-27 00:37:49] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 echo '===VMID:300==='; qm config 300 2>/dev/null || echo 'NOT_FOUND'
-[2026-02-27 00:37:49] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:50] [CMD-OUTPUT]
+[2026-02-27 01:32:57] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 echo '===VMID:300==='; qm config 300 2>/dev/null || echo 'NOT_FOUND'
+[2026-02-27 01:32:57] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:32:58] [CMD-OUTPUT]
 ===VMID:300===
 acpi: 1
 agent: enabled=1,fstrim_cloned_disks=1,type=virtio
@@ -351,11 +351,11 @@ tablet: 1
 tags: kubernetes;talos;worker
 template: 0
 vmgenid: a8881baa-0e68-47c6-af1a-64f0f0319174
-[2026-02-27 00:37:50] [CMD-EXIT] 0 [DURATION: 823ms]
+[2026-02-27 01:32:58] [CMD-EXIT] 0 [DURATION: 895ms]
 
-[2026-02-27 00:37:50] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 echo '===VMID:301==='; qm config 301 2>/dev/null || echo 'NOT_FOUND'
-[2026-02-27 00:37:50] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:52] [CMD-OUTPUT]
+[2026-02-27 01:32:59] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.201 echo '===VMID:301==='; qm config 301 2>/dev/null || echo 'NOT_FOUND'
+[2026-02-27 01:32:59] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:00] [CMD-OUTPUT]
 ===VMID:301===
 acpi: 1
 agent: enabled=1,fstrim_cloned_disks=1,type=virtio
@@ -384,11 +384,11 @@ tablet: 1
 tags: kubernetes;talos;worker
 template: 0
 vmgenid: 270b680e-37ae-4174-83da-64abc88fb90f
-[2026-02-27 00:37:52] [CMD-EXIT] 0 [DURATION: 1259ms]
+[2026-02-27 01:33:00] [CMD-EXIT] 0 [DURATION: 1340ms]
 
-[2026-02-27 00:37:52] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 echo '===VMID:302==='; qm config 302 2>/dev/null || echo 'NOT_FOUND'
-[2026-02-27 00:37:52] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:53] [CMD-OUTPUT]
+[2026-02-27 01:33:00] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.202 echo '===VMID:302==='; qm config 302 2>/dev/null || echo 'NOT_FOUND'
+[2026-02-27 01:33:00] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:02] [CMD-OUTPUT]
 ===VMID:302===
 acpi: 1
 agent: enabled=1,fstrim_cloned_disks=1,type=virtio
@@ -417,11 +417,11 @@ tablet: 1
 tags: kubernetes;talos;worker
 template: 0
 vmgenid: a638e0b0-cd33-48df-b7d9-245f2797066e
-[2026-02-27 00:37:53] [CMD-EXIT] 0 [DURATION: 1254ms]
+[2026-02-27 01:33:02] [CMD-EXIT] 0 [DURATION: 1356ms]
 
-[2026-02-27 00:37:54] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 echo '===VMID:303==='; qm config 303 2>/dev/null || echo 'NOT_FOUND'
-[2026-02-27 00:37:54] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:55] [CMD-OUTPUT]
+[2026-02-27 01:33:02] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.203 echo '===VMID:303==='; qm config 303 2>/dev/null || echo 'NOT_FOUND'
+[2026-02-27 01:33:02] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:03] [CMD-OUTPUT]
 ===VMID:303===
 acpi: 1
 agent: enabled=1,fstrim_cloned_disks=1,type=virtio
@@ -450,59 +450,49 @@ tablet: 1
 tags: kubernetes;talos;worker
 template: 0
 vmgenid: 47a4f483-fc81-4ae3-b42c-d95d87f00485
-[2026-02-27 00:37:55] [CMD-EXIT] 0 [DURATION: 1253ms]
+[2026-02-27 01:33:03] [CMD-EXIT] 0 [DURATION: 1324ms]
 
-[2026-02-27 00:37:55] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 ip -s -s neigh flush all
-[2026-02-27 00:37:55] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:56] [CMD-OUTPUT]
-192.168.1.202 dev vmbr0 lladdr 84:47:09:63:61:31  ref 1 used 38/38/38probes 1 REACHABLE 
-192.168.1.205 dev vmbr0 lladdr 98:28:a6:0b:b5:2f  used 45/45/2probes 1 STALE 
-192.168.1.83 dev vmbr0 lladdr bc:24:11:9d:a1:af  used 46/46/6probes 1 STALE 
-192.168.1.203 dev vmbr0 lladdr 84:47:09:62:ff:cd  ref 1 used 25/25/25probes 1 REACHABLE 
-192.168.1.143 dev vmbr0 lladdr bc:24:11:9d:45:97  used 46/46/6probes 1 STALE 
-192.168.1.104 dev vmbr0 lladdr bc:24:11:1b:01:90  used 46/46/6probes 1 STALE 
-192.168.1.193 dev vmbr0 lladdr e8:84:a5:96:67:fc  used 53/47/8probes 4 STALE 
-192.168.1.254 dev vmbr0 lladdr ec:c3:02:f8:0b:b1  ref 1 used 1/44/1probes 1 DELAY 
-192.168.1.213 dev vmbr0 lladdr bc:24:11:fd:8a:4a  used 45/45/2probes 1 STALE 
-192.168.1.197 dev vmbr0 lladdr 04:d4:c4:58:ac:bd  ref 1 used 9507/0/9507probes 4 REACHABLE 
-192.168.1.195 dev vmbr0 lladdr bc:24:11:08:72:3a  used 45/45/2probes 1 STALE 
-192.168.1.109 dev vmbr0 lladdr bc:24:11:42:33:cc  used 46/46/6probes 1 STALE 
-192.168.1.123 dev vmbr0 lladdr e0:8f:4c:bb:54:fe  used 46/46/6probes 1 STALE 
-192.168.1.201 dev vmbr0 lladdr 84:47:09:63:06:4e  ref 1 used 9383/0/9383probes 1 REACHABLE 
-192.168.1.170 dev vmbr0 lladdr 7e:e0:21:32:76:ac  used 44/44/2probes 1 STALE 
-192.168.1.110 dev vmbr0 lladdr bc:24:11:e5:8d:9e  used 46/46/6probes 1 STALE 
-192.168.1.204 dev vmbr0 lladdr 88:ae:1d:54:f9:88  used 45/45/2probes 1 STALE 
-192.168.1.199 dev vmbr0 lladdr bc:24:11:f2:5e:23  used 45/45/2probes 1 STALE 
-192.168.1.218 dev vmbr0 lladdr d8:31:34:30:3b:3a  used 44/44/2probes 1 STALE 
-192.168.1.173 dev vmbr0 lladdr bc:24:11:95:0f:0f  used 45/45/2probes 1 STALE 
-192.168.1.145 dev vmbr0 lladdr bc:24:11:ca:e2:65  used 46/46/6probes 1 STALE 
-fe80::c410:f9fc:3992:1d93 dev vmbr0 lladdr e8:84:a5:96:67:fc  used 7893/7953/7893probes 0 STALE 
-fe80::be24:11ff:fe42:33cc dev vmbr0 lladdr bc:24:11:42:33:cc  used 9477/9537/9477probes 0 STALE 
-fe80::eec3:2ff:fef8:bb1 dev vmbr0 lladdr ec:c3:02:f8:0b:b1 router  used 9355/9415/9355probes 0 STALE 
+[2026-02-27 01:33:04] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 ip -s -s neigh flush all
+[2026-02-27 01:33:04] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:04] [CMD-OUTPUT]
+192.168.1.202 dev vmbr0 lladdr 84:47:09:63:61:31  ref 1 used 15/15/15probes 1 REACHABLE 
+192.168.1.205 dev vmbr0 lladdr 98:28:a6:0b:b5:2f  used 50/50/34probes 1 STALE 
+192.168.1.83 dev vmbr0 lladdr bc:24:11:9d:a1:af  used 52/52/36probes 1 STALE 
+192.168.1.203 dev vmbr0 lladdr 84:47:09:62:ff:cd  ref 1 used 10/10/10probes 1 REACHABLE 
+192.168.1.143 dev vmbr0 lladdr bc:24:11:9d:45:97  used 51/51/35probes 1 STALE 
+192.168.1.104 dev vmbr0 lladdr bc:24:11:1b:01:90  used 51/51/35probes 1 STALE 
+192.168.1.193 dev vmbr0 lladdr e8:84:a5:96:67:fc  used 58/52/36probes 4 STALE 
+192.168.1.254 dev vmbr0 lladdr ec:c3:02:f8:0b:b1  used 49/49/33probes 1 STALE 
+192.168.1.213 dev vmbr0 lladdr bc:24:11:fd:8a:4a  used 50/50/34probes 1 STALE 
+192.168.1.197 dev vmbr0 lladdr 04:d4:c4:58:ac:bd  ref 1 used 424/0/424probes 4 REACHABLE 
+192.168.1.195 dev vmbr0 lladdr bc:24:11:08:72:3a  used 50/50/34probes 1 STALE 
+192.168.1.109 dev vmbr0 lladdr bc:24:11:42:33:cc  used 51/51/35probes 1 STALE 
+192.168.1.123 dev vmbr0 lladdr e0:8f:4c:bb:54:fe  used 51/51/35probes 1 STALE 
+192.168.1.201 dev vmbr0 lladdr 84:47:09:63:06:4e  ref 1 used 424/0/424probes 4 REACHABLE 
+192.168.1.170 dev vmbr0 lladdr 7e:e0:21:32:76:ac  used 50/50/34probes 1 STALE 
+192.168.1.110 dev vmbr0 lladdr bc:24:11:e5:8d:9e  used 51/51/35probes 1 STALE 
+192.168.1.204 dev vmbr0 lladdr 88:ae:1d:54:f9:88  used 50/50/34probes 1 STALE 
+192.168.1.199 dev vmbr0 lladdr bc:24:11:f2:5e:23  used 50/50/34probes 1 STALE 
+192.168.1.218 dev vmbr0 lladdr d8:31:34:30:3b:3a  used 49/49/33probes 1 STALE 
+192.168.1.173 dev vmbr0 lladdr bc:24:11:95:0f:0f  used 50/50/34probes 1 STALE 
+192.168.1.145 dev vmbr0 lladdr bc:24:11:ca:e2:65  used 51/51/35probes 1 STALE 
+fe80::c410:f9fc:3992:1d93 dev vmbr0 lladdr e8:84:a5:96:67:fc  used 101/161/101probes 0 STALE 
+fe80::eec3:2ff:fef8:bb1 dev vmbr0 lladdr ec:c3:02:f8:0b:b1 router  used 120/180/120probes 0 STALE 
 
-*** Round 1, deleting 24 entries ***
+*** Round 1, deleting 23 entries ***
 192.168.1.197 dev vmbr0  ref 1 used 0/60/0probes 3 INCOMPLETE 
 
 *** Round 2, deleting 1 entries ***
-192.168.1.197 dev vmbr0  ref 1 used 0/60/0probes 4 INCOMPLETE 
+*** Flush is complete after 2 rounds ***
+[2026-02-27 01:33:04] [CMD-EXIT] 0 [DURATION: 374ms]
 
-*** Round 3, deleting 1 entries ***
-192.168.1.197 dev vmbr0  ref 1 used 0/60/0probes 4 INCOMPLETE 
+[2026-02-27 01:33:05] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 seq 1 254 | xargs -P 100 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
+[2026-02-27 01:33:05] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:08] [CMD-EXIT] 0 [DURATION: 3355ms]
 
-*** Round 4, deleting 1 entries ***
-192.168.1.197 dev vmbr0 lladdr 04:d4:c4:58:ac:bd  ref 1 used 0/0/0probes 4 REACHABLE 
-
-*** Round 5, deleting 1 entries ***
-*** Flush is complete after 5 rounds ***
-[2026-02-27 00:37:56] [CMD-EXIT] 0 [DURATION: 300ms]
-
-[2026-02-27 00:37:56] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 seq 1 254 | xargs -P 100 -I{} ping -c 1 -W 1 192.168.1.{} >/dev/null 2>&1 || true
-[2026-02-27 00:37:56] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:37:59] [CMD-EXIT] 0 [DURATION: 3320ms]
-
-[2026-02-27 00:38:02] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 cat /proc/net/arp
-[2026-02-27 00:38:02] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:03] [CMD-OUTPUT]
+[2026-02-27 01:33:11] [CMD-START] ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@192.168.1.200 cat /proc/net/arp
+[2026-02-27 01:33:11] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:11] [CMD-OUTPUT]
 IP address       HW type     Flags       HW address            Mask     Device
 192.168.1.247    0x1         0x0         00:00:00:00:00:00     *        vmbr0
 192.168.1.6      0x1         0x0         00:00:00:00:00:00     *        vmbr0
@@ -757,69 +747,94 @@ IP address       HW type     Flags       HW address            Mask     Device
 192.168.1.66     0x1         0x0         00:00:00:00:00:00     *        vmbr0
 192.168.1.145    0x1         0x2         bc:24:11:ca:e2:65     *        vmbr0
 192.168.1.160    0x1         0x0         00:00:00:00:00:00     *        vmbr0
-[2026-02-27 00:38:03] [CMD-EXIT] 0 [DURATION: 291ms]
+[2026-02-27 01:33:12] [CMD-EXIT] 0 [DURATION: 370ms]
 
-[2026-02-27 00:38:37] [CMD-START] talosctl get members -o json --endpoints 192.168.1.145 --insecure
-[2026-02-27 00:38:38] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:38] [CMD-OUTPUT]
+[2026-02-27 01:33:48] [CMD-START] talosctl get members -o json --endpoints 192.168.1.145 --insecure
+[2026-02-27 01:33:48] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:48] [CMD-OUTPUT]
 failed to determine endpoints
-[2026-02-27 00:38:38] [CMD-EXIT] 1 [DURATION: 193ms]
-[2026-02-27 00:38:38] [STATE-CHANGE] PLAN_ADD_CP: [] -> []
+[2026-02-27 01:33:48] [CMD-EXIT] 1 [DURATION: 381ms]
+[2026-02-27 01:33:49] [STATE-CHANGE] PLAN_ADD_CP: [] -> []
 
-[2026-02-27 00:38:38] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-control-plane-201.yaml
-[2026-02-27 00:38:38] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:38] [CMD-OUTPUT]
+[2026-02-27 01:33:49] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-control-plane-201.yaml
+[2026-02-27 01:33:49] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:49] [CMD-OUTPUT]
 64999be1e79840acfe10051d475ac286cfc87ee9fa653b41ad3cdd57a13a8cbd */f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-control-plane-201.yaml
-[2026-02-27 00:38:38] [CMD-EXIT] 0 [DURATION: 133ms]
+[2026-02-27 01:33:49] [CMD-EXIT] 0 [DURATION: 203ms]
 
-[2026-02-27 00:38:39] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-control-plane-200.yaml
-[2026-02-27 00:38:39] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:39] [CMD-OUTPUT]
+[2026-02-27 01:33:50] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-control-plane-200.yaml
+[2026-02-27 01:33:50] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:50] [CMD-OUTPUT]
 64999be1e79840acfe10051d475ac286cfc87ee9fa653b41ad3cdd57a13a8cbd */f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-control-plane-200.yaml
-[2026-02-27 00:38:39] [CMD-EXIT] 0 [DURATION: 114ms]
+[2026-02-27 01:33:50] [CMD-EXIT] 0 [DURATION: 337ms]
 
-[2026-02-27 00:38:39] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-control-plane-202.yaml
-[2026-02-27 00:38:39] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:39] [CMD-OUTPUT]
+[2026-02-27 01:33:50] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-control-plane-202.yaml
+[2026-02-27 01:33:50] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:50] [CMD-OUTPUT]
 64999be1e79840acfe10051d475ac286cfc87ee9fa653b41ad3cdd57a13a8cbd */f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-control-plane-202.yaml
-[2026-02-27 00:38:39] [CMD-EXIT] 0 [DURATION: 116ms]
+[2026-02-27 01:33:50] [CMD-EXIT] 0 [DURATION: 188ms]
 
-[2026-02-27 00:38:39] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-worker-300.yaml
-[2026-02-27 00:38:39] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:39] [CMD-OUTPUT]
+[2026-02-27 01:33:51] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-worker-300.yaml
+[2026-02-27 01:33:51] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:51] [CMD-OUTPUT]
 39bf621873561fc713c026558eff8727e04766d406b81cb6d06790567a6ccc38 */f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-worker-300.yaml
-[2026-02-27 00:38:39] [CMD-EXIT] 0 [DURATION: 115ms]
+[2026-02-27 01:33:51] [CMD-EXIT] 0 [DURATION: 217ms]
 
-[2026-02-27 00:38:40] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-worker-301.yaml
-[2026-02-27 00:38:40] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:40] [CMD-OUTPUT]
+[2026-02-27 01:33:51] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-worker-301.yaml
+[2026-02-27 01:33:51] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:51] [CMD-OUTPUT]
 39bf621873561fc713c026558eff8727e04766d406b81cb6d06790567a6ccc38 */f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-worker-301.yaml
-[2026-02-27 00:38:40] [CMD-EXIT] 0 [DURATION: 112ms]
+[2026-02-27 01:33:51] [CMD-EXIT] 0 [DURATION: 215ms]
 
-[2026-02-27 00:38:40] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-worker-302.yaml
-[2026-02-27 00:38:40] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:40] [CMD-OUTPUT]
+[2026-02-27 01:33:52] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-worker-302.yaml
+[2026-02-27 01:33:52] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:52] [CMD-OUTPUT]
 39bf621873561fc713c026558eff8727e04766d406b81cb6d06790567a6ccc38 */f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-worker-302.yaml
-[2026-02-27 00:38:40] [CMD-EXIT] 0 [DURATION: 117ms]
+[2026-02-27 01:33:52] [CMD-EXIT] 0 [DURATION: 217ms]
 
-[2026-02-27 00:38:40] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-worker-303.yaml
-[2026-02-27 00:38:40] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:40] [CMD-OUTPUT]
+[2026-02-27 01:33:52] [CMD-START] sha256sum /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-worker-303.yaml
+[2026-02-27 01:33:52] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:52] [CMD-OUTPUT]
 39bf621873561fc713c026558eff8727e04766d406b81cb6d06790567a6ccc38 */f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/node-worker-303.yaml
-[2026-02-27 00:38:40] [CMD-EXIT] 0 [DURATION: 123ms]
+[2026-02-27 01:33:53] [CMD-EXIT] 0 [DURATION: 207ms]
 
-[2026-02-27 00:38:41] [CMD-START] mkdir -p /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state
-[2026-02-27 00:38:41] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:41] [CMD-EXIT] 0 [DURATION: 134ms]
+[2026-02-27 01:33:54] [CMD-START] mkdir -p /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state
+[2026-02-27 01:33:54] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:54] [CMD-EXIT] 0 [DURATION: 192ms]
 
-[2026-02-27 00:38:42] [CMD-START] mv /tmp/tmp.K8vlnqIe7r /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
-[2026-02-27 00:38:42] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:42] [CMD-EXIT] 0 [DURATION: 115ms]
-[2026-02-27 00:38:42] [STATE] Saved to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
+[2026-02-27 01:33:54] [CMD-START] mv /tmp/tmp.ESnqVJ1enY /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
+[2026-02-27 01:33:54] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:55] [CMD-EXIT] 0 [DURATION: 215ms]
+[2026-02-27 01:33:55] [STATE] Saved to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
 
-[2026-02-27 00:38:42] [CMD-START] talosctl version --nodes 192.168.1.145 --endpoints 192.168.1.145
-[2026-02-27 00:38:42] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:43] [CMD-OUTPUT]
+[2026-02-27 01:33:57] [CMD-START] mv /tmp/tmp.7iLx6qUd3C /tmp/haproxy.cfg.S7tNv6
+[2026-02-27 01:33:57] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:57] [CMD-EXIT] 0 [DURATION: 208ms]
+
+[2026-02-27 01:33:57] [CMD-START] scp -o ConnectTimeout=10 -o StrictHostKeyChecking=no /tmp/haproxy.cfg.S7tNv6 jake@192.168.1.199:/tmp/haproxy.cfg.new
+[2026-02-27 01:33:57] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:58] [CMD-EXIT] 0 [DURATION: 600ms]
+
+[2026-02-27 01:33:58] [CMD-START] ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no jake@192.168.1.199 sudo cp /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.backup.20260227_013358 && sudo mv /tmp/haproxy.cfg.new /etc/haproxy/haproxy.cfg
+[2026-02-27 01:33:58] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:58] [CMD-EXIT] 0 [DURATION: 436ms]
+
+[2026-02-27 01:33:59] [CMD-START] ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no jake@192.168.1.199 sudo haproxy -c -f /etc/haproxy/haproxy.cfg
+[2026-02-27 01:33:59] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:33:59] [CMD-EXIT] 0 [DURATION: 458ms]
+
+[2026-02-27 01:33:59] [CMD-START] ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no jake@192.168.1.199 sudo systemctl reload haproxy || sudo systemctl start haproxy
+[2026-02-27 01:33:59] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:34:00] [CMD-EXIT] 0 [DURATION: 499ms]
+
+[2026-02-27 01:34:00] [CMD-START] rm -f /tmp/haproxy.cfg.S7tNv6
+[2026-02-27 01:34:00] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:34:00] [CMD-EXIT] 0 [DURATION: 206ms]
+[2026-02-27 01:34:00] [DEPLOY] HAPROXY: Updated with 3 backends
+
+[2026-02-27 01:34:01] [CMD-START] talosctl version --nodes 192.168.1.145 --endpoints 192.168.1.145
+[2026-02-27 01:34:01] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:34:01] [CMD-OUTPUT]
 Client:
 	Tag:         v1.12.3
 	SHA:         6d6471f6
@@ -834,34 +849,34 @@ Server:
 	Go version:  go1.25.7
 	OS/Arch:     linux/amd64
 	Enabled:     RBAC
-[2026-02-27 00:38:43] [CMD-EXIT] 0 [DURATION: 216ms]
+[2026-02-27 01:34:01] [CMD-EXIT] 0 [DURATION: 280ms]
 
-[2026-02-27 00:38:43] [CMD-START] timeout 10 talosctl etcd members --nodes 192.168.1.145 --endpoints 192.168.1.145
-[2026-02-27 00:38:43] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:43] [CMD-OUTPUT]
+[2026-02-27 01:34:01] [CMD-START] timeout 10 talosctl etcd members --nodes 192.168.1.145 --endpoints 192.168.1.145
+[2026-02-27 01:34:01] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:34:02] [CMD-OUTPUT]
 NODE            ID                 HOSTNAME        PEER URLS                    CLIENT URLS                  LEARNER
 192.168.1.145   4b1aa1dd24c2ff5e   talos-2si-1cs   https://192.168.1.145:2380   https://192.168.1.145:2379   false
 192.168.1.145   76beaa5a027a7a18   talos-h7i-os5   https://192.168.1.195:2380   https://192.168.1.195:2379   false
 192.168.1.145   7e479149119aebe8   talos-6sh-lnr   https://192.168.1.213:2380   https://192.168.1.213:2379   false
-[2026-02-27 00:38:43] [CMD-EXIT] 0 [DURATION: 238ms]
+[2026-02-27 01:34:02] [CMD-EXIT] 0 [DURATION: 367ms]
 
-[2026-02-27 00:38:43] [CMD-START] mkdir -p /c/Users/jdwil/.kube
-[2026-02-27 00:38:43] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:44] [CMD-EXIT] 0 [DURATION: 124ms]
+[2026-02-27 01:34:02] [CMD-START] mkdir -p /c/Users/jdwil/.kube
+[2026-02-27 01:34:02] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:34:02] [CMD-EXIT] 0 [DURATION: 176ms]
 
-[2026-02-27 00:38:44] [CMD-START] talosctl kubeconfig /tmp/talos-kubeconfig.C1BL8W --nodes 192.168.1.145 --endpoints 192.168.1.145
-[2026-02-27 00:38:44] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:38:44] [CMD-EXIT] 0 [DURATION: 230ms]
+[2026-02-27 01:34:03] [CMD-START] talosctl kubeconfig /tmp/talos-kubeconfig.tZSjje --nodes 192.168.1.145 --endpoints 192.168.1.145
+[2026-02-27 01:34:03] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:34:03] [CMD-EXIT] 0 [DURATION: 304ms]
 
-[2026-02-27 00:41:15] [CMD-START] talosctl kubeconfig /tmp/talos-kubeconfig.C1BL8W --nodes 192.168.1.145 --endpoints 192.168.1.145 --force
-[2026-02-27 00:41:15] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:41:15] [CMD-EXIT] 0 [DURATION: 216ms]
+[2026-02-27 01:34:34] [CMD-START] talosctl kubeconfig /tmp/talos-kubeconfig.tZSjje --nodes 192.168.1.145 --endpoints 192.168.1.145 --force
+[2026-02-27 01:34:34] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:34:34] [CMD-EXIT] 0 [DURATION: 276ms]
 
-[2026-02-27 00:43:46] [CMD-START] rm -f /tmp/haproxy.cfg.*
-[2026-02-27 00:43:46] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
-[2026-02-27 00:43:46] [CMD-EXIT] 0 [DURATION: 147ms]
+[2026-02-27 01:35:05] [CMD-START] rm -f /tmp/haproxy.cfg.*
+[2026-02-27 01:35:05] [CMD-WD] /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+[2026-02-27 01:35:05] [CMD-EXIT] 0 [DURATION: 235ms]
 
 ========================================
-Script Ended: Fri, Feb 27, 2026 12:43:46 AM
+Script Ended: Fri, Feb 27, 2026  1:35:05 AM
 Exit Code: 1
 ========================================

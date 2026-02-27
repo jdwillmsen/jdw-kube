@@ -2,7 +2,7 @@ TALOS BOOTSTRAP RUN SUMMARY
 ===========================
 
 Run Information:
-  Timestamp:    20260227_003619
+  Timestamp:    20260227_013119
   Date:         2026-02-27
   Cluster:      core
   Command:      bootstrap.sh
@@ -39,9 +39,9 @@ Files:
   Console Log:   console.log
   Structured:    structured.log
   Audit Trail:   audit.log
-  Full Path:     /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/logs/2026-02-27/run-20260227_003619
+  Full Path:     /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/logs/2026-02-27/run-20260227_013119
 
 Quick Commands:
-  View console:  cat /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/logs/2026-02-27/run-20260227_003619/console.log
-  View audit:    tail -100 /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/logs/2026-02-27/run-20260227_003619/audit.log
+  View console:  cat /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/logs/2026-02-27/run-20260227_013119/console.log
+  View audit:    tail -100 /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/logs/2026-02-27/run-20260227_013119/audit.log
   Rerun:         bootstrap.sh
