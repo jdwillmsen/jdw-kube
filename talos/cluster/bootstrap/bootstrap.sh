@@ -2398,7 +2398,7 @@ rediscover_ip_by_mac() {
                 "${TF_PROXMOX_SSH_USER}@$host_ip" \
                 "qm config $vmid | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2"; then
             local candidate_ip=$(echo "$LAST_COMMAND_OUTPUT" | tr -d '\r' | tr '[:lower:]' '[:upper:]')
-            if [[ "$candidate_ip" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]; then
+            if [[ "$candidate_ip" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]]; then
                 mac="$candidate_ip"
                 MAC_BY_VMID["$vmid"]="$mac"
                 log_detail_debug "Fetched MAC $mac for VM $vmid from Proxmox"
@@ -2411,6 +2411,7 @@ rediscover_ip_by_mac() {
           log_detail_debug "Failed to fetch valid MAC for VM $vmid from Proxmox at $host_ip"
           for node_name in "${!PROXMOX_NODE_IPS[@]}"; do
               local node_ip="${PROXMOX_NODE_IPS[$node_name]}"
+              [[ "$node_ip" == "$host_ip" ]] && continue
               if run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
                       "${TF_PROXMOX_SSH_USER}@$node_ip" \
                       "qm config $vmid | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2"; then
