@@ -2377,19 +2377,61 @@ rediscover_ip_by_mac() {
     local vmid="$1"
     log_detail_trace "rediscover_ip_by_mac: Starting for VM $vmid"
     local mac="${MAC_BY_VMID[$vmid]:-}"
-    local host_ip="${PROXMOX_NODE_IPS[pve1]:-192.168.1.233}"
+    local host_ip=""
+    local info="${DESIRED_ALL_VMIDS[$vmid]:-}"
+    local owner_node=""
+    if [[ -n "$info" ]]; then
+        owner_node=$(echo "$info" | cut -d'|' -f3)
+    fi
+    if [[ -n "$owner_node" ]]; then
+        host_ip=$(get_node_ip "$owner_node")
+        log_detail_debug "VM $vmid is associated with node $owner_node, using host IP $host_ip for ARP lookup"
+    else
+        host_ip="${PROXMOX_NODE_IPS["pve1"]:-$(get_node_ip "pve1") }"
+        log_detail_debug "No specific node association for VM $vmid, defaulting to host IP $host_ip for ARP lookup"
+    fi
     local subnet=$(get_network_subnet "$host_ip")
     if [[ -z "$mac" ]]; then
         log_detail_debug "No MAC cached for VM $vmid, attempting to fetch from Proxmox..."
+        local fetched=false
         if run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
                 "${TF_PROXMOX_SSH_USER}@$host_ip" \
                 "qm config $vmid | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2"; then
-            mac=$(echo "$LAST_COMMAND_OUTPUT" | tr -d '\r' | tr '[:lower:]' '[:upper:]')
-            if [[ -n "$mac" ]]; then
+            local candidate_ip=$(echo "$LAST_COMMAND_OUTPUT" | tr -d '\r' | tr '[:lower:]' '[:upper:]')
+            if [[ "$candidate_ip" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]; then
+                mac="$candidate_ip"
                 MAC_BY_VMID["$vmid"]="$mac"
-                VMID_BY_MAC["$mac"]="$vmid"
-                log_detail_debug "Fetched MAC $mac for VM $vmid"
+                log_detail_debug "Fetched MAC $mac for VM $vmid from Proxmox"
+                fetched=true
+            else
+                log_detail_warn "Fetched MAC $candidate_ip for VM $vmid is not valid"
             fi
+        fi
+        if [[ "$fetched" != "true" ]]; then
+          log_detail_debug "Failed to fetch valid MAC for VM $vmid from Proxmox at $host_ip"
+          for node_name in "${!PROXMOX_NODE_IPS[@]}"; do
+              local node_ip="${PROXMOX_NODE_IPS[$node_name]}"
+              if run_command ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
+                      "${TF_PROXMOX_SSH_USER}@$node_ip" \
+                      "qm config $vmid | grep -E '^net[0-9]+:' | head -1 | grep -oE 'virtio=[0-9A-Fa-f:]+' | cut -d= -f2"; then
+                  local candidate_ip=$(echo "$LAST_COMMAND_OUTPUT" | tr -d '\r' | tr '[:lower:]' '[:upper:]')
+                  if [[ "$candidate_ip" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]]; then
+                      mac="$candidate_ip"
+                      MAC_BY_VMID["$vmid"]="$mac"
+                      log_detail_debug "Fetched MAC $mac for VM $vmid from Proxmox at $node_ip"
+                      break
+                  else
+                      log_detail_warn "Fetched MAC $candidate_ip for VM $vmid from node $node_name is not valid"
+                  fi
+              else
+                  log_detail_debug "Failed to fetch MAC for VM $vmid from Proxmox at node $node_name"
+              fi
+          done
+        fi
+        if [[ -n "$mac" ]]; then
+            MAC_BY_VMID["$vmid"]="$mac"
+            VMID_BY_MAC["$mac"]="$vmid"
+            log_detail_debug "MAC $mac for VM $vmid cached for future lookups"
         fi
         if [[ -z "$mac" ]]; then
             log_detail_warn "Still no MAC for VM $vmid, cannot rediscover"
