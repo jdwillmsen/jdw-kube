@@ -3289,7 +3289,7 @@ update_kubeconfig() {
     fi
     log_step_debug "Testing kubeconfig with verify_server $verify_server..."
     local verify_output
-    if ! verify_output=$(timeout 30 bash -c "KUBECONFIG='$temp_kubeconfig' kubectl cluster-info >/dev/null 2>&1"); then
+    if ! verify_output=$(timeout 30 bash -c "KUBECONFIG='$temp_kubeconfig' kubectl cluster-info 2>&1"); then
         log_step_warn "Fresh kubeconfig failed initial test via HAPROXY IP: $(echo "$verify_output" | head -3)"
         log_step_debug "Attempting to fetch with force-update to regenerate certificates..."
         rm -f "$temp_kubeconfig"
@@ -3306,7 +3306,7 @@ update_kubeconfig() {
         else
             sed -i "s|server: https://[^[:space:]]*|server: $verify_server|g" "$temp_kubeconfig"
         fi
-        if ! verify_output=$(timeout 30 bash -c "KUBECONFIG='$temp_kubeconfig' kubectl cluster-info >/dev/null 2>&1"); then
+        if ! verify_output=$(timeout 30 bash -c "KUBECONFIG='$temp_kubeconfig' kubectl cluster-info 2>&1"); then
             log_step_error "Kubeconfig with force update still failed verification via HAPROXY IP: $(echo "$verify_output" | head -3)"
             rm -f "$temp_kubeconfig"
             return 1
