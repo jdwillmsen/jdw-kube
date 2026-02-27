@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly VERSION="3.22.2"
+readonly VERSION="3.22.3"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 CLUSTER_NAME="${CLUSTER_NAME:-cluster}"
@@ -18,7 +18,7 @@ STATE_FILE="${STATE_FILE:-${STATE_DIR}/bootstrap-state.json}"
 TALOSCONFIG="${TALOSCONFIG:-${SECRETS_DIR}/talosconfig}"
 KUBECONFIG_PATH="${HOME}/.kube/config-${CLUSTER_NAME}"
 
-CONTROL_PLANE_ENDPOINT="${CONTROL_PLANE_ENDPOINT:-$CLUSTER_NAME.jdwkube.com}"
+CONTROL_PLANE_ENDPOINT="${CONTROL_PLANE_ENDPOINT:-$CLUSTER_NAME.jdwlabs.com}"
 HAPROXY_IP="${HAPROXY_IP:-192.168.1.199}"
 HAPROXY_LOGIN_USERNAME="${HAPROXY_LOGIN_USERNAME:-jake}"
 HAPROXY_STATS_USERNAME="${HAPROXY_STATS_USERNAME:-admin}"
@@ -972,7 +972,7 @@ load_cluster_name_from_terraform() {
             SECRETS_FILE="${SECRETS_DIR}/secrets.yaml"
             STATE_FILE="${STATE_DIR}/bootstrap-state.json"
             TALOSCONFIG="${SECRETS_DIR}/talosconfig"
-            CONTROL_PLANE_ENDPOINT="${CLUSTER_NAME}.jdwkube.com"
+            CONTROL_PLANE_ENDPOINT="${CLUSTER_NAME}.jdwlabs.com"
             log_detail_debug "Updated paths for cluster '$CLUSTER_NAME':"
             log_detail_debug "  CLUSTER_DIR: $CLUSTER_DIR"
             log_detail_debug "  KUBECONFIG_PATH: $KUBECONFIG_PATH"
@@ -2866,12 +2866,33 @@ run_execution() {
 run_finalization() {
     log_stage_info "Finalizing"
     log_stage_trace "run_finalization: Starting finalization"
-    [[ ${#PLAN_ADD_CP[@]} -gt 0 || ${#PLAN_REMOVE_CP[@]} -gt 0 || "$PLAN_NEED_BOOTSTRAP" == "true" ]] && {
+    local needs_kubeconfig_update=false
+    if [[ ! -f "$KUBECONFIG_PATH" ]]; then
+        log_step_info "Kubeconfig not found at $KUBECONFIG_PATH, will fetch"
+        needs_kubeconfig_update=true
+    elif [[ ! -s "$KUBECONFIG_PATH" ]]; then
+        log_step_warn "Kubeconfig exists but is empty, will refetch"
+        needs_kubeconfig_update=true
+    else
+        log_step_debug "Testing existing kubeconfig..."
+        if ! KUBECONFIG="$KUBECONFIG_PATH" kubectl cluster-info >/dev/null 2>&1; then
+            log_step_warn "Existing kubeconfig failed verification, will refetch"
+            needs_kubeconfig_update=true
+        else
+            log_step_info "Existing kubeconfig is valid"
+        fi
+    fi
+    if [[ "$needs_kubeconfig_update" == "true" ]] || \
+       [[ ${#PLAN_ADD_CP[@]} -gt 0 ]] || \
+       [[ ${#PLAN_REMOVE_CP[@]} -gt 0 ]] || \
+       [[ "$PLAN_NEED_BOOTSTRAP" == "true" ]]; then
         update_kubeconfig || {
             log_stage_error "Failed to update kubeconfig"
             return 1
         }
-    }
+    else
+        log_step_info "Skipping kubeconfig update (no changes and existing config is valid)"
+    fi
     verify_cluster || {
         log_stage_warn "Cluster verification had issues, but bootstrap may still be usable"
     }
@@ -3047,7 +3068,7 @@ run_preflight_checks() {
             continue
         }
         test_port "$ip" "50000" "$PREFLIGHT_CONNECT_TIMEOUT" "$vmid" && {
-            log_detail_debug "VMID $vmid ($name at $ip): Talos API ready"
+            log_detail_info "VMID $vmid ($name at $ip): Talos API ready"
             ready_vms=$((ready_vms + 1))
             LIVE_NODE_IPS["$vmid"]="$ip"
         } || {
@@ -3188,70 +3209,129 @@ update_kubeconfig() {
     }
     log_step_info "Retrieving kubeconfig from $bootstrap_node"
     run_command mkdir -p "$(dirname "$KUBECONFIG_PATH")"
-    local temp_kubeconfig=$(mktemp)
+    local temp_kubeconfig
+    temp_kubeconfig=$(mktemp "${TMPDIR:-/tmp}/talos-kubeconfig.XXXXXX")
+    if [[ -f "$KUBECONFIG_PATH" ]]; then
+        local backup_name="${KUBECONFIG_PATH}.backup.$(date +%Y%m%d_%H%M%S)"
+        log_step_info "Backing up existing kubeconfig to $backup_name"
+        cp "$KUBECONFIG_PATH" "$backup_name" || {
+            log_step_warn "Failed to backup existing kubeconfig, proceeding anyway"
+        }
+        rm -f "$KUBECONFIG_PATH"
+        log_step_debug "Removed old kubeconfig to ensure fresh certificate data"
+    fi
     log_step_debug "Fetching kubeconfig using talosctl from bootstrap node $bootstrap_node to temporary file $temp_kubeconfig"
-    run_command talosctl kubeconfig "$temp_kubeconfig" --nodes "$bootstrap_node" --endpoints "$bootstrap_node" && {
-        chmod 600 "$temp_kubeconfig"
-        local correct_server="https://${CONTROL_PLANE_ENDPOINT}:6443"
-        log_step_info "Setting kubeconfig server to $correct_server (via HAProxy/control plane endpoint)"
-        local actual_cluster_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.clusters[0].name}' 2>/dev/null || echo "")
-        if [[ -z "$actual_cluster_name" ]]; then
-            log_step_warn "Could not detect cluster name from kubeconfig, falling back to $CLUSTER_NAME"
-            actual_cluster_name="$CLUSTER_NAME"
-        fi
-        log_step_debug "Detected cluster name in kubeconfig: $actual_cluster_name"
-        local effective_cluster_name="$actual_cluster_name"
-        local context_name="$effective_cluster_name"
-        local effective_kubeconfig_path="${HOME}/.kube/config-${effective_cluster_name}"
-        if ! KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "$effective_cluster_name" --server="$correct_server" >/dev/null 2>&1; then
-          sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
-          log_step_debug "Used sed fallback to update server URL in kubeconfig"
-        fi
-        local actual_context_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.contexts[0].name}' 2>/dev/null || echo "")
-        if [[ -n "$actual_context_name" && "$actual_context_name" != "$context_name" ]]; then
-            log_step_debug "Renaming kubeconfig context from $actual_context_name to $context_name"
-            KUBECONFIG="$temp_kubeconfig" kubectl config rename-context "$actual_context_name" "$context_name" >/dev/null 2>&1 || true
-        fi
-        if [[ -f "${HOME}/.kube/config" ]]; then
-            log_step_info "Merging with existing kubeconfig at ${HOME}/.kube/config"
-            local merged_config
-            merged_config=$(mktemp)
-            KUBECONFIG="${HOME}/.kube/config:${temp_kubeconfig}" kubectl config view --flatten 2>/dev/null > "$merged_config"
-            if [[ -s "$merged_config" ]]; then
-                local backup_name="${HOME}/.kube/config.backup.$(date +%Y%m%d_%H%M%S)"
-                cp "${HOME}/.kube/config" "$backup_name"
-                log_step_info "Backed up existing kubeconfig to $backup_name"
-                mv "$merged_config" "${HOME}/.kube/config"
-                chmod 600 "${HOME}/.kube/config"
-                cp "${HOME}/.kube/config" "$effective_kubeconfig_path"
-            else
-                log_step_warn "Merge failed, using cluster-specific config only"
-                mv "$temp_kubeconfig" "$effective_kubeconfig_path"
-            fi
-            rm -f "$merged_config"
-        else
-            mv "$temp_kubeconfig" "${HOME}/.kube/config"
-            chmod 600 "${HOME}/.kube/config"
-            cp "${HOME}/.kube/config" "$effective_kubeconfig_path"
-        fi
-        rm -f "$temp_kubeconfig"
-        KUBECONFIG_PATH="$effective_kubeconfig_path"
-        log_step_info "Kubeconfig saved to $effective_kubeconfig_path"
-        log_step_info "Available contexts:"
-        KUBECONFIG="$KUBECONFIG_PATH" kubectl config get-contexts -o name 2>/dev/null | head -10 || true
-        local current_context=$(KUBECONFIG="$KUBECONFIG_PATH" kubectl config current-context 2>/dev/null || echo "")
-        if [[ -z "$current_context" || "$current_context" != "$context_name" ]]; then
-            KUBECONFIG="$KUBECONFIG_PATH" kubectl config use-context "$context_name" >/dev/null 2>&1 || true
-            kubectl config use-context "$context_name" >/dev/null 2>&1 || true
-            log_step_info "Set current context to: $context_name"
-        fi
-        configure_talosctl_endpoints "$bootstrap_node"
-        verify_kubernetes_access
-    } || {
+    if ! run_command talosctl kubeconfig "$temp_kubeconfig" --nodes "$bootstrap_node" --endpoints "$bootstrap_node"; then
         log_step_error "Failed to retrieve kubeconfig from $bootstrap_node"
         rm -f "$temp_kubeconfig"
         return 1
+    fi
+    chmod 600 "$temp_kubeconfig"
+    log_step_debug "Verifying fetched kubeconfig works..."
+    local correct_server="https://${CONTROL_PLANE_ENDPOINT}:6443"
+    if ! KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "temp-cluster" --server="$correct_server" >/dev/null 2>&1; then
+        log_step_debug "Using sed fallback to update server URL"
+        sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
+    fi
+    if ! KUBECONFIG="$temp_kubeconfig" kubectl cluster-info >/dev/null 2>&1; then
+        log_step_warn "Fresh kubeconfig failed initial test, may need certificate regeneration"
+        log_step_debug "Attempting to fetch with force-update to regenerate certificates..."
+        rm -f "$temp_kubeconfig"
+        if ! run_command talosctl kubeconfig "$temp_kubeconfig" --nodes "$bootstrap_node" --endpoints "$bootstrap_node" --force; then
+            log_step_error "Failed to retrieve kubeconfig even with force flag"
+            rm -f "$temp_kubeconfig"
+            return 1
+        fi
+        chmod 600 "$temp_kubeconfig"
+        KUBECONFIG="$temp_kubeconfig" kubectl config set-cluster "temp-cluster" --server="$correct_server" >/dev/null 2>&1 || \
+            sed -i "s|server: https://[^[:space:]]*|server: $correct_server|g" "$temp_kubeconfig"
+        if ! KUBECONFIG="$temp_kubeconfig" kubectl cluster-info >/dev/null 2>&1; then
+            log_step_error "Kubeconfig verification failed even after force update - cluster certificates may be corrupted"
+            rm -f "$temp_kubeconfig"
+            return 1
+        fi
+    fi
+    log_step_info "Fetched kubeconfig verified successfully"
+    local actual_cluster_name
+    actual_cluster_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.clusters[0].name}' 2>/dev/null || echo "")
+    if [[ -z "$actual_cluster_name" ]]; then
+        log_step_warn "Could not detect cluster name from kubeconfig, falling back to $CLUSTER_NAME"
+        actual_cluster_name="$CLUSTER_NAME"
+    fi
+    log_step_debug "Detected cluster name in kubeconfig: $actual_cluster_name"
+    local effective_cluster_name="$actual_cluster_name"
+    local context_name="$effective_cluster_name"
+    local effective_kubeconfig_path="${HOME}/.kube/config-${effective_cluster_name}"
+    local actual_context_name
+    actual_context_name=$(KUBECONFIG="$temp_kubeconfig" kubectl config view -o jsonpath='{.contexts[0].name}' 2>/dev/null || echo "")
+    if [[ -n "$actual_context_name" && "$actual_context_name" != "$context_name" ]]; then
+        log_step_debug "Renaming kubeconfig context from $actual_context_name to $context_name"
+        KUBECONFIG="$temp_kubeconfig" kubectl config rename-context "$actual_context_name" "$context_name" >/dev/null 2>&1 || {
+            log_step_warn "Failed to rename context, using original name: $actual_context_name"
+            context_name="$actual_context_name"
+        }
+    fi
+    KUBECONFIG="$temp_kubeconfig" kubectl config use-context "$context_name" >/dev/null 2>&1 || {
+        log_step_warn "Failed to set current context in temp kubeconfig"
     }
+    if [[ -f "${HOME}/.kube/config" ]]; then
+        log_step_info "Merging with existing kubeconfig at ${HOME}/.kube/config"
+        local main_backup="${HOME}/.kube/config.backup.$(date +%Y%m%d_%H%M%S)"
+        cp "${HOME}/.kube/config" "$main_backup" || {
+            log_step_warn "Failed to backup main kubeconfig"
+        }
+        local merged_config
+        merged_config=$(mktemp "${TMPDIR:-/tmp}/talos-kubeconfig-merged.XXXXXX")
+        if KUBECONFIG="${HOME}/.kube/config:${temp_kubeconfig}" kubectl config view --flatten > "$merged_config" 2>/dev/null && [[ -s "$merged_config" ]]; then
+            if KUBECONFIG="$merged_config" kubectl cluster-info >/dev/null 2>&1; then
+                mv "$merged_config" "${HOME}/.kube/config"
+                chmod 600 "${HOME}/.kube/config"
+                log_step_info "Successfully merged kubeconfig into ${HOME}/.kube/config"
+            else
+                log_step_warn "Merged kubeconfig failed verification, using cluster-specific config only"
+                mv "$temp_kubeconfig" "$effective_kubeconfig_path"
+                rm -f "$merged_config"
+            fi
+        else
+            log_step_warn "Merge command failed, using cluster-specific config only"
+            mv "$temp_kubeconfig" "$effective_kubeconfig_path"
+            rm -f "$merged_config"
+        fi
+        cp "${HOME}/.kube/config" "$effective_kubeconfig_path" || {
+            log_step_warn "Failed to copy to cluster-specific path"
+        }
+    else
+        mv "$temp_kubeconfig" "${HOME}/.kube/config"
+        chmod 600 "${HOME}/.kube/config"
+        cp "${HOME}/.kube/config" "$effective_kubeconfig_path" || true
+        log_step_info "Kubeconfig saved to ${HOME}/.kube/config and $effective_kubeconfig_path"
+    fi
+    rm -f "$temp_kubeconfig"
+    KUBECONFIG_PATH="$effective_kubeconfig_path"
+    log_step_debug "Verifying final kubeconfig at $KUBECONFIG_PATH..."
+    if ! KUBECONFIG="$KUBECONFIG_PATH" kubectl cluster-info >/dev/null 2>&1; then
+        log_step_warn "Final kubeconfig verification failed - attempting to use backup"
+        if [[ -f "${KUBECONFIG_PATH}.backup."* ]]; then
+            local latest_backup
+            latest_backup=$(ls -t "${KUBECONFIG_PATH}.backup."* 2>/dev/null | head -1)
+            if [[ -n "$latest_backup" ]]; then
+                log_step_warn "Restoring from backup: $latest_backup"
+                cp "$latest_backup" "$KUBECONFIG_PATH"
+            fi
+        fi
+    fi
+    log_step_info "Kubeconfig saved to $effective_kubeconfig_path"
+    log_step_info "Available contexts:"
+    KUBECONFIG="$KUBECONFIG_PATH" kubectl config get-contexts -o name 2>/dev/null | head -10 || true
+    local current_context
+    current_context=$(KUBECONFIG="$KUBECONFIG_PATH" kubectl config current-context 2>/dev/null || echo "")
+    if [[ -z "$current_context" || "$current_context" != "$context_name" ]]; then
+        KUBECONFIG="$KUBECONFIG_PATH" kubectl config use-context "$context_name" >/dev/null 2>&1 || true
+        kubectl config use-context "$context_name" >/dev/null 2>&1 || true
+        log_step_info "Set current context to: $context_name"
+    fi
+    configure_talosctl_endpoints "$bootstrap_node"
+    verify_kubernetes_access
     log_job_trace "update_kubeconfig: Kubeconfig update completed"
 }
 
