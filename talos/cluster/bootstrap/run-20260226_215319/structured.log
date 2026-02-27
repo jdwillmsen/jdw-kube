@@ -1,0 +1,507 @@
+========================================
+Talos Bootstrap Log Started: Thu, Feb 26, 2026  9:53:19 PM
+Version: 3.22.3
+Script: bootstrap.sh
+User: jdwil
+Working Directory: /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap
+Hostname: JakeGPC
+Platform: msys
+Cluster: cluster
+Control Plane Endpoint: cluster.jdwlabs.com
+HAProxy IP: 192.168.1.199
+Arguments: reconcile
+Environment:
+  KUBERNETES_VERSION=v1.35.0
+  TALOS_VERSION=v1.12.3
+  AUTO_APPROVE=true
+  DRY_RUN=false
+  PLAN_MODE=false
+  SKIP_PREFLIGHT=false
+  FORCE_RECONFIGURE=false
+  LOG_LEVEL=DEBUG
+========================================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ▄▄▄█████▓ ▄▄▄       ██▓      ▒█████    ██████ 
+  ▓  ██▒ ▓▒▒████▄    ▓██▒     ▒██▓  ██▒▒██    ▒ 
+  ▒ ▓██░ ▒░▒██  ▀█▄  ▒██░     ▒██▒  ██░░ ▓██▄   
+  ░ ▓██▓ ░ ░██▄▄▄▄██ ▒██░     ░██  █▀ ░  ▒   ██▒
+    ▒██▒ ░  ▓█   ▓██▒░██████▒░▒███▒█▄ ▒██████▒▒
+    ▒ ░░    ▒▒   ▓▒█░░ ▒░▓  ░░░ ▒▒░ ▒ ▒ ▒▓▒ ▒ ░
+            SMART RECONCILIATION v3.22.3
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[21:53:20] [INFO ] [PLAN  ] Reconcile Execution
+[21:53:20] [INFO ] [STAGE ] Environment Setup
+[21:53:20] [INFO ] [JOB   ] Detect Platform
+[21:53:20] [INFO ] [STEP  ] Detected Windows/Git Bash environment
+[21:53:20] [INFO ] [JOB   ] Check Prerequisites
+[21:53:21] [DEBUG] [DETAIL] talosctl version: v1.12.3
+[21:53:21] [INFO ] [STEP  ] Prerequisites satisfied
+[21:53:21] [INFO ] [DETAIL] Loaded PROXMOX_TOKEN_ID from terraform.tfvars
+[21:53:21] [INFO ] [DETAIL] Loaded PROXMOX_TOKEN_SECRET from terraform.tfvars (masked)
+[21:53:21] [DEBUG] [JOB   ] Proxmox API token configured: terraform@pve!cluster
+[21:53:21] [INFO ] [STEP  ] Loaded cluster_name from terraform.tfvars: core
+[21:53:21] [DEBUG] [DETAIL] Updated paths for cluster 'core':
+[21:53:21] [DEBUG] [DETAIL]   CLUSTER_DIR: /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core
+[21:53:21] [DEBUG] [DETAIL]   KUBECONFIG_PATH: /c/Users/jdwil/.kube/config-core
+[21:53:21] [DEBUG] [DETAIL]   TALOSCONFIG: /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/secrets/talosconfig
+[21:53:21] [INFO ] [JOB   ] Initialize Directories
+[21:53:22] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/.gitignore
+[21:53:22] [DEBUG] [DETAIL] Created .gitignore
+[2026-02-26 21:53:22] [INIT] Directories initialized
+[21:53:22] [INFO ] [JOB   ] Loading Desired State from Terraform
+[2026-02-26 21:53:22] [TERRAFORM] File: /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/terraform.tfvars, Size: 1822 bytes, Lines: 81, Hash: ...
+[21:53:22] [DEBUG] [STEP  ] Found: /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/terraform.tfvars
+[21:53:23] [DEBUG] [DETAIL] Terraform hash: 55c6c6fc61d53d62...
+[21:53:23] [DEBUG] [DETAIL] Proxmox endpoint: https://192.168.1.200:8006/api2/json
+[21:53:23] [DEBUG] [DETAIL] SSH host: 192.168.1.200
+[21:53:23] [DEBUG] [DETAIL] Parsing array: talos_control_configuration (role: control-plane)
+[21:53:23] [DEBUG] [DETAIL] Found array start: talos_control_configuration
+[21:53:23] [DEBUG] [DETAIL] Parsed control-plane: talos-cp-01 (VMID: 200)
+[21:53:23] [DEBUG] [DETAIL] Parsed control-plane: talos-cp-02 (VMID: 201)
+[21:53:23] [DEBUG] [DETAIL] Parsed control-plane: talos-cp-03 (VMID: 202)
+[21:53:23] [DEBUG] [DETAIL] Parsed 3 control-plane nodes from talos_control_configuration
+[21:53:24] [DEBUG] [DETAIL] Parsing array: talos_worker_configuration (role: worker)
+[21:53:24] [DEBUG] [DETAIL] Found array start: talos_worker_configuration
+[21:53:24] [DEBUG] [DETAIL] Parsed worker: talos-worker-01 (VMID: 300)
+[21:53:24] [DEBUG] [DETAIL] Parsed worker: talos-worker-02 (VMID: 301)
+[21:53:24] [DEBUG] [DETAIL] Parsed worker: talos-worker-03 (VMID: 302)
+[21:53:24] [DEBUG] [DETAIL] Parsed worker: talos-worker-04 (VMID: 303)
+[21:53:24] [DEBUG] [DETAIL] Parsed 4 worker nodes from talos_worker_configuration
+[21:53:24] [INFO ] [STEP  ] Parsed: 3 control planes, 4 workers
+[2026-02-26 21:53:24] [TERRAFORM] Hash: 55c6c6fc61d53d6276d5ecc1c0663147f5d7656ccbb06375e82d71dab25f1f1a, CP: 3, Workers: 4
+[21:53:24] [INFO ] [JOB   ] Loading Deployed State
+[21:53:24] [DEBUG] [STEP  ] No existing state file found - starting fresh
+[21:53:24] [INFO ] [STAGE ] Node Discovery
+[21:53:24] [INFO ] [JOB   ] Pre-flight Checks - Verifying VM readiness
+[21:53:24] [INFO ] [STEP  ] Checking 7 VMs for Talos API readiness (timeout: 60s)
+[21:53:26] [DEBUG] [DETAIL] Fetched MAC BC:24:11:CA:E2:65 for VM 201
+[21:53:34] [DEBUG] [DETAIL] Found ARP entries for VM 201 MAC BC:24:11:CA:E2:65
+[21:53:35] [WARN ] [DETAIL] No reachable IP found for VM 201, using first ARP entry: 192.168.1.221
+[21:53:35] [INFO ] [DETAIL] VMID 201 (talos-cp-02 at 192.168.1.221): Talos API ready
+[21:53:37] [DEBUG] [DETAIL] Fetched MAC BC:24:11:FD:8A:4A for VM 200
+[21:53:45] [DEBUG] [DETAIL] Found ARP entries for VM 200 MAC BC:24:11:FD:8A:4A
+[21:53:45] [WARN ] [DETAIL] No reachable IP found for VM 200, using first ARP entry: 192.168.1.79
+[21:53:45] [INFO ] [DETAIL] VMID 200 (talos-cp-01 at 192.168.1.79): Talos API ready
+[21:53:47] [DEBUG] [DETAIL] Fetched MAC BC:24:11:08:72:3A for VM 202
+[21:53:55] [DEBUG] [DETAIL] Found ARP entries for VM 202 MAC BC:24:11:08:72:3A
+[21:53:56] [WARN ] [DETAIL] No reachable IP found for VM 202, using first ARP entry: 192.168.1.233
+[21:53:56] [INFO ] [DETAIL] VMID 202 (talos-cp-03 at 192.168.1.233): Talos API ready
+[21:53:57] [DEBUG] [DETAIL] Fetched MAC BC:24:11:1B:01:90 for VM 300
+[21:54:05] [DEBUG] [DETAIL] Found ARP entries for VM 300 MAC BC:24:11:1B:01:90
+[21:54:05] [WARN ] [DETAIL] No reachable IP found for VM 300, using first ARP entry: 192.168.1.77
+[21:54:06] [INFO ] [DETAIL] VMID 300 (talos-worker-01 at 192.168.1.77): Talos API ready
+[21:54:08] [DEBUG] [DETAIL] Fetched MAC BC:24:11:9D:45:97 for VM 301
+[21:54:16] [DEBUG] [DETAIL] Found ARP entries for VM 301 MAC BC:24:11:9D:45:97
+[21:54:16] [WARN ] [DETAIL] No reachable IP found for VM 301, using first ARP entry: 192.168.1.118
+[21:54:16] [INFO ] [DETAIL] VMID 301 (talos-worker-02 at 192.168.1.118): Talos API ready
+[21:54:18] [DEBUG] [DETAIL] Fetched MAC BC:24:11:E5:8D:9E for VM 302
+[21:54:26] [DEBUG] [DETAIL] Found ARP entries for VM 302 MAC BC:24:11:E5:8D:9E
+[21:54:26] [WARN ] [DETAIL] No reachable IP found for VM 302, using first ARP entry: 192.168.1.100
+[21:54:27] [INFO ] [DETAIL] VMID 302 (talos-worker-03 at 192.168.1.100): Talos API ready
+[21:54:29] [DEBUG] [DETAIL] Fetched MAC BC:24:11:42:33:CC for VM 303
+[21:54:37] [DEBUG] [DETAIL] Found ARP entries for VM 303 MAC BC:24:11:42:33:CC
+[21:54:37] [WARN ] [DETAIL] No reachable IP found for VM 303, using first ARP entry: 192.168.1.82
+[21:54:37] [INFO ] [DETAIL] VMID 303 (talos-worker-04 at 192.168.1.82): Talos API ready
+[21:54:37] [INFO ] [STEP  ] All 7 VMs are ready
+[21:54:37] [INFO ] [JOB   ] Synchronizing deployed IPs with live discovery
+[21:54:37] [INFO ] [STEP  ] All IPs are current (no changes needed)
+[21:54:37] [INFO ] [STAGE ] Configuration Generation
+[21:54:37] [INFO ] [STEP  ] Generating base Talos configurations
+[21:54:37] [INFO ] [STEP  ] Generating secrets
+[21:54:39] [INFO ] [STEP  ] Talos config saved to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/secrets/talosconfig
+[21:54:39] [INFO ] [STEP  ] Generating control plane configurations
+[21:54:39] [INFO ] [STEP  ] Generating config for talos-cp-02 (VMID: 201)
+[21:54:40] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.patches/control-plane-201.yaml
+[21:54:42] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/control-plane-201.sha256
+[21:54:42] [INFO ] [STEP  ] Generating config for talos-cp-01 (VMID: 200)
+[21:54:43] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.patches/control-plane-200.yaml
+[21:54:44] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/control-plane-200.sha256
+[21:54:45] [INFO ] [STEP  ] Generating config for talos-cp-03 (VMID: 202)
+[21:54:45] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.patches/control-plane-202.yaml
+[21:54:47] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/control-plane-202.sha256
+[21:54:47] [INFO ] [STEP  ] Generating worker configurations
+[21:54:47] [INFO ] [STEP  ] Generating config for talos-worker-01 (VMID: 300)
+[21:54:48] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.patches/worker-300.yaml
+[21:54:50] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/worker-300.sha256
+[21:54:50] [INFO ] [STEP  ] Generating config for talos-worker-02 (VMID: 301)
+[21:54:51] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.patches/worker-301.yaml
+[21:54:52] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/worker-301.sha256
+[21:54:53] [INFO ] [STEP  ] Generating config for talos-worker-03 (VMID: 302)
+[21:54:53] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.patches/worker-302.yaml
+[21:54:55] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/worker-302.sha256
+[21:54:56] [INFO ] [STEP  ] Generating config for talos-worker-04 (VMID: 303)
+[21:54:56] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.patches/worker-303.yaml
+[21:54:58] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/worker-303.sha256
+[21:54:58] [INFO ] [STEP  ] Verifying configuration files
+[21:54:58] [INFO ] [STEP  ] Configuration files ready in /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes (3 CPs, 4 Workers)
+[21:54:58] [INFO ] [STAGE ] Reconciling Cluster State
+[21:54:58] [INFO ] [JOB   ] Discovering Live Cluster State
+[21:54:58] [INFO ] [JOB   ] Fetching Proxmox cluster node IPs from API
+[21:54:58] [DEBUG] [STEP  ] Querying Proxmox API: https://192.168.1.200:8006/api2/json/api2/json/cluster/status
+[21:54:59] [DEBUG] [STEP  ] Resolved 4 Proxmox node IPs
+[21:54:59] [DEBUG] [STEP  ] Querying Proxmox nodes for VM status
+[21:54:59] [DEBUG] [STEP  ] Querying node pve3 (192.168.1.202) for VM 201
+[21:55:01] [DEBUG] [JOB   ] MAC: VM 201 -> BC:24:11:CA:E2:65 (on node pve3)
+[21:55:01] [DEBUG] [STEP  ] Querying node pve2 (192.168.1.201) for VM 200
+[21:55:03] [DEBUG] [JOB   ] MAC: VM 200 -> BC:24:11:FD:8A:4A (on node pve2)
+[21:55:03] [DEBUG] [STEP  ] Querying node pve4 (192.168.1.203) for VM 202
+[21:55:05] [DEBUG] [JOB   ] MAC: VM 202 -> BC:24:11:08:72:3A (on node pve4)
+[21:55:05] [DEBUG] [STEP  ] Querying node pve1 (192.168.1.200) for VM 300
+[21:55:06] [DEBUG] [JOB   ] MAC: VM 300 -> BC:24:11:1B:01:90 (on node pve1)
+[21:55:06] [DEBUG] [STEP  ] Querying node pve2 (192.168.1.201) for VM 301
+[21:55:07] [DEBUG] [JOB   ] MAC: VM 301 -> BC:24:11:9D:45:97 (on node pve2)
+[21:55:07] [DEBUG] [STEP  ] Querying node pve3 (192.168.1.202) for VM 302
+[21:55:09] [DEBUG] [JOB   ] MAC: VM 302 -> BC:24:11:E5:8D:9E (on node pve3)
+[21:55:09] [DEBUG] [STEP  ] Querying node pve4 (192.168.1.203) for VM 303
+[21:55:10] [DEBUG] [JOB   ] MAC: VM 303 -> BC:24:11:42:33:CC (on node pve4)
+[21:55:10] [DEBUG] [STEP  ] Populating ARP table from main node (192.168.1.200)
+[21:55:11] [DEBUG] [STEP  ] [ARP-SCAN] Populating ARP table from 192.168.1.200 (subnet: 192.168.1.0/24)
+[21:55:11] [DEBUG] [STEP  ] [ARP-SCAN] Pinging 192.168.1.0/24...
+[21:55:18] [DEBUG] [STEP  ] [ARP-SCAN] Reading ARP table...
+[21:55:18] [DEBUG] [STEP  ] [ARP-SCAN] Looking for 7 MAC addresses:
+[21:55:18] [DEBUG] [STEP  ] [ARP-SCAN]   - VM 200 -> MAC BC:24:11:FD:8A:4A
+[21:55:18] [DEBUG] [STEP  ] [ARP-SCAN]   - VM 302 -> MAC BC:24:11:E5:8D:9E
+[21:55:18] [DEBUG] [STEP  ] [ARP-SCAN]   - VM 301 -> MAC BC:24:11:9D:45:97
+[21:55:18] [DEBUG] [STEP  ] [ARP-SCAN]   - VM 303 -> MAC BC:24:11:42:33:CC
+[21:55:18] [DEBUG] [STEP  ] [ARP-SCAN]   - VM 202 -> MAC BC:24:11:08:72:3A
+[21:55:19] [DEBUG] [STEP  ] [ARP-SCAN]   - VM 201 -> MAC BC:24:11:CA:E2:65
+[21:55:19] [DEBUG] [STEP  ] [ARP-SCAN]   - VM 300 -> MAC BC:24:11:1B:01:90
+[21:55:19] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: TYPE -> IP
+[21:55:19] [DEBUG] [STEP  ] [ARP-SCAN] Found VM 302 -> 192.168.1.100 (BC:24:11:E5:8D:9E)
+[21:55:20] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: 84:47:09:63:61:31 -> 192.168.1.202
+[21:55:20] [DEBUG] [STEP  ] [ARP-SCAN] Found VM 201 -> 192.168.1.221 (BC:24:11:CA:E2:65)
+[21:55:22] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: 98:28:A6:0B:B5:2F -> 192.168.1.205
+[21:55:23] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: BC:24:11:9D:A1:AF -> 192.168.1.83
+[21:55:26] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: 84:47:09:62:FF:CD -> 192.168.1.203
+[21:55:29] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: E8:84:A5:96:67:FC -> 192.168.1.193
+[21:55:29] [DEBUG] [STEP  ] [ARP-SCAN] Found VM 301 -> 192.168.1.118 (BC:24:11:9D:45:97)
+[21:55:30] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: EC:C3:02:F8:0B:B1 -> 192.168.1.254
+[21:55:37] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: 04:D4:C4:58:AC:BD -> 192.168.1.197
+[21:55:38] [DEBUG] [STEP  ] [ARP-SCAN] Found VM 300 -> 192.168.1.77 (BC:24:11:1B:01:90)
+[21:55:43] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: E0:8F:4C:BB:54:FE -> 192.168.1.123
+[21:55:45] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: 84:47:09:63:06:4E -> 192.168.1.201
+[21:55:47] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: 7E:E0:21:32:76:AC -> 192.168.1.170
+[21:55:47] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: 88:AE:1D:54:F9:88 -> 192.168.1.204
+[21:55:48] [DEBUG] [STEP  ] [ARP-SCAN] Found VM 303 -> 192.168.1.82 (BC:24:11:42:33:CC)
+[21:55:48] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: BC:24:11:F2:5E:23 -> 192.168.1.199
+[21:55:49] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: D8:31:34:30:3B:3A -> 192.168.1.218
+[21:55:49] [DEBUG] [STEP  ] [ARP-SCAN] Found VM 202 -> 192.168.1.233 (BC:24:11:08:72:3A)
+[21:55:49] [DEBUG] [STEP  ] [ARP-SCAN] Found VM 200 -> 192.168.1.79 (BC:24:11:FD:8A:4A)
+[21:55:50] [DEBUG] [STEP  ] [ARP-SCAN] Unmatched MAC: BC:24:11:95:0F:0F -> 192.168.1.173
+[21:55:50] [DEBUG] [STEP  ] [ARP-SCAN] Complete: Found 7 of 7 VMs
+[21:55:51] [DEBUG] [STEP  ] ARP discovery complete: 7 of 7 VMs found
+[21:55:51] [DEBUG] [STEP  ] MAC to VMID mapping (7 entries):
+[21:55:51] [DEBUG] [STEP  ]   MAC BC:24:11:FD:8A:4A -> VM 200
+[21:55:51] [DEBUG] [STEP  ]   MAC BC:24:11:E5:8D:9E -> VM 302
+[21:55:51] [DEBUG] [STEP  ]   MAC BC:24:11:9D:45:97 -> VM 301
+[21:55:51] [DEBUG] [STEP  ]   MAC BC:24:11:42:33:CC -> VM 303
+[21:55:51] [DEBUG] [STEP  ]   MAC BC:24:11:08:72:3A -> VM 202
+[21:55:51] [DEBUG] [STEP  ]   MAC BC:24:11:CA:E2:65 -> VM 201
+[21:55:51] [DEBUG] [STEP  ]   MAC BC:24:11:1B:01:90 -> VM 300
+[21:55:51] [DEBUG] [STEP  ] VMID to IP mapping (7 entries):
+[21:55:51] [DEBUG] [STEP  ]   VM 201 -> IP 192.168.1.221
+[21:55:51] [DEBUG] [STEP  ]   VM 200 -> IP 192.168.1.79
+[21:55:51] [DEBUG] [STEP  ]   VM 202 -> IP 192.168.1.233
+[21:55:51] [DEBUG] [STEP  ]   VM 300 -> IP 192.168.1.77
+[21:55:51] [DEBUG] [STEP  ]   VM 301 -> IP 192.168.1.118
+[21:55:51] [DEBUG] [STEP  ]   VM 302 -> IP 192.168.1.100
+[21:55:52] [DEBUG] [STEP  ]   VM 303 -> IP 192.168.1.82
+[21:55:52] [DEBUG] [STEP  ] Checking Talos cluster membership
+[21:55:52] [INFO ] [STEP  ] No control plane IP available for membership check
+[21:55:52] [DEBUG] [STEP  ] Discovery complete: 7 nodes found
+[21:55:52] [INFO ] [JOB   ] Building Reconciliation Plan
+[21:55:52] [DEBUG] [STEP  ] Checking for new nodes to add
+[2026-02-26 21:55:52] [RECONCILE] ADD_CP: 201
+[2026-02-26 21:55:52] [RECONCILE] ADD_CP: 200
+[2026-02-26 21:55:52] [RECONCILE] ADD_CP: 202
+[2026-02-26 21:55:52] [RECONCILE] ADD_WORKER: 300
+[2026-02-26 21:55:52] [RECONCILE] ADD_WORKER: 301
+[2026-02-26 21:55:52] [RECONCILE] ADD_WORKER: 302
+[2026-02-26 21:55:52] [RECONCILE] ADD_WORKER: 303
+[21:55:52] [DEBUG] [STEP  ] Checking for nodes to remove
+[21:55:52] [DEBUG] [STEP  ] Checking for configuration drift
+[21:55:52] [INFO ] [JOB   ] Reconciliation Plan Summary
+┌─────────────────────────────────────────────────────────────┐
+│                     RECONCILIATION PLAN                     │
+├─────────────────────────────────────────────────────────────┤
+│  ADD CONTROL PLANES:                                        │
+│     VMID 201  talos-cp-02  node: pve3                       │
+│     VMID 200  talos-cp-01  node: pve2                       │
+│     VMID 202  talos-cp-03  node: pve4                       │
+├─────────────────────────────────────────────────────────────┤
+│  ADD WORKERS:                                               │
+│     VMID 300  talos-worker-01  node: pve1                   │
+│     VMID 301  talos-worker-02  node: pve2                   │
+│     VMID 302  talos-worker-03  node: pve3                   │
+│     VMID 303  talos-worker-04  node: pve4                   │
+├─────────────────────────────────────────────────────────────┤
+│  TOTAL OPERATIONS: 7                                        │
+└─────────────────────────────────────────────────────────────┘
+[21:55:54] [INFO ] [JOB   ] Executing Reconciliation Plan
+[21:55:55] [INFO ] [STAGE ] Phase 3a: Adding Control Planes
+[21:55:55] [INFO ] [STEP  ] Adding control plane VM 201 (talos-cp-02)
+[21:55:55] [DEBUG] [DETAIL] Using live discovered IP for VM 201: 192.168.1.221
+[21:55:55] [INFO ] [STEP  ] Discovered IP: 192.168.1.221
+[21:55:55] [INFO ] [STEP  ] Applying config to 192.168.1.221 (VMID: 201, role: control-plane, attempt 1/5)...
+[21:55:55] [INFO ] [STEP  ] Configuration applied successfully, node will reboot (VMID: 201)
+[21:55:56] [INFO ] [STEP  ] Monitoring VM 201 (IP: 192.168.1.221, role: control-plane, reboot_expected: true)...
+[21:55:56] [INFO ] [STEP  ] Node 192.168.1.221 (VMID: 201) stopped responding (possible reboot starting)
+[21:55:56] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Immediate flush triggered...
+[21:55:56] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Repopulating 192.168.1.0/24...
+[21:56:03] [DEBUG] [DETAIL] Looking for MAC BC:24:11:CA:E2:65 (VM 201) in ARP tables across all nodes...
+[21:56:03] [DEBUG] [DETAIL] Found IPs for VM 201 MAC BC:24:11:CA:E2:65: 192.168.1.145 
+[21:56:03] [DEBUG] [DETAIL] Testing candidate IP 192.168.1.145 for VM 201...
+[21:56:06] [DEBUG] [DETAIL] [VMID:201] 192.168.1.145:50000 is closed/unreachable
+[21:56:06] [WARN ] [DETAIL] No responsive IP found for VM 201, returning first ARP entry: 192.168.1.145
+[21:56:06] [INFO ] [STEP  ] IP changed: 192.168.1.221 -> 192.168.1.145 (reboot confirmed, VMID: 201)
+[21:56:10] [DEBUG] [DETAIL] [VMID:201] 192.168.1.145:50000 is closed/unreachable
+[21:56:15] [DEBUG] [DETAIL] [VMID:201] 192.168.1.145:50000 is closed/unreachable
+[21:56:19] [DEBUG] [DETAIL] [VMID:201] 192.168.1.145:50000 is closed/unreachable
+[21:56:23] [DEBUG] [DETAIL] [VMID:201] 192.168.1.145:50000 is closed/unreachable
+[21:56:27] [DEBUG] [DETAIL] Node 192.168.1.145 (VMID: 201) has certificates, trying secure mode
+[21:56:28] [DEBUG] [DETAIL] Node 192.168.1.145 (VMID: 201) responding to secure version check
+[21:56:28] [INFO ] [STEP  ] VM 201 ready at 192.168.1.145 (10s)
+[21:56:29] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/cp-201.sha256
+[21:56:29] [INFO ] [STEP  ] Control plane VM 201 added successfully (IP: 192.168.1.145)
+[2026-02-26 21:56:29] [DEPLOY] SUCCESS: CP 201 at 192.168.1.145
+[21:56:29] [INFO ] [STEP  ] Adding control plane VM 200 (talos-cp-01)
+[21:56:29] [DEBUG] [DETAIL] Using live discovered IP for VM 200: 192.168.1.79
+[21:56:29] [INFO ] [STEP  ] Discovered IP: 192.168.1.79
+[21:56:29] [INFO ] [STEP  ] Applying config to 192.168.1.79 (VMID: 200, role: control-plane, attempt 1/5)...
+[21:56:30] [INFO ] [STEP  ] Configuration applied successfully, node will reboot (VMID: 200)
+[21:56:30] [INFO ] [STEP  ] Monitoring VM 200 (IP: 192.168.1.79, role: control-plane, reboot_expected: true)...
+[21:56:30] [INFO ] [STEP  ] Node 192.168.1.79 (VMID: 200) stopped responding (possible reboot starting)
+[21:56:30] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Immediate flush triggered...
+[21:56:30] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Repopulating 192.168.1.0/24...
+[21:56:37] [DEBUG] [DETAIL] Looking for MAC BC:24:11:FD:8A:4A (VM 200) in ARP tables across all nodes...
+[21:56:38] [DEBUG] [DETAIL] Found IPs for VM 200 MAC BC:24:11:FD:8A:4A: 192.168.1.213 
+[21:56:38] [DEBUG] [DETAIL] Testing candidate IP 192.168.1.213 for VM 200...
+[21:56:40] [DEBUG] [DETAIL] [VMID:200] 192.168.1.213:50000 is closed/unreachable
+[21:56:40] [WARN ] [DETAIL] No responsive IP found for VM 200, returning first ARP entry: 192.168.1.213
+[21:56:40] [INFO ] [STEP  ] IP changed: 192.168.1.79 -> 192.168.1.213 (reboot confirmed, VMID: 200)
+[21:56:44] [DEBUG] [DETAIL] [VMID:200] 192.168.1.213:50000 is closed/unreachable
+[21:56:49] [DEBUG] [DETAIL] [VMID:200] 192.168.1.213:50000 is closed/unreachable
+[21:56:53] [DEBUG] [DETAIL] [VMID:200] 192.168.1.213:50000 is closed/unreachable
+[21:56:57] [DEBUG] [DETAIL] [VMID:200] 192.168.1.213:50000 is closed/unreachable
+[21:57:02] [DEBUG] [DETAIL] [VMID:200] 192.168.1.213:50000 is closed/unreachable
+[21:57:02] [INFO ] [STEP  ] Verifying Talos ready... (10s)
+[21:57:05] [DEBUG] [DETAIL] Node 192.168.1.213 (VMID: 200) has certificates, trying secure mode
+[21:57:05] [DEBUG] [DETAIL] Node 192.168.1.213 (VMID: 200) responding to secure version check
+[21:57:05] [INFO ] [STEP  ] VM 200 ready at 192.168.1.213 (12s)
+[21:57:06] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/cp-200.sha256
+[21:57:06] [INFO ] [STEP  ] Control plane VM 200 added successfully (IP: 192.168.1.213)
+[2026-02-26 21:57:06] [DEPLOY] SUCCESS: CP 200 at 192.168.1.213
+[21:57:06] [INFO ] [STEP  ] Adding control plane VM 202 (talos-cp-03)
+[21:57:06] [DEBUG] [DETAIL] Using live discovered IP for VM 202: 192.168.1.233
+[21:57:06] [INFO ] [STEP  ] Discovered IP: 192.168.1.233
+[21:57:06] [INFO ] [STEP  ] Applying config to 192.168.1.233 (VMID: 202, role: control-plane, attempt 1/5)...
+[21:57:07] [INFO ] [STEP  ] Configuration applied successfully, node will reboot (VMID: 202)
+[21:57:07] [INFO ] [STEP  ] Monitoring VM 202 (IP: 192.168.1.233, role: control-plane, reboot_expected: true)...
+[21:57:07] [INFO ] [STEP  ] Node 192.168.1.233 (VMID: 202) stopped responding (possible reboot starting)
+[21:57:07] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Immediate flush triggered...
+[21:57:07] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Repopulating 192.168.1.0/24...
+[21:57:14] [DEBUG] [DETAIL] Looking for MAC BC:24:11:08:72:3A (VM 202) in ARP tables across all nodes...
+[21:57:15] [DEBUG] [DETAIL] Found IPs for VM 202 MAC BC:24:11:08:72:3A: 192.168.1.195 
+[21:57:15] [DEBUG] [DETAIL] Testing candidate IP 192.168.1.195 for VM 202...
+[21:57:17] [DEBUG] [DETAIL] [VMID:202] 192.168.1.195:50000 is closed/unreachable
+[21:57:17] [WARN ] [DETAIL] No responsive IP found for VM 202, returning first ARP entry: 192.168.1.195
+[21:57:17] [INFO ] [STEP  ] IP changed: 192.168.1.233 -> 192.168.1.195 (reboot confirmed, VMID: 202)
+[21:57:22] [DEBUG] [DETAIL] [VMID:202] 192.168.1.195:50000 is closed/unreachable
+[21:57:26] [DEBUG] [DETAIL] [VMID:202] 192.168.1.195:50000 is closed/unreachable
+[21:57:30] [DEBUG] [DETAIL] [VMID:202] 192.168.1.195:50000 is closed/unreachable
+[21:57:35] [DEBUG] [DETAIL] [VMID:202] 192.168.1.195:50000 is closed/unreachable
+[21:57:38] [DEBUG] [DETAIL] Node 192.168.1.195 (VMID: 202) has certificates, trying secure mode
+[21:57:38] [DEBUG] [DETAIL] Node 192.168.1.195 (VMID: 202) responding to secure version check
+[21:57:38] [INFO ] [STEP  ] VM 202 ready at 192.168.1.195 (10s)
+[21:57:39] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/cp-202.sha256
+[21:57:39] [INFO ] [STEP  ] Control plane VM 202 added successfully (IP: 192.168.1.195)
+[2026-02-26 21:57:39] [DEPLOY] SUCCESS: CP 202 at 192.168.1.195
+[21:57:39] [INFO ] [STAGE ] Phase 3b: Adding Workers
+[21:57:39] [INFO ] [STEP  ] Adding worker VM 300 (talos-worker-01)
+[21:57:39] [DEBUG] [DETAIL] Using live discovered IP for VM 300: 192.168.1.77
+[21:57:39] [INFO ] [STEP  ] Discovered IP: 192.168.1.77
+[21:57:39] [INFO ] [STEP  ] Applying config to 192.168.1.77 (VMID: 300, role: worker, attempt 1/5)...
+[21:57:40] [INFO ] [STEP  ] Configuration applied successfully, node will reboot (VMID: 300)
+[21:57:40] [INFO ] [STEP  ] Monitoring VM 300 (IP: 192.168.1.77, role: worker, reboot_expected: true)...
+[21:57:40] [INFO ] [STEP  ] Node 192.168.1.77 (VMID: 300) stopped responding (possible reboot starting)
+[21:57:40] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Immediate flush triggered...
+[21:57:40] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Repopulating 192.168.1.0/24...
+[21:57:47] [DEBUG] [DETAIL] Looking for MAC BC:24:11:1B:01:90 (VM 300) in ARP tables across all nodes...
+[21:57:48] [DEBUG] [DETAIL] Found IPs for VM 300 MAC BC:24:11:1B:01:90: 192.168.1.104 
+[21:57:48] [DEBUG] [DETAIL] Testing candidate IP 192.168.1.104 for VM 300...
+[21:57:50] [DEBUG] [DETAIL] [VMID:300] 192.168.1.104:50000 is closed/unreachable
+[21:57:50] [WARN ] [DETAIL] No responsive IP found for VM 300, returning first ARP entry: 192.168.1.104
+[21:57:50] [INFO ] [STEP  ] IP changed: 192.168.1.77 -> 192.168.1.104 (reboot confirmed, VMID: 300)
+[21:57:55] [DEBUG] [DETAIL] [VMID:300] 192.168.1.104:50000 is closed/unreachable
+[21:57:59] [DEBUG] [DETAIL] [VMID:300] 192.168.1.104:50000 is closed/unreachable
+[21:58:03] [DEBUG] [DETAIL] [VMID:300] 192.168.1.104:50000 is closed/unreachable
+[21:58:08] [DEBUG] [DETAIL] [VMID:300] 192.168.1.104:50000 is closed/unreachable
+[21:58:10] [DEBUG] [DETAIL] Node 192.168.1.104 (VMID: 300) has certificates, trying secure mode
+[21:58:11] [DEBUG] [DETAIL] Node 192.168.1.104 (VMID: 300) responding to secure version check
+[21:58:11] [INFO ] [STEP  ] VM 300 ready at 192.168.1.104 (10s)
+[21:58:12] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/worker-300.sha256
+[21:58:12] [INFO ] [STEP  ] Worker VM 300 added successfully (IP: 192.168.1.104)
+[2026-02-26 21:58:12] [DEPLOY] SUCCESS: Worker 300 at 192.168.1.104
+[21:58:12] [INFO ] [STEP  ] Adding worker VM 301 (talos-worker-02)
+[21:58:12] [DEBUG] [DETAIL] Using live discovered IP for VM 301: 192.168.1.118
+[21:58:12] [INFO ] [STEP  ] Discovered IP: 192.168.1.118
+[21:58:12] [INFO ] [STEP  ] Applying config to 192.168.1.118 (VMID: 301, role: worker, attempt 1/5)...
+[21:58:13] [INFO ] [STEP  ] Configuration applied successfully, node will reboot (VMID: 301)
+[21:58:13] [INFO ] [STEP  ] Monitoring VM 301 (IP: 192.168.1.118, role: worker, reboot_expected: true)...
+[21:58:13] [INFO ] [STEP  ] Node 192.168.1.118 (VMID: 301) stopped responding (possible reboot starting)
+[21:58:13] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Immediate flush triggered...
+[21:58:13] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Repopulating 192.168.1.0/24...
+[21:58:20] [DEBUG] [DETAIL] Looking for MAC BC:24:11:9D:45:97 (VM 301) in ARP tables across all nodes...
+[21:58:21] [DEBUG] [DETAIL] Found IPs for VM 301 MAC BC:24:11:9D:45:97: 192.168.1.143 
+[21:58:21] [DEBUG] [DETAIL] Testing candidate IP 192.168.1.143 for VM 301...
+[21:58:23] [DEBUG] [DETAIL] [VMID:301] 192.168.1.143:50000 is closed/unreachable
+[21:58:23] [WARN ] [DETAIL] No responsive IP found for VM 301, returning first ARP entry: 192.168.1.143
+[21:58:23] [INFO ] [STEP  ] IP changed: 192.168.1.118 -> 192.168.1.143 (reboot confirmed, VMID: 301)
+[21:58:28] [DEBUG] [DETAIL] [VMID:301] 192.168.1.143:50000 is closed/unreachable
+[21:58:32] [DEBUG] [DETAIL] [VMID:301] 192.168.1.143:50000 is closed/unreachable
+[21:58:36] [DEBUG] [DETAIL] [VMID:301] 192.168.1.143:50000 is closed/unreachable
+[21:58:41] [DEBUG] [DETAIL] [VMID:301] 192.168.1.143:50000 is closed/unreachable
+[21:58:45] [DEBUG] [DETAIL] [VMID:301] 192.168.1.143:50000 is closed/unreachable
+[21:58:45] [INFO ] [STEP  ] Verifying Talos ready... (10s)
+[21:58:48] [DEBUG] [DETAIL] Node 192.168.1.143 (VMID: 301) has certificates, trying secure mode
+[21:58:48] [DEBUG] [DETAIL] Node 192.168.1.143 (VMID: 301) responding to secure version check
+[21:58:48] [INFO ] [STEP  ] VM 301 ready at 192.168.1.143 (12s)
+[21:58:49] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/worker-301.sha256
+[21:58:49] [INFO ] [STEP  ] Worker VM 301 added successfully (IP: 192.168.1.143)
+[2026-02-26 21:58:49] [DEPLOY] SUCCESS: Worker 301 at 192.168.1.143
+[21:58:49] [INFO ] [STEP  ] Adding worker VM 302 (talos-worker-03)
+[21:58:49] [DEBUG] [DETAIL] Using live discovered IP for VM 302: 192.168.1.100
+[21:58:49] [INFO ] [STEP  ] Discovered IP: 192.168.1.100
+[21:58:50] [INFO ] [STEP  ] Applying config to 192.168.1.100 (VMID: 302, role: worker, attempt 1/5)...
+[21:58:50] [INFO ] [STEP  ] Configuration applied successfully, node will reboot (VMID: 302)
+[21:58:50] [INFO ] [STEP  ] Monitoring VM 302 (IP: 192.168.1.100, role: worker, reboot_expected: true)...
+[21:58:50] [INFO ] [STEP  ] Node 192.168.1.100 (VMID: 302) stopped responding (possible reboot starting)
+[21:58:50] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Immediate flush triggered...
+[21:58:50] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Repopulating 192.168.1.0/24...
+[21:58:57] [DEBUG] [DETAIL] Looking for MAC BC:24:11:E5:8D:9E (VM 302) in ARP tables across all nodes...
+[21:58:58] [DEBUG] [DETAIL] Found IPs for VM 302 MAC BC:24:11:E5:8D:9E: 192.168.1.110 
+[21:58:58] [DEBUG] [DETAIL] Testing candidate IP 192.168.1.110 for VM 302...
+[21:59:00] [DEBUG] [DETAIL] [VMID:302] 192.168.1.110:50000 is closed/unreachable
+[21:59:00] [WARN ] [DETAIL] No responsive IP found for VM 302, returning first ARP entry: 192.168.1.110
+[21:59:01] [INFO ] [STEP  ] IP changed: 192.168.1.100 -> 192.168.1.110 (reboot confirmed, VMID: 302)
+[21:59:05] [DEBUG] [DETAIL] [VMID:302] 192.168.1.110:50000 is closed/unreachable
+[21:59:09] [DEBUG] [DETAIL] [VMID:302] 192.168.1.110:50000 is closed/unreachable
+[21:59:14] [DEBUG] [DETAIL] [VMID:302] 192.168.1.110:50000 is closed/unreachable
+[21:59:18] [DEBUG] [DETAIL] [VMID:302] 192.168.1.110:50000 is closed/unreachable
+[21:59:22] [DEBUG] [DETAIL] [VMID:302] 192.168.1.110:50000 is closed/unreachable
+[21:59:22] [INFO ] [STEP  ] Verifying Talos ready... (10s)
+[21:59:25] [DEBUG] [DETAIL] Node 192.168.1.110 (VMID: 302) has certificates, trying secure mode
+[21:59:26] [DEBUG] [DETAIL] Node 192.168.1.110 (VMID: 302) responding to secure version check
+[21:59:26] [INFO ] [STEP  ] VM 302 ready at 192.168.1.110 (12s)
+[21:59:26] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/worker-302.sha256
+[21:59:27] [INFO ] [STEP  ] Worker VM 302 added successfully (IP: 192.168.1.110)
+[2026-02-26 21:59:27] [DEPLOY] SUCCESS: Worker 302 at 192.168.1.110
+[21:59:27] [INFO ] [STEP  ] Adding worker VM 303 (talos-worker-04)
+[21:59:27] [DEBUG] [DETAIL] Using live discovered IP for VM 303: 192.168.1.82
+[21:59:27] [INFO ] [STEP  ] Discovered IP: 192.168.1.82
+[21:59:27] [INFO ] [STEP  ] Applying config to 192.168.1.82 (VMID: 303, role: worker, attempt 1/5)...
+[21:59:27] [INFO ] [STEP  ] Configuration applied successfully, node will reboot (VMID: 303)
+[21:59:28] [INFO ] [STEP  ] Monitoring VM 303 (IP: 192.168.1.82, role: worker, reboot_expected: true)...
+[21:59:28] [INFO ] [STEP  ] Node 192.168.1.82 (VMID: 303) stopped responding (possible reboot starting)
+[21:59:28] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Immediate flush triggered...
+[21:59:28] [DEBUG] [STEP  ] [ARP-AGGRESSIVE] Repopulating 192.168.1.0/24...
+[21:59:35] [DEBUG] [DETAIL] Looking for MAC BC:24:11:42:33:CC (VM 303) in ARP tables across all nodes...
+[21:59:35] [DEBUG] [DETAIL] Found IPs for VM 303 MAC BC:24:11:42:33:CC: 192.168.1.109 
+[21:59:35] [DEBUG] [DETAIL] Testing candidate IP 192.168.1.109 for VM 303...
+[21:59:38] [DEBUG] [DETAIL] [VMID:303] 192.168.1.109:50000 is closed/unreachable
+[21:59:38] [WARN ] [DETAIL] No responsive IP found for VM 303, returning first ARP entry: 192.168.1.109
+[21:59:38] [INFO ] [STEP  ] IP changed: 192.168.1.82 -> 192.168.1.109 (reboot confirmed, VMID: 303)
+[21:59:42] [DEBUG] [DETAIL] [VMID:303] 192.168.1.109:50000 is closed/unreachable
+[21:59:47] [DEBUG] [DETAIL] [VMID:303] 192.168.1.109:50000 is closed/unreachable
+[21:59:51] [DEBUG] [DETAIL] [VMID:303] 192.168.1.109:50000 is closed/unreachable
+[21:59:55] [DEBUG] [DETAIL] [VMID:303] 192.168.1.109:50000 is closed/unreachable
+[22:00:00] [DEBUG] [DETAIL] [VMID:303] 192.168.1.109:50000 is closed/unreachable
+[22:00:00] [INFO ] [STEP  ] Verifying Talos ready... (10s)
+[22:00:02] [DEBUG] [DETAIL] Node 192.168.1.109 (VMID: 303) has certificates, trying secure mode
+[22:00:03] [DEBUG] [DETAIL] Node 192.168.1.109 (VMID: 303) responding to secure version check
+[22:00:03] [INFO ] [STEP  ] VM 303 ready at 192.168.1.109 (12s)
+[22:00:04] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/nodes/.checksums/worker-303.sha256
+[22:00:04] [INFO ] [STEP  ] Worker VM 303 added successfully (IP: 192.168.1.109)
+[2026-02-26 22:00:04] [DEPLOY] SUCCESS: Worker 303 at 192.168.1.109
+[22:00:04] [INFO ] [STAGE ] Phase 4: Updating HAProxy Configuration
+[22:00:04] [INFO ] [JOB   ] Updating HAProxy from current state
+[22:00:04] [INFO ] [STEP  ] Configuring HAProxy with 3 backends
+[22:00:04] [INFO ] [STEP  ] Generate HAProxy configuration
+[22:00:05] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /tmp/haproxy.cfg.k9gx6N
+[22:00:05] [INFO ] [STEP  ] Copy configuration to HAProxy server
+[22:00:07] [INFO ] [STEP  ] HAProxy updated successfully
+[2026-02-26 22:00:07] [DEPLOY] HAPROXY: Updated with 3 backends
+[22:00:07] [INFO ] [STAGE ] Starting cluster bootstrap with IP rediscovery support
+[22:00:07] [INFO ] [STEP  ] Forcing complete IP rediscovery before bootstrap...
+[22:00:07] [INFO ] [STEP  ] Rediscovering IP for control plane VM 201...
+[22:00:07] [DEBUG] [DETAIL] No MAC cached for VM 201, attempting to fetch from Proxmox...
+[22:00:08] [DEBUG] [DETAIL] Fetched MAC CONFIGURATION FILE 'NODES/PVE1/QEMU-SERVER/201.CONF' DOES NOT EXIST for VM 201
+[22:00:08] [DEBUG] [DETAIL] Looking for MAC CONFIGURATION FILE 'NODES/PVE1/QEMU-SERVER/201.CONF' DOES NOT EXIST (VM 201) in ARP tables across all nodes...
+[22:00:09] [WARN ] [DETAIL] No IPs found in ARP for MAC CONFIGURATION FILE 'NODES/PVE1/QEMU-SERVER/201.CONF' DOES NOT EXIST (VM 201)
+[22:00:09] [INFO ] [STEP  ] Rediscovering IP for control plane VM 200...
+[22:00:09] [DEBUG] [DETAIL] No MAC cached for VM 200, attempting to fetch from Proxmox...
+[22:00:10] [DEBUG] [DETAIL] Fetched MAC CONFIGURATION FILE 'NODES/PVE1/QEMU-SERVER/200.CONF' DOES NOT EXIST for VM 200
+[22:00:10] [DEBUG] [DETAIL] Looking for MAC CONFIGURATION FILE 'NODES/PVE1/QEMU-SERVER/200.CONF' DOES NOT EXIST (VM 200) in ARP tables across all nodes...
+[22:00:11] [WARN ] [DETAIL] No IPs found in ARP for MAC CONFIGURATION FILE 'NODES/PVE1/QEMU-SERVER/200.CONF' DOES NOT EXIST (VM 200)
+[22:00:11] [INFO ] [STEP  ] Rediscovering IP for control plane VM 202...
+[22:00:11] [DEBUG] [DETAIL] No MAC cached for VM 202, attempting to fetch from Proxmox...
+[22:00:12] [DEBUG] [DETAIL] Fetched MAC CONFIGURATION FILE 'NODES/PVE1/QEMU-SERVER/202.CONF' DOES NOT EXIST for VM 202
+[22:00:12] [DEBUG] [DETAIL] Looking for MAC CONFIGURATION FILE 'NODES/PVE1/QEMU-SERVER/202.CONF' DOES NOT EXIST (VM 202) in ARP tables across all nodes...
+[22:00:12] [WARN ] [DETAIL] No IPs found in ARP for MAC CONFIGURATION FILE 'NODES/PVE1/QEMU-SERVER/202.CONF' DOES NOT EXIST (VM 202)
+[22:00:13] [DEBUG] [DETAIL] save_state: Writing state with 3 CPs, 4 workers
+[22:00:13] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
+[2026-02-26 22:00:13] [STATE] Saved to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
+[22:00:13] [INFO ] [JOB   ] Synchronizing deployed IPs with live discovery
+[22:00:13] [WARN ] [STEP  ] Live discovery empty, skipping IP sync (will use stored IPs)
+[22:00:13] [INFO ] [STEP  ] All IPs are current (no changes needed)
+[22:00:13] [INFO ] [STEP  ] Selected bootstrap node: VMID 201 at 192.168.1.145
+[22:00:13] [INFO ] [STEP  ] Discovering MAC address for VM 201...
+[22:00:15] [INFO ] [STEP  ] Cached MAC BC:24:11:CA:E2:65 for VM 201
+[22:00:15] [INFO ] [STEP  ] Bootstrapping VM 201 (IP: 192.168.1.145)
+[22:00:15] [INFO ] [STEP  ] Applying config to 192.168.1.145 (VMID: 201, role: control-plane, attempt 1/5)...
+[22:00:16] [INFO ] [STEP  ] Node 192.168.1.145 (VMID: 201) reports already configured, checking state...
+[22:00:16] [DEBUG] [STEP  ] Waiting for Talos ready at 192.168.1.145 (VMID: 201, role: control-plane, max: 30s)
+[22:00:16] [DEBUG] [DETAIL] Node 192.168.1.145 (VMID: 201) has certificates, trying secure mode
+[22:00:17] [DEBUG] [DETAIL] Node 192.168.1.145 (VMID: 201) responding to secure version check
+[22:00:17] [INFO ] [STEP  ] Node 201 at 192.168.1.145 is ready (role: control-plane)
+[22:00:17] [INFO ] [STEP  ] Monitoring VM 201 (IP: 192.168.1.145, role: control-plane, reboot_expected: false)...
+[22:00:17] [DEBUG] [STEP  ] No reboot expected, verifying node readiness...
+[22:00:17] [DEBUG] [DETAIL] Node 192.168.1.145 (VMID: 201) has certificates, trying secure mode
+[22:00:18] [DEBUG] [DETAIL] Node 192.168.1.145 (VMID: 201) responding to secure version check
+[22:00:18] [INFO ] [STEP  ] VM 201 ready at 192.168.1.145 (no reboot needed)
+[22:00:18] [DEBUG] [DETAIL] save_state: Writing state with 3 CPs, 4 workers
+[22:00:19] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
+[2026-02-26 22:00:19] [STATE] Saved to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
+[22:00:19] [DEBUG] [STEP  ] Attempting etcd bootstrap (attempt 1/3)...
+[22:00:19] [INFO ] [STEP  ] Bootstrap command succeeded
+[22:00:19] [INFO ] [STEP  ] Waiting for etcd to become healthy...
+[22:00:21] [INFO ] [STEP  ] etcd has 1 member(s) on VM 303 (healthy)
+[22:00:21] [INFO ] [STEP  ] Successfully bootstrapped VM 303 at 192.168.1.145
+[22:00:21] [DEBUG] [DETAIL] save_state: Writing state with 3 CPs, 4 workers
+[22:00:21] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
+[2026-02-26 22:00:21] [STATE] Saved to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
+[22:00:21] [INFO ] [STAGE ] Bootstrap completed successfully
+[22:00:22] [DEBUG] [DETAIL] save_state: Writing state with 3 CPs, 4 workers
+[22:00:22] [DEBUG] [DETAIL] write_file_audited: Successfully wrote to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
+[2026-02-26 22:00:22] [STATE] Saved to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/clusters/core/state/bootstrap-state.json
+[22:00:22] [INFO ] [PLAN  ] Reconciliation complete
+[22:00:22] [INFO ] [STAGE ] Finalizing
+[22:00:22] [INFO ] [STEP  ] Kubeconfig not found at /c/Users/jdwil/.kube/config-core, will fetch
+[22:00:23] [INFO ] [JOB   ] Update Kubeconfig
+[22:00:23] [INFO ] [STEP  ] Waiting for control planes to be ready (this may take 60-90 seconds)...
+[22:00:23] [DEBUG] [STEP  ] Checking VMID 201 at 192.168.1.145...
+[22:00:23] [INFO ] [STEP  ] Control plane 192.168.1.145 (VMID 201) is ready with healthy etcd (attempt 1)
+[22:00:24] [INFO ] [STEP  ] Retrieving kubeconfig from 192.168.1.145
+[22:00:24] [DEBUG] [STEP  ] Fetching kubeconfig using talosctl from bootstrap node 192.168.1.145 to temporary file /tmp/talos-kubeconfig.jZ2ECG
+[22:00:24] [DEBUG] [STEP  ] Verifying fetched kubeconfig works...
+[22:02:55] [WARN ] [STEP  ] Fresh kubeconfig failed initial test, may need certificate regeneration
+[22:02:55] [DEBUG] [STEP  ] Attempting to fetch with force-update to regenerate certificates...
+[22:05:25] [ERROR] [STEP  ] Kubeconfig verification failed even after force update - cluster certificates may be corrupted
+[22:05:26] [ERROR] [STAGE ] Failed to update kubeconfig
+[22:05:26] [ERROR] [PLAN  ] Finalization failed with exit code 1
+
+========================================
+Script Ended: Thu, Feb 26, 2026 10:05:26 PM
+Exit Code: 1
+========================================
+[22:05:26] [DEBUG] [DETAIL] cleanup_on_exit: Summary written to /f/Dev/projects/personal/jdw-kube/talos/cluster/bootstrap/logs/2026-02-26/run-20260226_215319/SUMMARY.txt
