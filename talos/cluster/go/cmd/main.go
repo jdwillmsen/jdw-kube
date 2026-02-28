@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -69,6 +70,8 @@ func initConfig(cmd *cobra.Command) error {
 	// Override with environment variables
 	if v := os.Getenv("CLUSTER_NAME"); v != "" {
 		cfg.ClusterName = v
+		// Update SecretsDir when CLUSTER_NAME changes
+		cfg.SecretsDir = filepath.Join("clusters", cfg.ClusterName, "secrets")
 	}
 	if v := os.Getenv("TERRAFORM_TFVARS"); v != "" {
 		cfg.TerraformTFVars = v
@@ -84,6 +87,9 @@ func initConfig(cmd *cobra.Command) error {
 	}
 	if v := os.Getenv("TALOS_VERSION"); v != "" {
 		cfg.TalosVersion = v
+	}
+	if v := os.Getenv("SECRETS_DIR"); v != "" {
+		cfg.SecretsDir = v
 	}
 
 	return nil
@@ -167,10 +173,14 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 		zap.Bool("plan_mode", cfg.PlanMode),
 	)
 
-	// Initialize components
 	stateMgr := state.NewManager(cfg)
 	scanner := discovery.NewScanner(cfg.ProxmoxSSHUser, cfg.ProxmoxNodeIPs)
 	talosClient := talos.NewClient(cfg)
+
+	// Initialize Talos client
+	if err := talosClient.Initialize(ctx); err != nil {
+		return fmt.Errorf("initialize talos client: %w", err)
+	}
 
 	// Phase 1: Load states
 	logger.Info("loading desired state from terraform")
@@ -211,7 +221,6 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 		return fmt.Errorf("build plan: %w", err)
 	}
 
-	// Display plan
 	displayPlan(plan)
 
 	if cfg.PlanMode {
@@ -236,7 +245,7 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 	}
 
 	// Phase 4: Execute
-	if err := executePlan(ctx, plan, desired, stateMgr, scanner, talosClient); err != nil {
+	if err := executePlan(ctx, plan, desired, deployed, stateMgr, scanner, talosClient); err != nil {
 		return fmt.Errorf("execute plan: %w", err)
 	}
 
@@ -320,6 +329,7 @@ func executePlan(
 	ctx context.Context,
 	plan *types.ReconcilePlan,
 	desired map[types.VMID]*types.NodeSpec,
+	deployed *types.ClusterState,
 	stateMgr *state.Manager,
 	scanner *discovery.Scanner,
 	talosClient *talos.Client,
@@ -328,22 +338,236 @@ func executePlan(
 	// Handle bootstrap first if needed
 	if plan.NeedsBootstrap {
 		logger.Info("executing bootstrap")
-		// Bootstrap logic here
-	}
 
-	// Remove workers (safe to do anytime)
-	if len(plan.RemoveWorkers) > 0 {
-		logger.Info("removing workers", zap.Int("count", len(plan.RemoveWorkers)))
-		for _, vmid := range plan.RemoveWorkers {
-			logger.Info("would remove worker", zap.Int("vmid", int(vmid)))
+		if len(plan.AddControlPlanes) > 0 {
+			firstVMID := plan.AddControlPlanes[0]
+			spec := desired[firstVMID]
+
+			liveNodes, err := scanner.DiscoverVMs(ctx, []types.VMID{firstVMID})
+			if err != nil {
+				return fmt.Errorf("discover first control plane: %w", err)
+			}
+
+			node, ok := liveNodes[firstVMID]
+			if !ok || node.IP == nil {
+				return fmt.Errorf("first control plane IP not discovered")
+			}
+
+			if !cfg.DryRun {
+				configPath := stateMgr.NodeConfigPath(firstVMID, types.RoleControlPlane)
+
+				if err := talosClient.ApplyConfig(ctx, node.IP, configPath, true); err != nil {
+					return fmt.Errorf("apply config to first CP: %w", err)
+				}
+
+				newIP, err := scanner.RediscoverIP(ctx, firstVMID, node.MAC)
+				if err != nil {
+					return fmt.Errorf("rediscover IP after reboot: %w", err)
+				}
+
+				if err := talosClient.BootstrapEtcd(ctx, newIP); err != nil {
+					return fmt.Errorf("bootstrap etcd: %w", err)
+				}
+
+				hash, _ := stateMgr.ComputeTerraformHash()
+				stateMgr.UpdateNodeState(deployed, firstVMID, newIP.String(), hash, types.RoleControlPlane)
+				deployed.BootstrapCompleted = true
+			} else {
+				logger.Info("would bootstrap first control plane",
+					zap.Int("vmid", int(firstVMID)),
+					zap.String("name", spec.Name),
+				)
+			}
 		}
 	}
 
-	// Remove control planes (check quorum!)
+	// Add remaining control planes (sequential for etcd safety)
+	if len(plan.AddControlPlanes) > 0 {
+		logger.Info("adding control planes", zap.Int("count", len(plan.AddControlPlanes)))
+
+		for _, vmid := range plan.AddControlPlanes {
+			if plan.NeedsBootstrap && vmid == plan.AddControlPlanes[0] {
+				continue
+			}
+
+			spec := desired[vmid]
+
+			if cfg.DryRun {
+				logger.Info("would add control plane",
+					zap.Int("vmid", int(vmid)),
+					zap.String("name", spec.Name),
+				)
+				continue
+			}
+
+			liveNodes, err := scanner.DiscoverVMs(ctx, []types.VMID{vmid})
+			if err != nil {
+				return fmt.Errorf("discover VM %d: %w", vmid, err)
+			}
+
+			node, ok := liveNodes[vmid]
+			if !ok || node.IP == nil {
+				return fmt.Errorf("VM %d IP not discovered", vmid)
+			}
+
+			configPath := stateMgr.NodeConfigPath(vmid, types.RoleControlPlane)
+			if err := talosClient.ApplyConfig(ctx, node.IP, configPath, true); err != nil {
+				return fmt.Errorf("apply config to CP %d: %w", vmid, err)
+			}
+
+			newIP, err := scanner.RediscoverIP(ctx, vmid, node.MAC)
+			if err != nil {
+				return fmt.Errorf("rediscover IP for CP %d: %w", vmid, err)
+			}
+
+			if err := talosClient.WaitForReady(ctx, newIP, types.RoleControlPlane); err != nil {
+				return fmt.Errorf("wait for CP %d ready: %w", vmid, err)
+			}
+
+			hash, _ := stateMgr.ComputeTerraformHash()
+			stateMgr.UpdateNodeState(deployed, vmid, newIP.String(), hash, types.RoleControlPlane)
+		}
+	}
+
+	// Add workers (parallel)
+	if len(plan.AddWorkers) > 0 {
+		logger.Info("adding workers", zap.Int("count", len(plan.AddWorkers)))
+
+		g, ctx := errgroup.WithContext(ctx)
+		sem := make(chan struct{}, 3)
+
+		for _, vmid := range plan.AddWorkers {
+			vmid, spec := vmid, desired[vmid]
+
+			g.Go(func() error {
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+				}
+
+				if cfg.DryRun {
+					logger.Info("would add worker",
+						zap.Int("vmid", int(vmid)),
+						zap.String("name", spec.Name),
+					)
+					return nil
+				}
+
+				liveNodes, err := scanner.DiscoverVMs(ctx, []types.VMID{vmid})
+				if err != nil {
+					return fmt.Errorf("discover worker %d: %w", vmid, err)
+				}
+
+				node, ok := liveNodes[vmid]
+				if !ok || node.IP == nil {
+					return fmt.Errorf("worker %d IP not discovered", vmid)
+				}
+
+				configPath := stateMgr.NodeConfigPath(vmid, types.RoleWorker)
+				if err := talosClient.ApplyConfig(ctx, node.IP, configPath, true); err != nil {
+					return fmt.Errorf("apply config to worker %d: %w", vmid, err)
+				}
+
+				newIP, err := scanner.RediscoverIP(ctx, vmid, node.MAC)
+				if err != nil {
+					return fmt.Errorf("rediscover IP for worker %d: %w", vmid, err)
+				}
+
+				if err := talosClient.WaitForReady(ctx, newIP, types.RoleWorker); err != nil {
+					return fmt.Errorf("wait for worker %d ready: %w", vmid, err)
+				}
+
+				hash, _ := stateMgr.ComputeTerraformHash()
+				stateMgr.UpdateNodeState(deployed, vmid, newIP.String(), hash, types.RoleWorker)
+
+				return nil
+			})
+		}
+
+		if err := g.Wait(); err != nil {
+			return err
+		}
+	}
+
+	// Remove workers
+	if len(plan.RemoveWorkers) > 0 {
+		logger.Info("removing workers", zap.Int("count", len(plan.RemoveWorkers)))
+
+		for _, vmid := range plan.RemoveWorkers {
+			if cfg.DryRun {
+				logger.Info("would remove worker", zap.Int("vmid", int(vmid)))
+				continue
+			}
+
+			var nodeIP net.IP
+			for _, w := range deployed.Workers {
+				if w.VMID == vmid {
+					nodeIP = w.IP
+					break
+				}
+			}
+
+			if nodeIP != nil {
+				if err := talosClient.ResetNode(ctx, nodeIP, true); err != nil {
+					logger.Warn("failed to reset worker", zap.Int("vmid", int(vmid)), zap.Error(err))
+				}
+			}
+
+			stateMgr.RemoveNodeState(deployed, vmid, types.RoleWorker)
+		}
+	}
+
+	// Remove control planes (with quorum check)
 	if len(plan.RemoveControlPlanes) > 0 {
 		logger.Info("removing control planes", zap.Int("count", len(plan.RemoveControlPlanes)))
+
+		if len(deployed.ControlPlanes) > 0 {
+			members, err := talosClient.GetEtcdMembers(ctx, deployed.ControlPlanes[0].IP)
+			if err != nil {
+				return fmt.Errorf("get etcd members for quorum check: %w", err)
+			}
+
+			currentMembers := len(members)
+			removing := len(plan.RemoveControlPlanes)
+			afterRemoval := currentMembers - removing
+			quorum := (currentMembers / 2) + 1
+
+			if afterRemoval < quorum {
+				return fmt.Errorf("cannot remove %d control planes: would violate etcd quorum (current=%d, after=%d, quorum=%d)",
+					removing, currentMembers, afterRemoval, quorum)
+			}
+		}
+
 		for _, vmid := range plan.RemoveControlPlanes {
-			logger.Info("would remove control plane", zap.Int("vmid", int(vmid)))
+			if cfg.DryRun {
+				logger.Info("would remove control plane", zap.Int("vmid", int(vmid)))
+				continue
+			}
+
+			var nodeIP net.IP
+			var memberID string
+			for _, cp := range deployed.ControlPlanes {
+				if cp.VMID == vmid {
+					nodeIP = cp.IP
+					break
+				}
+			}
+
+			if nodeIP != nil && memberID != "" {
+				if err := talosClient.RemoveEtcdMember(ctx, nodeIP, memberID); err != nil {
+					logger.Warn("failed to remove etcd member", zap.Error(err))
+				}
+
+				if err := talosClient.ResetNode(ctx, nodeIP, true); err != nil {
+					logger.Warn("failed to reset control plane", zap.Int("vmid", int(vmid)), zap.Error(err))
+				}
+			}
+
+			stateMgr.RemoveNodeState(deployed, vmid, types.RoleControlPlane)
 		}
 	}
 
@@ -355,48 +579,10 @@ func executePlan(
 		}
 	}
 
-	// Add control planes (sequential for etcd safety)
-	if len(plan.AddControlPlanes) > 0 {
-		logger.Info("adding control planes", zap.Int("count", len(plan.AddControlPlanes)))
-		for _, vmid := range plan.AddControlPlanes {
-			spec := desired[vmid]
-			logger.Info("would add control plane",
-				zap.Int("vmid", int(vmid)),
-				zap.String("name", spec.Name),
-			)
-		}
-	}
-
-	// Add workers (can be parallel)
-	if len(plan.AddWorkers) > 0 {
-		logger.Info("adding workers", zap.Int("count", len(plan.AddWorkers)))
-
-		g, ctx := errgroup.WithContext(ctx)
-		sem := make(chan struct{}, 3)
-
-		for _, vmid := range plan.AddWorkers {
-			vmid, spec := vmid, desired[vmid]
-			g.Go(func() error {
-				sem <- struct{}{}
-				defer func() { <-sem }()
-
-				// Check for cancellation before proceeding
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				default:
-				}
-
-				logger.Info("would add worker",
-					zap.Int("vmid", int(vmid)),
-					zap.String("name", spec.Name),
-				)
-				return nil
-			})
-		}
-
-		if err := g.Wait(); err != nil {
-			logger.Warn("some workers failed to add", zap.Error(err))
+	// Save final state
+	if !cfg.DryRun {
+		if err := stateMgr.Save(ctx, deployed); err != nil {
+			return fmt.Errorf("save state: %w", err)
 		}
 	}
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"path/filepath"
 	"time"
 )
 
@@ -166,7 +167,7 @@ type Config struct {
 
 // DefaultConfig returns a config with sensible defaults
 func DefaultConfig() *Config {
-	return &Config{
+	cfg := &Config{
 		ClusterName:             "cluster",
 		TerraformTFVars:         "terraform.tfvars",
 		ControlPlaneEndpoint:    "cluster.jdwlabs.com",
@@ -176,7 +177,7 @@ func DefaultConfig() *Config {
 		HAProxyStatsPassword:    "admin",
 		KubernetesVersion:       "v1.35.1",
 		TalosVersion:            "v1.12.3",
-		InstallerImage:          "factory.talos.dev/installer/...",
+		InstallerImage:          "factory.talos.dev/nocloud-installer/b553b4a25d76e938fd7a9aaa7f887c06ea4ef75275e64f4630e6f8f739cf07df:v1.12.3",
 		DefaultNetworkInterface: "eth0",
 		DefaultDisk:             "sda",
 		ProxmoxSSHUser:          "root",
@@ -189,4 +190,7 @@ func DefaultConfig() *Config {
 		},
 		LogLevel: "info",
 	}
+	// Set SecretsDir based on ClusterName
+	cfg.SecretsDir = filepath.Join("clusters", cfg.ClusterName, "secrets")
+	return cfg
 }

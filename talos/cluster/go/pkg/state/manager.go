@@ -329,6 +329,29 @@ func (m *Manager) UpdateNodeState(state *types.ClusterState, vmid types.VMID, ip
 	}
 }
 
+// RemoveNodeState removes a node from the cluster state
+func (m *Manager) RemoveNodeState(state *types.ClusterState, vmid types.VMID, role types.Role) {
+	switch role {
+	case types.RoleControlPlane:
+		filtered := make([]types.NodeState, 0, len(state.ControlPlanes))
+		for _, cp := range state.ControlPlanes {
+			if cp.VMID != vmid {
+				filtered = append(filtered, cp)
+			}
+		}
+		state.ControlPlanes = filtered
+
+	case types.RoleWorker:
+		filtered := make([]types.NodeState, 0, len(state.Workers))
+		for _, w := range state.Workers {
+			if w.VMID != vmid {
+				filtered = append(filtered, w)
+			}
+		}
+		state.Workers = filtered
+	}
+}
+
 func parseIP(s string) net.IP {
 	return net.ParseIP(s)
 }

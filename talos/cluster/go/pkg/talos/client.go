@@ -2,155 +2,285 @@ package talos
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
+	"os"
 	"time"
 
 	"github.com/jdw/talos-bootstrap/pkg/types"
+
+	"github.com/siderolabs/talos/pkg/machinery/api/machine"
+	"github.com/siderolabs/talos/pkg/machinery/client"
+	"github.com/siderolabs/talos/pkg/machinery/client/config"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
-// Client wraps talosctl operations
-// Note: This uses shell execution for now, but can be upgraded to native API
 type Client struct {
-	config *types.Config
-	// TODO: Add native Talos client when we import siderolabs/talos
+	config      *types.Config
+	talosConfig *config.Config
+	ctxName     string
 }
 
-// NewClient creates a new Talos client
 func NewClient(cfg *types.Config) *Client {
 	return &Client{config: cfg}
 }
 
-// ApplyConfig sends configuration to a node
-// Replaces your apply_config_with_rediscovery()
-func (c *Client) ApplyConfig(ctx context.Context, ip net.IP, configPath string, insecure bool) error {
-	// For now, shell out to talosctl
-	// TODO: Use native client when we have the dependency working
+func (c *Client) Initialize(ctx context.Context) error {
+	talosConfigPath := fmt.Sprintf("%s/talosconfig", c.config.SecretsDir)
 
-	args := []string{
-		"apply-config",
-		"--nodes", ip.String(),
-		"--file", configPath,
+	if _, err := os.Stat(talosConfigPath); os.IsNotExist(err) {
+		return fmt.Errorf("talosconfig not found at %s: run 'talosctl gen config' first", talosConfigPath)
+	}
+
+	talosCfg, err := config.Open(talosConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to load talosconfig: %w", err)
+	}
+
+	c.talosConfig = talosCfg
+	c.ctxName = talosCfg.Context
+	return nil
+}
+
+func (c *Client) getClient(ctx context.Context, endpoint net.IP, insecure bool) (*client.Client, error) {
+	if c.talosConfig == nil {
+		return nil, fmt.Errorf("client not initialized")
+	}
+
+	opts := []client.OptionFunc{
+		client.WithConfig(c.talosConfig),
+		client.WithEndpoints(endpoint.String()),
 	}
 
 	if insecure {
-		args = append(args, "--insecure")
+		opts = append(opts, client.WithGRPCDialOptions(
+			grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+				InsecureSkipVerify: true,
+			})),
+		))
 	}
 
-	// This would use exec.CommandContext in real implementation
-	// For now, just log what we would do
-	fmt.Printf("Would run: talosctl %v\n", args)
+	return client.New(ctx, opts...)
+}
+
+func (c *Client) ApplyConfig(ctx context.Context, ip net.IP, configPath string, insecure bool) error {
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	tc, err := c.getClient(ctx, ip, insecure)
+	if err != nil {
+		return fmt.Errorf("failed to create talos client: %w", err)
+	}
+	defer tc.Close()
+
+	mode := machine.ApplyConfigurationRequest_AUTO
+	if insecure {
+		mode = machine.ApplyConfigurationRequest_REBOOT
+	}
+
+	resp, err := tc.ApplyConfiguration(ctx, &machine.ApplyConfigurationRequest{
+		Data: configData,
+		Mode: mode,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to apply configuration: %w", err)
+	}
+
+	if len(resp.Messages) > 0 && len(resp.Messages[0].Warnings) > 0 {
+		for _, warning := range resp.Messages[0].Warnings {
+			fmt.Printf("Warning: %s\n", warning)
+		}
+	}
 
 	return nil
 }
 
-// BootstrapEtcd initializes the etcd cluster on first control plane
-// Replaces your bootstrap_etcd_at_ip()
 func (c *Client) BootstrapEtcd(ctx context.Context, ip net.IP) error {
-	args := []string{
-		"bootstrap",
-		"--nodes", ip.String(),
-		"--endpoints", ip.String(),
+	tc, err := c.getClient(ctx, ip, false)
+	if err != nil {
+		return fmt.Errorf("failed to create talos client: %w", err)
+	}
+	defer tc.Close()
+
+	// Bootstrap returns only error, not (resp, error)
+	if err := tc.Bootstrap(ctx, &machine.BootstrapRequest{}); err != nil {
+		return fmt.Errorf("failed to bootstrap etcd: %w", err)
 	}
 
-	fmt.Printf("Would run: talosctl %v\n", args)
 	return nil
 }
 
-// WaitForReady blocks until node is ready
-// Replaces your wait_for_node_with_rediscovery()
 func (c *Client) WaitForReady(ctx context.Context, ip net.IP, role types.Role) error {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+
+	insecure := true
+	var tc *client.Client
+	var err error
 
 	for {
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("timeout waiting for node %s to be ready", ip)
 		case <-ticker.C:
-			ready, err := c.checkReady(ctx, ip, role)
-			if err != nil {
-				continue // Keep trying
+			if tc == nil {
+				tc, err = c.getClient(ctx, ip, insecure)
+				if err != nil {
+					continue
+				}
 			}
+
+			ready, err := c.checkReady(ctx, tc, role)
+			if err != nil {
+				tc.Close()
+				tc = nil
+				continue
+			}
+
 			if ready {
+				tc.Close()
 				return nil
+			}
+
+			if insecure {
+				insecure = false
+				tc.Close()
+				tc = nil
 			}
 		}
 	}
 }
 
-func (c *Client) checkReady(ctx context.Context, ip net.IP, role types.Role) (bool, error) {
-	// Try insecure first (maintenance mode)
-	// In real implementation, use native API
-	// For now, simulate with port check
-
-	// Check if Talos API port is open
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:50000", ip), 5*time.Second)
-	if err != nil {
+func (c *Client) checkReady(ctx context.Context, tc *client.Client, role types.Role) (bool, error) {
+	if _, err := tc.Version(ctx); err != nil {
 		return false, err
 	}
-	conn.Close()
 
-	// In maintenance mode, workers are "ready" when stable
-	if role == types.RoleWorker {
-		// Would check if in maintenance mode via API
-		return true, nil
+	if role == types.RoleControlPlane {
+		// Use EtcdMemberList from the client (machine API)
+		_, err := tc.EtcdMemberList(ctx, &machine.EtcdMemberListRequest{})
+		if err != nil {
+			return false, nil
+		}
+
+		services, err := tc.ServiceList(ctx)
+		if err != nil {
+			return false, nil
+		}
+
+		kubeletRunning := false
+		for _, svc := range services.Messages {
+			for _, s := range svc.Services {
+				if s.Id == "kubelet" && s.State == "running" {
+					kubeletRunning = true
+					break
+				}
+			}
+		}
+
+		if !kubeletRunning {
+			return false, nil
+		}
 	}
 
-	// For control planes, need to check if bootstrapped
-	// Would query etcd members via API
-	return false, nil
+	return true, nil
 }
 
-// GetEtcdMembers returns current etcd member list
-// Used for quorum calculations in control plane removal
+// GetEtcdMembers uses the machine API EtcdMemberList method
 func (c *Client) GetEtcdMembers(ctx context.Context, ip net.IP) ([]string, error) {
-	// Would use: talosctl etcd members --nodes <ip> --endpoints <ip>
-	// For now, return mock data
-	return []string{"member1", "member2", "member3"}, nil
+	tc, err := c.getClient(ctx, ip, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create talos client: %w", err)
+	}
+	defer tc.Close()
+
+	resp, err := tc.EtcdMemberList(ctx, &machine.EtcdMemberListRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get etcd members: %w", err)
+	}
+
+	if len(resp.Messages) == 0 {
+		return nil, fmt.Errorf("no etcd members response")
+	}
+
+	members := make([]string, 0, len(resp.Messages[0].Members))
+	for _, member := range resp.Messages[0].Members {
+		// Convert uint64 ID to string
+		members = append(members, fmt.Sprintf("%d", member.Id))
+	}
+
+	return members, nil
 }
 
-// RemoveEtcdMember removes a member from etcd cluster
-// Critical for safe control plane removal
+// RemoveEtcdMember uses the machine API EtcdRemoveMemberByID method
 func (c *Client) RemoveEtcdMember(ctx context.Context, endpoint net.IP, memberID string) error {
-	args := []string{
-		"etcd", "remove-member",
-		"--nodes", endpoint.String(),
-		"--endpoints", endpoint.String(),
-		memberID,
+	tc, err := c.getClient(ctx, endpoint, false)
+	if err != nil {
+		return fmt.Errorf("failed to create talos client: %w", err)
+	}
+	defer tc.Close()
+
+	// Parse memberID string to uint64
+	var memberIDUint uint64
+	_, err = fmt.Sscanf(memberID, "%d", &memberIDUint)
+	if err != nil {
+		return fmt.Errorf("invalid member ID %s: %w", memberID, err)
 	}
 
-	fmt.Printf("Would run: talosctl %v\n", args)
+	// EtcdRemoveMemberByID returns only error, not (resp, error)
+	if err := tc.EtcdRemoveMemberByID(ctx, &machine.EtcdRemoveMemberByIDRequest{
+		MemberId: memberIDUint,
+	}); err != nil {
+		return fmt.Errorf("failed to remove etcd member %s: %w", memberID, err)
+	}
+
 	return nil
 }
 
-// ResetNode resets a Talos node (removes from cluster)
 func (c *Client) ResetNode(ctx context.Context, ip net.IP, graceful bool) error {
-	args := []string{
-		"reset",
-		"--nodes", ip.String(),
-		"--endpoints", ip.String(),
-		"--system-labels-to-wipe", "STATE",
-		"--system-labels-to-wipe", "EPHEMERAL",
+	tc, err := c.getClient(ctx, ip, false)
+	if err != nil {
+		return fmt.Errorf("failed to create talos client: %w", err)
+	}
+	defer tc.Close()
+
+	// Reset signature: (ctx context.Context, graceful bool, reboot bool) error
+	// We want to reset without reboot (the node will be reconfigured after)
+	if err := tc.Reset(ctx, graceful, false); err != nil {
+		return fmt.Errorf("failed to reset node: %w", err)
 	}
 
-	if !graceful {
-		args = append(args, "--graceful=false")
-	}
-
-	fmt.Printf("Would run: talosctl %v\n", args)
 	return nil
 }
 
-// GenerateNodeConfig creates Talos configuration for a specific node
-// Replaces your generate_node_config() and generate_control_plane_patch()
-func (c *Client) GenerateNodeConfig(ctx context.Context, spec *types.NodeSpec, secretsDir string) ([]byte, error) {
-	// In real implementation, use Talos machinery
-	// For now, generate YAML manually
+func (c *Client) Kubeconfig(ctx context.Context, endpoint net.IP, outputPath string) error {
+	tc, err := c.getClient(ctx, endpoint, false)
+	if err != nil {
+		return fmt.Errorf("failed to create talos client: %w", err)
+	}
+	defer tc.Close()
 
+	// Kubeconfig returns ([]byte, error), not a stream
+	data, err := tc.Kubeconfig(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get kubeconfig: %w", err)
+	}
+
+	if err := os.WriteFile(outputPath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write kubeconfig: %w", err)
+	}
+
+	return nil
+}
+
+func (c *Client) GenerateNodeConfig(ctx context.Context, spec *types.NodeSpec, secretsDir string) ([]byte, error) {
 	var config string
 	switch spec.Role {
 	case types.RoleControlPlane:
@@ -158,12 +288,12 @@ func (c *Client) GenerateNodeConfig(ctx context.Context, spec *types.NodeSpec, s
 	case types.RoleWorker:
 		config = c.generateWorkerConfig(spec)
 	}
-
 	return []byte(config), nil
 }
 
 func (c *Client) generateControlPlaneConfig(spec *types.NodeSpec) string {
-	return fmt.Sprintf(`machine:
+	return fmt.Sprintf(`version: v1alpha1
+machine:
   install:
     disk: /dev/%s
     extraKernelArgs:
@@ -181,7 +311,7 @@ func (c *Client) generateControlPlaneConfig(spec *types.NodeSpec) string {
     vm.nr_hugepages: "1024"
   kubelet:
     extraArgs:
-      rotate-server-certificates: true
+      rotate-server-certificates: "true"
   kernel:
     modules:
       - name: nvme_tcp
@@ -208,7 +338,8 @@ cluster:
 }
 
 func (c *Client) generateWorkerConfig(spec *types.NodeSpec) string {
-	return fmt.Sprintf(`machine:
+	return fmt.Sprintf(`version: v1alpha1
+machine:
   install:
     disk: /dev/%s
     extraKernelArgs:
@@ -231,7 +362,7 @@ func (c *Client) generateWorkerConfig(spec *types.NodeSpec) string {
       - name: zfs
   kubelet:
     extraArgs:
-      rotate-server-certificates: true
+      rotate-server-certificates: "true"
     extraMounts:
       - destination: /var/local
         type: bind
@@ -246,16 +377,4 @@ func (c *Client) generateWorkerConfig(spec *types.NodeSpec) string {
 		c.config.HAProxyIP.String(),
 		c.config.ControlPlaneEndpoint,
 	)
-}
-
-// Kubeconfig fetches kubeconfig from cluster
-func (c *Client) Kubeconfig(ctx context.Context, endpoint net.IP, outputPath string) error {
-	args := []string{
-		"kubeconfig", outputPath,
-		"--nodes", endpoint.String(),
-		"--endpoints", endpoint.String(),
-	}
-
-	fmt.Printf("Would run: talosctl %v\n", args)
-	return nil
 }
