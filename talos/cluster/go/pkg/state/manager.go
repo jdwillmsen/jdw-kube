@@ -25,7 +25,7 @@ type Manager struct {
 }
 
 // NewManager creates a new state manager
-func NewManager(cfg *types.Config) *types.Manager {
+func NewManager(cfg *types.Config) *Manager {
 	clusterDir := filepath.Join("clusters", cfg.ClusterName)
 	return &Manager{
 		config:   cfg,
@@ -187,7 +187,7 @@ func (m *Manager) BuildReconcilePlan(
 
 	// Check for removals
 	for _, cp := range deployed.ControlPlanes {
-		if _, desired := desired[cp.VMID]; !desired {
+		if _, exists := desired[cp.VMID]; !exists {
 			// Check if it's in desired as worker (role change)
 			if spec, ok := desired[cp.VMID]; ok && spec.Role == types.RoleWorker {
 				// Role change: remove CP, add worker

@@ -23,6 +23,10 @@ var (
 	logger *zap.Logger
 )
 
+func init() {
+	cfg = types.DefaultConfig()
+}
+
 func main() {
 	// Initialize logger
 	var err error
@@ -62,8 +66,6 @@ func main() {
 }
 
 func initConfig(cmd *cobra.Command) error {
-	cfg = types.DefaultConfig()
-
 	// Override with environment variables
 	if v := os.Getenv("CLUSTER_NAME"); v != "" {
 		cfg.ClusterName = v
@@ -370,13 +372,20 @@ func executePlan(
 		logger.Info("adding workers", zap.Int("count", len(plan.AddWorkers)))
 
 		g, ctx := errgroup.WithContext(ctx)
-		sem := make(chan struct{}, 3) // Max parallel workers
+		sem := make(chan struct{}, 3)
 
 		for _, vmid := range plan.AddWorkers {
 			vmid, spec := vmid, desired[vmid]
 			g.Go(func() error {
 				sem <- struct{}{}
 				defer func() { <-sem }()
+
+				// Check for cancellation before proceeding
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+				}
 
 				logger.Info("would add worker",
 					zap.Int("vmid", int(vmid)),

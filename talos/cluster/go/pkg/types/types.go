@@ -190,9 +190,3 @@ func DefaultConfig() *Config {
 		LogLevel: "info",
 	}
 }
-
-type Manager struct {
-	Config   *Config
-	StateDir string
-	NodesDir string
-}
