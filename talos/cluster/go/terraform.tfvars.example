@@ -1,0 +1,56 @@
+# Sample terraform.tfvars for testing
+
+cluster_name = "test-cluster"
+
+proxmox_endpoint = "https://192.168.1.200:8006"
+proxmox_node = "pve1"
+
+storage_pool = "local-zfs"
+
+# Control plane nodes
+talos_control_configuration = [
+  {
+    vmid      = 201
+    vm_name   = "talos-cp-1"
+    node_name = "pve1"
+    cpu_cores = 4
+    memory    = 8192
+    disk_size = 100
+  },
+  {
+    vmid      = 202
+    vm_name   = "talos-cp-2"
+    node_name = "pve2"
+    cpu_cores = 4
+    memory    = 8192
+    disk_size = 100
+  },
+  {
+    vmid      = 203
+    vm_name   = "talos-cp-3"
+    node_name = "pve3"
+    cpu_cores = 4
+    memory    = 8192
+    disk_size = 100
+  }
+]
+
+# Worker nodes
+talos_worker_configuration = [
+  {
+    vmid      = 211
+    vm_name   = "talos-worker-1"
+    node_name = "pve1"
+    cpu_cores = 8
+    memory    = 16384
+    disk_size = 500
+  },
+  {
+    vmid      = 212
+    vm_name   = "talos-worker-2"
+    node_name = "pve2"
+    cpu_cores = 8
+    memory    = 16384
+    disk_size = 500
+  }
+]

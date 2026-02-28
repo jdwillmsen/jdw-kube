@@ -1,0 +1,28 @@
+# Binaries
+build/
+talos-bootstrap
+talos-bootstrap.exe
+*.exe
+
+# Go
+*.log
+*.test
+*.out
+vendor/
+
+# Cluster state (sensitive)
+clusters/
+secrets/
+*.yaml
+!*.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
