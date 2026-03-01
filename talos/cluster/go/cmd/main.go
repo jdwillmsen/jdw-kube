@@ -8,12 +8,14 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/jdw/talos-bootstrap/pkg/discovery"
+	"github.com/jdw/talos-bootstrap/pkg/haproxy"
 	"github.com/jdw/talos-bootstrap/pkg/state"
 	"github.com/jdw/talos-bootstrap/pkg/talos"
 	"github.com/jdw/talos-bootstrap/pkg/types"
@@ -356,11 +358,13 @@ func executePlan(
 			if !cfg.DryRun {
 				configPath := stateMgr.NodeConfigPath(firstVMID, types.RoleControlPlane)
 
-				if err := talosClient.ApplyConfig(ctx, node.IP, configPath, true); err != nil {
+				logger.Info("applying config to first control plane", zap.Int("vmid", int(firstVMID)))
+				if err := talosClient.ApplyConfigWithRetry(ctx, node.IP, configPath, 5); err != nil {
 					return fmt.Errorf("apply config to first CP: %w", err)
 				}
 
-				newIP, err := scanner.RediscoverIP(ctx, firstVMID, node.MAC)
+				monitor := discovery.NewRebootMonitor(firstVMID, node.IP, node.MAC, scanner, logger)
+				newIP, err := monitor.WaitForReady(ctx, 3*time.Minute)
 				if err != nil {
 					return fmt.Errorf("rediscover IP after reboot: %w", err)
 				}
@@ -411,11 +415,13 @@ func executePlan(
 			}
 
 			configPath := stateMgr.NodeConfigPath(vmid, types.RoleControlPlane)
-			if err := talosClient.ApplyConfig(ctx, node.IP, configPath, true); err != nil {
+			logger.Info("applying config to control plane", zap.Int("vmid", int(vmid)))
+			if err := talosClient.ApplyConfigWithRetry(ctx, node.IP, configPath, 5); err != nil {
 				return fmt.Errorf("apply config to CP %d: %w", vmid, err)
 			}
 
-			newIP, err := scanner.RediscoverIP(ctx, vmid, node.MAC)
+			monitor := discovery.NewRebootMonitor(vmid, node.IP, node.MAC, scanner, logger)
+			newIP, err := monitor.WaitForReady(ctx, 3*time.Minute)
 			if err != nil {
 				return fmt.Errorf("rediscover IP for CP %d: %w", vmid, err)
 			}
@@ -426,6 +432,38 @@ func executePlan(
 
 			hash, _ := stateMgr.ComputeTerraformHash()
 			stateMgr.UpdateNodeState(deployed, vmid, newIP.String(), hash, types.RoleControlPlane)
+		}
+	}
+
+	// Fetch kubeconfig after successful bootstrap
+	if plan.NeedsBootstrap && deployed.BootstrapCompleted && !cfg.DryRun {
+		kubeconfigMgr := talos.NewKubeconfigManager(talosClient, logger)
+		if len(deployed.ControlPlanes) > 0 {
+			if err := kubeconfigMgr.FetchAndMerge(ctx, deplyoed.ControlPlanes[0].IP, cfg.ClusterName, cfg.ControlPlaneEndpoint); err != nil {
+				logger.Warn("kubeconfig fetch failed (can retry later)", zap.Error(err))
+			} else {
+				if err := kubeconfigMgr.Verify(ctx, cfg.ClusterName); err != nil {
+					logger.Warn("kubeconfig verification failed", zap.Error(err))
+				}
+			}
+		}
+	}
+
+	// Update HAProxy after any CP membership changes
+	if len(plan.AddControlPlanes) > 0 || len(plan.RemoveControlPlanes) > 0 {
+		if !cfg.DryRun {
+			haproxyConfig := haproxy.ConfigFromClusterState(cfg, deployed)
+			configStr, err := haproxyConfig.Generate()
+			if err != nil {
+				logger.Warn("failed to generate HAProxy config", zap.Error(err))
+			} else {
+				haproxyClient := haproxy.NewClient(cfg.HAProxyLoginUser, cfg.HAProxyIP.String(), logger)
+				if err := haproxyClient.Update(ctx, configStr); err != nil {
+					logger.Warn("HAProxy update failed", zap.Error(err))
+				}
+			}
+		} else {
+			logger.Info("would update HAProxy configuration", zap.Int("backends", len(deployed.ControlPlanes)))
 		}
 	}
 
@@ -468,7 +506,8 @@ func executePlan(
 				}
 
 				configPath := stateMgr.NodeConfigPath(vmid, types.RoleWorker)
-				if err := talosClient.ApplyConfig(ctx, node.IP, configPath, true); err != nil {
+				logger.Info("applying config to worker", zap.Int("vmid", int(vmid)))
+				if err := talosClient.ApplyConfigWithRetry(ctx, node.IP, configPath, 5); err != nil {
 					return fmt.Errorf("apply config to worker %d: %w", vmid, err)
 				}
 
@@ -525,21 +564,17 @@ func executePlan(
 	if len(plan.RemoveControlPlanes) > 0 {
 		logger.Info("removing control planes", zap.Int("count", len(plan.RemoveControlPlanes)))
 
-		if len(deployed.ControlPlanes) > 0 {
-			members, err := talosClient.GetEtcdMembers(ctx, deployed.ControlPlanes[0].IP)
-			if err != nil {
-				return fmt.Errorf("get etcd members for quorum check: %w", err)
+		// Validate quorum safety before any removals
+		if len(deployed.ControlPlanes) > 0 && !cfg.DryRun {
+			firstHealthyCP := deployed.ControlPlanes[0].IP
+
+			for range plane.RemoveControlPlanes {
+				if err := talosClient.ValidateRemovalQuorum(ctx, firstHealthyCP, len(deployed.ControlPlanes)); err != nil {
+					return fmt.Errorf("quorum safety check failed: %w", err)
+				}
 			}
 
-			currentMembers := len(members)
-			removing := len(plan.RemoveControlPlanes)
-			afterRemoval := currentMembers - removing
-			quorum := (currentMembers / 2) + 1
-
-			if afterRemoval < quorum {
-				return fmt.Errorf("cannot remove %d control planes: would violate etcd quorum (current=%d, after=%d, quorum=%d)",
-					removing, currentMembers, afterRemoval, quorum)
-			}
+			logger.Info("quorum safety check passed", zap.Int("current_cps", len(deployed.ControlPlanes)), zap.Int("removing", len(plan.RemoveControlPlanes)))
 		}
 
 		for _, vmid := range plan.RemoveControlPlanes {
@@ -549,7 +584,6 @@ func executePlan(
 			}
 
 			var nodeIP net.IP
-			var memberID string
 			for _, cp := range deployed.ControlPlanes {
 				if cp.VMID == vmid {
 					nodeIP = cp.IP
@@ -557,13 +591,27 @@ func executePlan(
 				}
 			}
 
-			if nodeIP != nil && memberID != "" {
-				if err := talosClient.RemoveEtcdMember(ctx, nodeIP, memberID); err != nil {
-					logger.Warn("failed to remove etcd member", zap.Error(err))
+			if nodeIP != nil {
+				// Find a healthy CP endpoint that's not the one being removed
+				var healthyEnpoint net.IP
+				for _, cp := range deployed.ControlPlanes {
+					if cp.VMID != vmid {
+						healthyEnpoint = cp.IP
+						break
+					}
 				}
 
-				if err := talosClient.ResetNode(ctx, nodeIP, true); err != nil {
-					logger.Warn("failed to reset control plane", zap.Int("vmid", int(vmid)), zap.Error(err))
+				if healthyEnpoint != nil {
+					// Get the etcd member ID for the node being removed
+					memberID, err := talosClient.GetEtcdMemberIDByIP(ctx, healthyEnpoint, nodeIP)
+					if err != nil {
+						logger.Warn("failed to get etcd member ID", zap.Error(err))
+					} else {
+						// Remove from etcd cluster first
+						if err := talosClient.RemoveEtcdMember(ctx, healthyEnpoint, memberID); err != nil {
+							logger.Warn("failed to remove etcd member", zap.Error(err))
+						}
+					}
 				}
 			}
 

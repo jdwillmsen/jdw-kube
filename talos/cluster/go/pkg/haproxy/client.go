@@ -1,0 +1,122 @@
+package haproxy
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"os"
+	"time"
+
+	"go.uber.org/zap"
+	"golang.org/x/crypto/ssh"
+)
+
+// Client manages HAProxy configuration via SSH
+type Client struct {
+	sshUser   string
+	sshHost   string
+	sshConfig *ssh.ClientConfig
+	logger    *zap.Logger
+}
+
+// NewClient creates a new HAProxy SSH client
+func NewClient(sshUser, sshHost string, logger *zap.Logger) *Client {
+	return &Client{
+		sshUser: sshUser,
+		sshHost: sshHost,
+		logger:  logger,
+		sshConfig: &ssh.ClientConfig{
+			User:            sshUser,
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			Timeout:         10 * time.Second,
+		},
+	}
+}
+
+// SetPrivateKey configures SSH public key authentication
+func (c *Client) SetPrivateKey(keyPath string) error {
+	key, err := os.ReadFile(keyPath)
+	if err != nil {
+		return fmt.Errorf("read private key: %w", err)
+	}
+
+	signer, err := ssh.ParsePrivateKey(key)
+	if err != nil {
+		return fmt.Errorf("parse private key: %w", err)
+	}
+
+	c.sshConfig.Auth = []ssh.AuthMethod{ssh.PublicKeys(signer)}
+	return nil
+}
+
+// Update writes a new HAProxy configuration, validates it, and reloads the service.
+// On validation failure, it automatically rolls back to the previous config.
+func (c *Client) Update(ctx context.Context, config string) error {
+	timestamp := time.Now().Format("20060102-150405")
+
+	c.logger.Info("updating HAProxy configuration",
+		zap.String("host", c.sshHost),
+		zap.String("backup_suffix", timestamp))
+
+	// 1. Write new config to temp location
+	writeCmd := fmt.Sprintf("cat > /tmp/haproxy.cfg.new << 'HAPROXY_EOF'\n%s\nHAPROXY_EOF", config)
+	if err := c.runSSH(writeCmd); err != nil {
+		return fmt.Errorf("write temp config: %w", err)
+	}
+
+	// 2. Backup existing config
+	backupCmd := fmt.Sprintf("sudo cp /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.backup.%s", timestamp)
+	if err := c.runSSH(backupCmd); err != nil {
+		c.logger.Warn("failed to backup existing config (may not exist yet)", zap.Error(err))
+	}
+
+	// 3. Install new config
+	if err := c.runSSH("sudo mv /tmp/haproxy.cfg.new /etc/haproxy/haproxy.cfg"); err != nil {
+		return fmt.Errorf("install config: %w", err)
+	}
+
+	// 4. Validate config
+	if err := c.runSSH("sudo haproxy -c -f /etc/haproxy/haproxy.cfg"); err != nil {
+		c.logger.Error("HAProxy config validation failed, rolling back", zap.Error(err))
+		rollbackCmd := fmt.Sprintf("sudo cp /etc/haproxy/haproxy.cfg.backup.%s /etc/haproxy/haproxy.cfg", timestamp)
+		if rollbackErr := c.runSSH(rollbackCmd); rollbackErr != nil {
+			return fmt.Errorf("config validation failed and rollback also failed: validation=%w, rollback=%v", err, rollbackErr)
+		}
+		return fmt.Errorf("config validation failed (rolled back): %w", err)
+	}
+
+	// 5. Reload HAProxy
+	if err := c.runSSH("sudo systemctl reload haproxy"); err != nil {
+		return fmt.Errorf("reload HAProxy: %w", err)
+	}
+
+	c.logger.Info("HAProxy configuration updated and reloaded successfully")
+	return nil
+}
+
+// Validate checks if HAProxy is currently running and healthy
+func (c *Client) Validate(ctx context.Context) error {
+	return c.runSSH("sudo systemctl is-active haproxy")
+}
+
+func (c *Client) runSSH(cmd string) error {
+	addr := net.JoinHostPort(c.sshHost, "22")
+	conn, err := ssh.Dial("tcp", addr, c.sshConfig)
+	if err != nil {
+		return fmt.Errorf("dial SSH: %w", err)
+	}
+	defer conn.Close()
+
+	session, err := conn.NewSession()
+	if err != nil {
+		return fmt.Errorf("create SSH session: %w", err)
+	}
+	defer session.Close()
+
+	output, err := session.CombinedOutput(cmd)
+	if err != nil {
+		return fmt.Errorf("run SSH command: %w, output: %s", err, string(output))
+	}
+
+	return nil
+}

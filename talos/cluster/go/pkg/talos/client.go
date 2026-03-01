@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/jdw/talos-bootstrap/pkg/types"
@@ -97,6 +98,97 @@ func (c *Client) ApplyConfig(ctx context.Context, ip net.IP, configPath string, 
 	}
 
 	return nil
+}
+
+// ApplyConfigWithRetry appleis configuration with intelligent retry logic
+func (c *Client) ApplyConfigWithREty(ctx context.Context, ip net.IP, configPath string, maxAttempts int) error {
+	if maxAttempts <= 0 {
+		maxAttempts = 5
+	}
+
+	var lastErr error
+	insecure := true
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		err := c.ApplyConfig(ctx, ip, configPath, insecure)
+
+		if err == nil {
+			return nil
+		}
+
+		lastErr = err
+		talosErr := ParseTalosError(err)
+
+		// Handle different error types
+		switch talosErr.Code {
+		case ErrAlreadyConfigured:
+			// Verify node is actualy ready
+			ready, checkErr := c.checkReadyByIP(ctx, ip, types.RoleWorker)
+			if checkErr == nil && ready {
+				// Node is configured and ready, this is success
+				return nil
+			}
+			// Node not ready yet, continue retrying
+
+		case ErrCertificateRequired:
+			// Switch to secure mode and retry immediately
+			insecure = false
+			continue
+
+		case ErrConnectionRefused, ErrConnectionTimeout, ErrMaintenanceMode, ErrNodeNotReady:
+			// Node might be rebooting or not ready, wait longer
+			if attempt < maxAttempts {
+				waitTime := time.Duration(attempt*5) * time.Second
+				if talosErr.Code == ErrConnectionTimeout {
+					// Even longer for timeouts
+					waitTime = time.Duration(attempt*10) * time.Second
+				}
+				fmt.Printf("Attempt %d/%d failed: %v. Retrying in %s...\n", attempt, maxAttempts, err, waitTime)
+				time.Sleep(waitTime)
+				continue
+			}
+
+		case ErrPermissionDenied:
+			// Don't retry on permission errors
+			return fmt.Errorf("permission denied: %w", err)
+
+		default:
+			// Unknown error, retry with standard backoff
+			if attempt < maxAttempts && talosErr.IsRetryable() {
+				waitTime := time.Duration(attempt*5) * time.Second
+				fmt.Printf("Attempt %d/%d failed with retryable error: %v. Retrying in %s...\n", attempt, maxAttempts, err, waitTime)
+				time.Sleep(waitTime)
+				continue
+			}
+		}
+
+		// If we're on the last attempt, return the error
+		if attempt >= maxAttempts {
+			break
+		}
+
+		// Standard backoff for other errors
+		if attempt < maxAttempts {
+			time.Sleep(time.Duration(attempt*5) * time.Second)
+		}
+	}
+
+	return fmt.Errorf("failed after %d attempts: %w", maxAttempts, lastErr)
+}
+
+// checkReady is a helper that works with an IP instead of requiring a client
+func (c *Client) checkReadyByIP(ctx context.Context, ip net.IP, role types.Role) (bool, error) {
+	tc, err := c.getClient(ctx, ip, false)
+	if err != nil {
+		// Try insecure mode if secure connection fails
+		tc, err = c.getClient(ctx, ip, true)
+		if err != nil {
+			return false, err
+		}
+	}
+	defer tc.Close()
+
+	return c.checkReady(ctx, tc, role)
 }
 
 func (c *Client) BootstrapEtcd(ctx context.Context, ip net.IP) error {
@@ -193,8 +285,15 @@ func (c *Client) checkReady(ctx context.Context, tc *client.Client, role types.R
 	return true, nil
 }
 
+// EtcdMember represents a member in the etcd cluster
+type EtcdMember struct {
+	ID        uint64
+	Hostname  string
+	IsHealthy bool
+}
+
 // GetEtcdMembers uses the machine API EtcdMemberList method
-func (c *Client) GetEtcdMembers(ctx context.Context, ip net.IP) ([]string, error) {
+func (c *Client) GetEtcdMembers(ctx context.Context, ip net.IP) ([]EtcdMember, error) {
 	tc, err := c.getClient(ctx, ip, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create talos client: %w", err)
@@ -210,38 +309,83 @@ func (c *Client) GetEtcdMembers(ctx context.Context, ip net.IP) ([]string, error
 		return nil, fmt.Errorf("no etcd members response")
 	}
 
-	members := make([]string, 0, len(resp.Messages[0].Members))
+	members := make([]EtcdMember, 0, len(resp.Messages[0].Members))
 	for _, member := range resp.Messages[0].Members {
-		// Convert uint64 ID to string
-		members = append(members, fmt.Sprintf("%d", member.Id))
+		members = append(members, EtcdMember{
+			ID:        member.Id,
+			Hostname:  member.Hostname,
+			IsHealthy: true, // Talos API only returns healthy members
+		})
 	}
 
 	return members, nil
 }
 
+// ValidateRemovalQuorum checks if removing a control plane would violate the etcd quorum
+func (c *Client) ValidateRemovalQuorum(ctx context.Context, endpoint net.IP, currentCPCount int) error {
+	if currentCPCount <= 0 {
+		return fmt.Errorf("invalid control plane count: %d", currentCPCount)
+	}
+
+	members, err := c.GetEtcdMembers(ctx, endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to get etcd members for quorum validation: %w", err)
+	}
+
+	healthyCount := len(members)
+
+	if healthyCount == 0 {
+		return fmt.Errorf("no healthy etcd members found")
+	}
+
+	afterRemoval := healthyCount - 1
+	minQuorum := (currentCPCount / 2) + 1
+
+	if afterRemoval < 1 {
+		return fmt.Errorf("cannot remove member: at least 1 healthy member is required")
+	}
+
+	if afterRemoval < minQuorum {
+		return fmt.Errorf("cannot remove member: would violate etcd quorum (remaining healthy members: %d, required for quorum: %d)", afterRemoval, minQuorum)
+	}
+
+	return nil
+}
+
 // RemoveEtcdMember uses the machine API EtcdRemoveMemberByID method
-func (c *Client) RemoveEtcdMember(ctx context.Context, endpoint net.IP, memberID string) error {
+func (c *Client) RemoveEtcdMember(ctx context.Context, endpoint net.IP, memberID uint64) error {
 	tc, err := c.getClient(ctx, endpoint, false)
 	if err != nil {
 		return fmt.Errorf("failed to create talos client: %w", err)
 	}
 	defer tc.Close()
 
-	// Parse memberID string to uint64
-	var memberIDUint uint64
-	_, err = fmt.Sscanf(memberID, "%d", &memberIDUint)
-	if err != nil {
-		return fmt.Errorf("invalid member ID %s: %w", memberID, err)
-	}
-
 	// EtcdRemoveMemberByID returns only error, not (resp, error)
 	if err := tc.EtcdRemoveMemberByID(ctx, &machine.EtcdRemoveMemberByIDRequest{
-		MemberId: memberIDUint,
+		MemberId: memberID,
 	}); err != nil {
-		return fmt.Errorf("failed to remove etcd member %s: %w", memberID, err)
+		return fmt.Errorf("failed to remove etcd member %d: %w", memberID, err)
 	}
 
 	return nil
+}
+
+// GetEtcdMemberIDByIP finds the etcd member ID for a given node IP
+func (c *Client) GetEtcdMemberIDByIP(ctx context.Context, endpoint net.IP, nodeIP net.IP) (uint64, error) {
+	members, err := c.GetEtcdMembers(ctx, endpoint)
+	if err != nil {
+		return 0, err
+	}
+
+	// Try to match by hostname (IP String)
+	nodeIPStr := nodeIP.String()
+	for _, member := range members {
+		if member.Hostname == nodeIPStr {
+			return member.ID, nil
+		}
+	}
+
+	return 0, fmt.Errorf("etcd member with IP %s not found", nodeIPStr)
 }
 
 func (c *Client) ResetNode(ctx context.Context, ip net.IP, graceful bool) error {
@@ -280,101 +424,8 @@ func (c *Client) Kubeconfig(ctx context.Context, endpoint net.IP, outputPath str
 	return nil
 }
 
-func (c *Client) GenerateNodeConfig(ctx context.Context, spec *types.NodeSpec, secretsDir string) ([]byte, error) {
-	var config string
-	switch spec.Role {
-	case types.RoleControlPlane:
-		config = c.generateControlPlaneConfig(spec)
-	case types.RoleWorker:
-		config = c.generateWorkerConfig(spec)
-	}
-	return []byte(config), nil
-}
-
-func (c *Client) generateControlPlaneConfig(spec *types.NodeSpec) string {
-	return fmt.Sprintf(`version: v1alpha1
-machine:
-  install:
-    disk: /dev/%s
-    extraKernelArgs:
-      - console=tty0
-      - console=ttyS0
-  network:
-    interfaces:
-      - interface: %s
-        dhcp: true
-    extraHostEntries:
-      - ip: %s
-        aliases:
-          - %s
-  sysctls:
-    vm.nr_hugepages: "1024"
-  kubelet:
-    extraArgs:
-      rotate-server-certificates: "true"
-  kernel:
-    modules:
-      - name: nvme_tcp
-      - name: vfio_pci
-      - name: zfs
-cluster:
-  extraManifests:
-    - https://raw.githubusercontent.com/alex1989hu/kubelet-serving-cert-approver/main/deploy/standalone-install.yaml
-    - https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-  allowSchedulingOnControlPlanes: false
-  apiServer:
-    certSANs:
-      - %s
-      - %s
-      - 127.0.0.1
-`,
-		c.config.DefaultDisk,
-		c.config.DefaultNetworkInterface,
-		c.config.HAProxyIP.String(),
-		c.config.ControlPlaneEndpoint,
-		c.config.ControlPlaneEndpoint,
-		c.config.HAProxyIP.String(),
-	)
-}
-
-func (c *Client) generateWorkerConfig(spec *types.NodeSpec) string {
-	return fmt.Sprintf(`version: v1alpha1
-machine:
-  install:
-    disk: /dev/%s
-    extraKernelArgs:
-      - console=tty0
-      - console=ttyS0
-  network:
-    interfaces:
-      - interface: %s
-        dhcp: true
-    extraHostEntries:
-      - ip: %s
-        aliases:
-          - %s
-  sysctls:
-    vm.nr_hugepages: "1024"
-  kernel:
-    modules:
-      - name: nvme_tcp
-      - name: vfio_pci
-      - name: zfs
-  kubelet:
-    extraArgs:
-      rotate-server-certificates: "true"
-    extraMounts:
-      - destination: /var/local
-        type: bind
-        source: /var/local
-        options:
-          - bind
-          - rshared
-          - rw
-`,
-		c.config.DefaultDisk,
-		c.config.DefaultNetworkInterface,
-		c.config.HAProxyIP.String(),
-		c.config.ControlPlaneEndpoint,
-	)
+func (c *Client) GenerateNodeConfig(ctx context.Context, spec *types.NodeSpec, secretsDir string) (string, error) {
+	nc := NewNodeConfig(c.config)
+	outputDir := filepath.Join("clusters", c.config.ClusterName, "nodes")
+	return nc.Generate(spec, secretsDir, outputDir)
 }
