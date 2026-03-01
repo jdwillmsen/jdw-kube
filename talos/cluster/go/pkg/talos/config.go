@@ -122,7 +122,7 @@ type templateData struct {
 
 // Generate creates a Talos node config for the given spec, write it to disk,
 // and returns the SHA256 hash of the config for change detection.
-func (nc *NodeConfig) Generate(spec types.NodeSpec, outputDir string) (string, error) {
+func (nc *NodeConfig) Generate(spec *types.NodeSpec, outputDir string) (string, error) {
 	data := templateData{
 		Hostname:                spec.Name,
 		DefaultDisk:             nc.cfg.DefaultDisk,

@@ -100,8 +100,8 @@ func (c *Client) ApplyConfig(ctx context.Context, ip net.IP, configPath string, 
 	return nil
 }
 
-// ApplyConfigWithRetry appleis configuration with intelligent retry logic
-func (c *Client) ApplyConfigWithREty(ctx context.Context, ip net.IP, configPath string, maxAttempts int) error {
+// ApplyConfigWithRetry applies configuration with intelligent retry logic
+func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath string, maxAttempts int) error {
 	if maxAttempts <= 0 {
 		maxAttempts = 5
 	}
@@ -122,7 +122,7 @@ func (c *Client) ApplyConfigWithREty(ctx context.Context, ip net.IP, configPath 
 		// Handle different error types
 		switch talosErr.Code {
 		case ErrAlreadyConfigured:
-			// Verify node is actualy ready
+			// Verify node is actually ready
 			ready, checkErr := c.checkReadyByIP(ctx, ip, types.RoleWorker)
 			if checkErr == nil && ready {
 				// Node is configured and ready, this is success
@@ -427,5 +427,5 @@ func (c *Client) Kubeconfig(ctx context.Context, endpoint net.IP, outputPath str
 func (c *Client) GenerateNodeConfig(ctx context.Context, spec *types.NodeSpec, secretsDir string) (string, error) {
 	nc := NewNodeConfig(c.config)
 	outputDir := filepath.Join("clusters", c.config.ClusterName, "nodes")
-	return nc.Generate(spec, secretsDir, outputDir)
+	return nc.Generate(spec, outputDir)
 }

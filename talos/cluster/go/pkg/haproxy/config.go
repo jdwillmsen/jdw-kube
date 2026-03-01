@@ -38,8 +38,17 @@ defaults
     retries 3
 
 frontend k8s-apiserver
-   bind {{ .HAProxyIP }}:6443
-   default_backend k8s-controlplane
+    bind {{ .HAProxyIP }}:6443
+    default_backend k8s-controlplane
+
+frontend stats
+    mode http
+    bind {{ .HAProxyIP }}:9000
+	stats enable
+	stats uri /
+{{- if and .StatsUser .StatsPassword }}
+	stats auth {{ .StatsUser }}:{{ .StatsPassword }}
+{{- end }}
 
 frontend talos-apiserver
    bind {{ .HAProxyIP }}:50000

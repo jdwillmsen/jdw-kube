@@ -36,7 +36,7 @@ func (e *TalosError) Unwrap() error {
 	return e.Wrapped
 }
 
-// ParseTalosError analyze an error and classifies it for retry logic
+// ParseTalosError analyzes an error and classifies it for retry logic
 func ParseTalosError(err error) *TalosError {
 	if err == nil {
 		return nil
@@ -57,13 +57,13 @@ func ParseTalosError(err error) *TalosError {
 
 	// Certificate required - switch to secure mode
 	if strings.Contains(errStr, "certificate required") ||
-		strings.Contains(errStr, "tls handshake failed") ||
+		strings.Contains(errStr, "tls handshake") ||
 		strings.Contains(errStr, "certificate is required") {
 		return &TalosError{
 			Code:      ErrCertificateRequired,
 			Message:   "certificate required for secure connection",
 			Wrapped:   err,
-			Retryable: false,
+			Retryable: true,
 		}
 	}
 
@@ -103,7 +103,7 @@ func ParseTalosError(err error) *TalosError {
 
 	// Already bootstrapped - not an error
 	if strings.Contains(errStr, "already bootstrapped") ||
-		strings.Contains(errStr, "etcd already intialized") {
+		strings.Contains(errStr, "etcd already initialized") {
 		return &TalosError{
 			Code:      ErrAlreadyBootstrapped,
 			Message:   "cluster already bootstrapped",

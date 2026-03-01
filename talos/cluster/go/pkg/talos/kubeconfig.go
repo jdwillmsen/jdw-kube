@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -19,7 +18,7 @@ type KubeconfigManager struct {
 	logger *zap.Logger
 }
 
-// NewKubeconfigManager creates a new kuberconfig manager
+// NewKubeconfigManager creates a new kubeconfig manager
 func NewKubeconfigManager(client *Client, logger *zap.Logger) *KubeconfigManager {
 	return &KubeconfigManager{
 		client: client,
@@ -93,7 +92,7 @@ func (km *KubeconfigManager) FetchAndMerge(ctx context.Context, endpoint net.IP,
 		return fmt.Errorf("parse kubeconfig YAML: %w", err)
 	}
 
-	// 3. Update server URL to use FDQN
+	// 3. Update server URL to use FQDN
 	newServer := fmt.Sprintf("https://%s:6443", controlPlaneEndpoint)
 	for i := range kc.Clusters {
 		kc.Clusters[i].Cluster.Server = newServer
@@ -162,11 +161,15 @@ func (km *KubeconfigManager) Verify(ctx context.Context, clusterName string) err
 	return nil
 }
 
+// kubeconfigPath returns the path to the kubeconfig file
 func (km *KubeconfigManager) kubeconfigPath() string {
 	if v := os.Getenv("KUBECONFIG"); v != "" {
-		// Use first path if multiple are set
-		parts := strings.Split(v, ":")
-		return parts[0]
+		// Use filepath.SplitList to handle OS-specific separators
+		// (semicolon on Windows, colon on Unix)
+		parts := filepath.SplitList(v)
+		if len(parts) > 0 {
+			return parts[0]
+		}
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -176,13 +179,13 @@ func (km *KubeconfigManager) kubeconfigPath() string {
 }
 
 func (km *KubeconfigManager) mergeKubeconfig(existingPath, newPath string) error {
-	// Ensure the directory exists
-	dir := filepath.Dir(newPath)
+	// Ensure the target directory exists
+	dir := filepath.Dir(existingPath)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("create kubeconfig directory: %w", err)
 	}
 
-	// If existing kubeconfig doesn't exist, just move the new one into place
+	// If existing kubeconfig doesn't exist, just copy the new one into place
 	if _, err := os.Stat(existingPath); os.IsNotExist(err) {
 		data, err := os.ReadFile(newPath)
 		if err != nil {

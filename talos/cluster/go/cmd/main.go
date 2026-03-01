@@ -439,7 +439,7 @@ func executePlan(
 	if plan.NeedsBootstrap && deployed.BootstrapCompleted && !cfg.DryRun {
 		kubeconfigMgr := talos.NewKubeconfigManager(talosClient, logger)
 		if len(deployed.ControlPlanes) > 0 {
-			if err := kubeconfigMgr.FetchAndMerge(ctx, deplyoed.ControlPlanes[0].IP, cfg.ClusterName, cfg.ControlPlaneEndpoint); err != nil {
+			if err := kubeconfigMgr.FetchAndMerge(ctx, deployed.ControlPlanes[0].IP, cfg.ClusterName, cfg.ControlPlaneEndpoint); err != nil {
 				logger.Warn("kubeconfig fetch failed (can retry later)", zap.Error(err))
 			} else {
 				if err := kubeconfigMgr.Verify(ctx, cfg.ClusterName); err != nil {
@@ -568,7 +568,7 @@ func executePlan(
 		if len(deployed.ControlPlanes) > 0 && !cfg.DryRun {
 			firstHealthyCP := deployed.ControlPlanes[0].IP
 
-			for range plane.RemoveControlPlanes {
+			for range plan.RemoveControlPlanes {
 				if err := talosClient.ValidateRemovalQuorum(ctx, firstHealthyCP, len(deployed.ControlPlanes)); err != nil {
 					return fmt.Errorf("quorum safety check failed: %w", err)
 				}
@@ -593,22 +593,22 @@ func executePlan(
 
 			if nodeIP != nil {
 				// Find a healthy CP endpoint that's not the one being removed
-				var healthyEnpoint net.IP
+				var healthyEndpoint net.IP
 				for _, cp := range deployed.ControlPlanes {
 					if cp.VMID != vmid {
-						healthyEnpoint = cp.IP
+						healthyEndpoint = cp.IP
 						break
 					}
 				}
 
-				if healthyEnpoint != nil {
+				if healthyEndpoint != nil {
 					// Get the etcd member ID for the node being removed
-					memberID, err := talosClient.GetEtcdMemberIDByIP(ctx, healthyEnpoint, nodeIP)
+					memberID, err := talosClient.GetEtcdMemberIDByIP(ctx, healthyEndpoint, nodeIP)
 					if err != nil {
 						logger.Warn("failed to get etcd member ID", zap.Error(err))
 					} else {
 						// Remove from etcd cluster first
-						if err := talosClient.RemoveEtcdMember(ctx, healthyEnpoint, memberID); err != nil {
+						if err := talosClient.RemoveEtcdMember(ctx, healthyEndpoint, memberID); err != nil {
 							logger.Warn("failed to remove etcd member", zap.Error(err))
 						}
 					}
