@@ -185,17 +185,19 @@ func (m *Manager) BuildReconcilePlan(
 		}
 	}
 
-	// Check for removals
+	// Check for removals and role changes
 	for _, cp := range deployed.ControlPlanes {
-		if _, exists := desired[cp.VMID]; !exists {
-			// Check if it's in desired as worker (role change)
-			if spec, ok := desired[cp.VMID]; ok && spec.Role == types.RoleWorker {
-				// Role change: remove CP, add worker
+		if spec, exists := desired[cp.VMID]; exists {
+			// VM exists in desired - check for role change
+			if spec.Role == types.RoleWorker {
+				// Role change: control plane -> worker
 				plan.RemoveControlPlanes = append(plan.RemoveControlPlanes, cp.VMID)
 				plan.AddWorkers = append(plan.AddWorkers, cp.VMID)
-			} else {
-				plan.RemoveControlPlanes = append(plan.RemoveControlPlanes, cp.VMID)
 			}
+			// If still control plane, no removal needed
+		} else {
+			// VM not in desired at all - remove it
+			plan.RemoveControlPlanes = append(plan.RemoveControlPlanes, cp.VMID)
 		}
 	}
 
