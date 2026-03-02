@@ -2,6 +2,7 @@ package haproxy
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"os"
@@ -10,6 +11,10 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
 )
+
+func base64Encode(s string) string {
+	return base64.StdEncoding.EncodeToString([]byte(s))
+}
 
 // Client manages HAProxy configuration via SSH
 type Client struct {
@@ -58,8 +63,9 @@ func (c *Client) Update(ctx context.Context, config string) error {
 		zap.String("host", c.sshHost),
 		zap.String("backup_suffix", timestamp))
 
-	// 1. Write new config to temp location
-	writeCmd := fmt.Sprintf("cat > /tmp/haproxy.cfg.new << 'HAPROXY_EOF'\n%s\nHAPROXY_EOF", config)
+	// 1. Write new config to temp location using base64 to avoid heredoc injection
+	encoded := base64Encode(config)
+	writeCmd := fmt.Sprintf("echo '%s' | base64 decode -d > /tmphaproxy.cfg.new", encoded)
 	if err := c.runSSH(writeCmd); err != nil {
 		return fmt.Errorf("write temp config: %w", err)
 	}

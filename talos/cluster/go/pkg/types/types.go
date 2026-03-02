@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -149,6 +150,7 @@ type Config struct {
 	// Proxmox connection
 	ProxmoxSSHUser     string            `json:"proxmox_ssh_user"`
 	ProxmoxSSHHost     string            `json:"proxmox_ssh_host"`
+	ProxmoxSSHKeyPath  string            `json:"proxmox_ssh_key_path"`
 	ProxmoxNodeIPs     map[string]net.IP `json:"proxmox_node_ips"` // pve1 -> 192.168.1.200
 	ProxmoxTokenID     string            `json:"proxmox_token_id,omitempty"`
 	ProxmoxTokenSecret string            `json:"proxmox_token_secret,omitempty"`
@@ -182,6 +184,7 @@ func DefaultConfig() *Config {
 		DefaultDisk:             "sda",
 		ProxmoxSSHUser:          "root",
 		ProxmoxSSHHost:          "192.168.1.199",
+		ProxmoxSSHKeyPath:       defaultSSHKeyPath(),
 		ProxmoxNodeIPs: map[string]net.IP{
 			"pve1": net.ParseIP("192.168.1.200"),
 			"pve2": net.ParseIP("192.168.1.201"),
@@ -193,4 +196,12 @@ func DefaultConfig() *Config {
 	// Set SecretsDir based on ClusterName
 	cfg.SecretsDir = filepath.Join("clusters", cfg.ClusterName, "secrets")
 	return cfg
+}
+
+func defaultSSHKeyPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "/root/.ssh/id_rsa"
+	}
+	return filepath.Join(home, ".ssh", "id_rsa")
 }

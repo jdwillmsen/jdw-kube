@@ -25,45 +25,63 @@ type Config struct {
 
 const haproxyTemplate = `global
     log /dev/log local0
-    maxconn 4096
+    maxconn 32000
+    ulimit-n 65535
+    nbthread 4
+    cpu-map auto:1/1-4 0-3
+    tune.ssl.default-dh-param 2048
     daemon
 
 defaults
     mode tcp
     log global
     option tcplog
-    timeout connect 5000
-    timeout client 50000
-    timeout server 50000
+    option dontlognull
+    option tcp-smart-connnect
+    option redispatch
     retries 3
+    timeout connect 5s
+    timeout client 30s
+    timeout server 30s
+    timeout check 5s
+    maxconn 32000
 
-frontend k8s-apiserver
-    bind {{ .HAProxyIP }}:6443
-    default_backend k8s-controlplane
-
-frontend stats
+listen stats
     mode http
     bind {{ .HAProxyIP }}:9000
 	stats enable
 	stats uri /
+    stats refresh 5s
+    stats show-legends
+    stats admin if TRUE
 {{- if and .StatsUser .StatsPassword }}
 	stats auth {{ .StatsUser }}:{{ .StatsPassword }}
 {{- end }}
 
-frontend talos-apiserver
-   bind {{ .HAProxyIP }}:50000
-   default_backend talos-controlplane
+frontend k8s-apiserver
+    bind {{ .HAProxyIP }}:6443
+    tcp-request inspect-delay 5s
+    default_backend k8s-controlplane
 
 backend k8s-controlplane
-    balance roundrobin
+    balance leastconn
     option tcp-check
+    tcp-check connect port 6443
 {{- range .ControlPlanes }}
 	server talos-cp-{{ .VMID }} {{ .IP }}:6443 check inter 5s fall 3 rise 2
 {{- end }}
 
+frontend talos-apiserver
+    bind {{ .HAProxyIP }}:50000
+    tcp-request inspect-delay 5s
+    default_backend talos-controlplane
+
 backend talos-controlplane
-    balance roundrobin
+    balance leastconn
 	option tcp-check
+    tcp-check connect port 50000
+    timeout connect 10s
+    timeout server 60s
 {{- range .ControlPlanes }}
 	server talos-cp-{{ .VMID }} {{ .IP }}:50000 check inter 5s fall 3 rise 2
 {{- end }}

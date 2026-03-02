@@ -29,10 +29,14 @@ func NewClient(cfg *types.Config) *Client {
 }
 
 func (c *Client) Initialize(ctx context.Context) error {
-	talosConfigPath := fmt.Sprintf("%s/talosconfig", c.config.SecretsDir)
+	talosConfigPath := filepath.Join(c.config.SecretsDir, "talosconfig")
 
 	if _, err := os.Stat(talosConfigPath); os.IsNotExist(err) {
-		return fmt.Errorf("talosconfig not found at %s: run 'talosctl gen config' first", talosConfigPath)
+		// Auto-generate secrets and base configs
+		nc := NewNodeConfig(c.config)
+		if err := nc.GenerateBaseConfigs(); err != nil {
+			return fmt.Errorf("generate base configs: %w", err)
+		}
 	}
 
 	talosCfg, err := config.Open(talosConfigPath)
@@ -119,28 +123,22 @@ func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath
 		lastErr = err
 		talosErr := ParseTalosError(err)
 
-		// Handle different error types
 		switch talosErr.Code {
 		case ErrAlreadyConfigured:
-			// Verify node is actually ready
 			ready, checkErr := c.checkReadyByIP(ctx, ip, types.RoleWorker)
 			if checkErr == nil && ready {
 				// Node is configured and ready, this is success
 				return nil
 			}
-			// Node not ready yet, continue retrying
 
 		case ErrCertificateRequired:
-			// Switch to secure mode and retry immediately
 			insecure = false
 			continue
 
 		case ErrConnectionRefused, ErrConnectionTimeout, ErrMaintenanceMode, ErrNodeNotReady:
-			// Node might be rebooting or not ready, wait longer
 			if attempt < maxAttempts {
 				waitTime := time.Duration(attempt*5) * time.Second
 				if talosErr.Code == ErrConnectionTimeout {
-					// Even longer for timeouts
 					waitTime = time.Duration(attempt*10) * time.Second
 				}
 				fmt.Printf("Attempt %d/%d failed: %v. Retrying in %s...\n", attempt, maxAttempts, err, waitTime)
@@ -149,11 +147,9 @@ func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath
 			}
 
 		case ErrPermissionDenied:
-			// Don't retry on permission errors
 			return fmt.Errorf("permission denied: %w", err)
 
 		default:
-			// Unknown error, retry with standard backoff
 			if attempt < maxAttempts && talosErr.IsRetryable() {
 				waitTime := time.Duration(attempt*5) * time.Second
 				fmt.Printf("Attempt %d/%d failed with retryable error: %v. Retrying in %s...\n", attempt, maxAttempts, err, waitTime)
@@ -162,15 +158,12 @@ func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath
 			}
 		}
 
-		// If we're on the last attempt, return the error
 		if attempt >= maxAttempts {
 			break
 		}
 
-		// Standard backoff for other errors
-		if attempt < maxAttempts {
-			time.Sleep(time.Duration(attempt*5) * time.Second)
-		}
+		// Standard backoff for unhanded cases (ErrAlreadyConfigured that isn't ready)
+		time.Sleep(time.Duration(attempt*5) * time.Second)
 	}
 
 	return fmt.Errorf("failed after %d attempts: %w", maxAttempts, lastErr)
@@ -198,12 +191,40 @@ func (c *Client) BootstrapEtcd(ctx context.Context, ip net.IP) error {
 	}
 	defer tc.Close()
 
-	// Bootstrap returns only error, not (resp, error)
 	if err := tc.Bootstrap(ctx, &machine.BootstrapRequest{}); err != nil {
+		talosErr := ParseTalosError(err)
+		if talosErr != nil && talosErr.Code == ErrAlreadyBootstrapped {
+			// Already bootstrapped is success
+			return nil
+		}
 		return fmt.Errorf("failed to bootstrap etcd: %w", err)
 	}
 
 	return nil
+}
+
+// WaitForEtcdHealthy polls etcd member list until members are present and healthy
+func (c *Client) WaitForEtcdHealthy(ctx context.Context, ip net.IP, maxWait time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, maxWait)
+	defer cancel()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for etcd to become healthy on %s", ip)
+		case <-ticker.C:
+			members, err := c.GetEtcdMembers(ctx, ip)
+			if err != nil {
+				continue
+			}
+			if len(members) > 0 {
+				return nil
+			}
+		}
+	}
 }
 
 func (c *Client) WaitForReady(ctx context.Context, ip net.IP, role types.Role) error {
@@ -214,12 +235,16 @@ func (c *Client) WaitForReady(ctx context.Context, ip net.IP, role types.Role) e
 	defer ticker.Stop()
 
 	insecure := true
+	switchToSecure := false
 	var tc *client.Client
 	var err error
 
 	for {
 		select {
 		case <-ctx.Done():
+			if tc != nil {
+				tc.Close()
+			}
 			return fmt.Errorf("timeout waiting for node %s to be ready", ip)
 		case <-ticker.C:
 			if tc == nil {
@@ -233,18 +258,18 @@ func (c *Client) WaitForReady(ctx context.Context, ip net.IP, role types.Role) e
 			if err != nil {
 				tc.Close()
 				tc = nil
+
+				// Switch to secure mode once after first failed attempt
+				if insecure && !switchToSecure {
+					insecure = false
+					switchToSecure = true
+				}
 				continue
 			}
 
 			if ready {
 				tc.Close()
 				return nil
-			}
-
-			if insecure {
-				insecure = false
-				tc.Close()
-				tc = nil
 			}
 		}
 	}

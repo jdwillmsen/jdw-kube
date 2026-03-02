@@ -279,27 +279,37 @@ func parseARPTable(output, targetMAC string) net.IP {
 
 // findVMNode determines which Proxmox node hosts a VM
 func (s *Scanner) findVMNode(ctx context.Context, vmid types.VMID) (string, error) {
-	// Try each node
 	for nodeName, nodeIP := range s.nodeIPs {
-		client, err := ssh.Dial("tcp", fmt.Sprintf("%s:22", nodeIP), s.sshConfig)
+		found, err := s.checkVMOnNode(vmid, nodeIP)
 		if err != nil {
 			continue
 		}
-		defer client.Close()
 
-		session, err := client.NewSession()
-		if err != nil {
-			continue
-		}
-		defer session.Close()
-
-		// Check if VM exists on this node
-		if err := session.Run(fmt.Sprintf("qm status %d", vmid)); err == nil {
+		if found {
 			return nodeName, nil
 		}
 	}
 
 	return "", fmt.Errorf("VM %d not found on any node", vmid)
+}
+
+func (s *Scanner) checkVMOnNode(vmid types.VMID, nodeIP net.IP) (bool, error) {
+	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:22", nodeIP), s.sshConfig)
+	if err != nil {
+		return false, err
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return false, err
+	}
+	defer session.Close()
+
+	if err := session.Run(fmt.Sprintf("qm status %d", vmid)); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // getVMMAC extracts MAC address from VM config
