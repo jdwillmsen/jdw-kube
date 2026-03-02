@@ -53,7 +53,7 @@ func TestConfigGenerate(t *testing.T) {
 				assert.Contains(t, output, "server talos-cp-201 10.0.0.11:6443")
 				assert.Contains(t, output, "server talos-cp-202 10.0.0.12:6443")
 				assert.Contains(t, output, "server talos-cp-203 10.0.0.13:6443")
-				assert.Contains(t, output, "balance roundrobin")
+				assert.Contains(t, output, "balance leastconn")
 			},
 		},
 		{
@@ -170,12 +170,12 @@ func TestGeneratedConfigValidity(t *testing.T) {
 		"global",
 		"defaults",
 		"frontend k8s-apiserver",
-		"frontend stats",
+		"listen stats",
 		"frontend talos-apiserver",
 		"backend k8s-controlplane",
 		"backend talos-controlplane",
 		"mode tcp",
-		"balance roundrobin",
+		"balance leastconn",
 		"option tcp-check",
 	}
 

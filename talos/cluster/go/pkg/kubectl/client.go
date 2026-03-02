@@ -78,7 +78,7 @@ func (c *Client) DeleteNode(ctx context.Context, nodeName string) error {
 	return nil
 }
 
-// ClusterInfo runs kubectl cluster-info and retruns the output
+// ClusterInfo runs kubectl cluster-info and returns the output
 func (c *Client) ClusterInfo(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "kubectl", "cluster-info")
 	output, err := cmd.CombinedOutput()

@@ -173,7 +173,14 @@ func (km *KubeconfigManager) kubeconfigPath() string {
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join("/root", ".kube", "config")
+		// Fallback: try environment variables
+		if h := os.Getenv("HOME"); h != "" {
+			return filepath.Join(h, ".kube", "config")
+		}
+		if h := os.Getenv("USERPROFILE"); h != "" {
+			return filepath.Join(h, ".kube", "config")
+		}
+		return filepath.Join(string(filepath.Separator), "root", ".kube", "config")
 	}
 	return filepath.Join(home, ".kube", "config")
 }
@@ -197,8 +204,8 @@ func (km *KubeconfigManager) mergeKubeconfig(existingPath, newPath string) error
 	// Use KUBECONFIG env var to merge using kubectl
 	mergedPath := existingPath + ".merged"
 	cmd := exec.Command("kubectl", "config", "view", "--flatten")
-	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("KUBECONFIG=%s:%s", existingPath, newPath))
+	kubeconfigEnv := fmt.Sprintf("KUBECONFIG=%s%s%s", existingPath, string(filepath.ListSeparator), newPath)
+	cmd.Env = append(os.Environ(), kubeconfigEnv)
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("kubectl config view failed: %w, output: %s", err, string(output))

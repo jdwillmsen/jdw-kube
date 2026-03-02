@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -143,7 +144,7 @@ func (m *Manager) fallbackParseTerraform(data []byte) (map[types.VMID]*types.Nod
 	return specs, nil
 }
 
-// parseArrayBlocks extracts individual block strings from a terraform array varaible.
+// parseArrayBlocks extracts individual block strings from a terraform array variable.
 // e.g., talos_control_configuration = [ { ... }, { ... } ]
 func parseArrayBlocks(content, varName string) []string {
 	var blocks []string
@@ -233,9 +234,11 @@ func extractStringField(block, key string) string {
 	return ""
 }
 
-// extractIntField extracts an integer value for a key from a terraform block
+// extractIntField extracts an integer value for a key from a terraform block.
+// Handles both quoted ("201") and unquoted (201) integer formats.
 func extractIntField(block, key string) int {
-	re := regexp.MustCompile(key + `\s*=\s*"(\d+)"`)
+	// Try unquoted first (e.g. vmid = 201), then quoted (e.g., vmid = "201")
+	re := regexp.MustCompile(key + `\s*=\s*"?(\d+)"?`)
 	matches := re.FindStringSubmatch(block)
 	if len(matches) >= 2 {
 		val, err := strconv.Atoi(matches[1])
@@ -340,8 +343,20 @@ func (m *Manager) BuildReconcilePlan(
 		}
 	}
 
-	// Check for config drift (hash comparison)
+	// Build set of nodes being added to skip them in drift check
+	adding := make(map[types.VMID]bool)
+	for _, vmid := range plan.AddControlPlanes {
+		adding[vmid] = true
+	}
+	for _, vmid := range plan.AddWorkers {
+		adding[vmid] = true
+	}
+
+	// Check for config drift (hash comparison), skip nodes being freshly added
 	for vmid, spec := range desired {
+		if adding[vmid] {
+			continue
+		}
 		configFile := m.NodeConfigPath(vmid, spec.Role)
 		currentHash, err := m.computeHash(configFile)
 		if err != nil {
@@ -424,6 +439,10 @@ func (m *Manager) Save(ctx context.Context, state *types.ClusterState) error {
 		return fmt.Errorf("write temp state: %w", err)
 	}
 
+	// On Windows, os.Rename cannot overwrite an existing file
+	if runtime.GOOS == "windows" {
+		_ = os.Remove(stateFile)
+	}
 	if err := os.Rename(tempFile, stateFile); err != nil {
 		return fmt.Errorf("rename state file: %w", err)
 	}

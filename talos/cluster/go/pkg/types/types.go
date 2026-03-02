@@ -47,11 +47,15 @@ type NodeState struct {
 // MarshalJSON customizes JSON serialization for NodeState
 func (n NodeState) MarshalJSON() ([]byte, error) {
 	type Alias NodeState
+	var ipStr string
+	if n.IP != nil {
+		ipStr = n.IP.String()
+	}
 	return json.Marshal(&struct {
 		IP string `json:"ip,omitempty"`
 		*Alias
 	}{
-		IP:    n.IP.String(),
+		IP:    ipStr,
 		Alias: (*Alias)(&n),
 	})
 }
@@ -201,7 +205,14 @@ func DefaultConfig() *Config {
 func defaultSSHKeyPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "/root/.ssh/id_rsa"
+		// Fallback: use home dir from environment
+		if h := os.Getenv("HOME"); h != "" {
+			return filepath.Join(h, ".ssh", "id_rsa")
+		}
+		if h := os.Getenv("USERPROFILE"); h != "" {
+			return filepath.Join(h, ".ssh", "id_rsa")
+		}
+		return filepath.Join(string(filepath.Separator), "root", ".ssh", "id_rsa")
 	}
 	return filepath.Join(home, ".ssh", "id_rsa")
 }

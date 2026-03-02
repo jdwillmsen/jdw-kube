@@ -25,6 +25,8 @@ type Config struct {
 
 const haproxyTemplate = `global
     log /dev/log local0
+    chroot /var/lib/haproxy
+    stats socket /run/haproxy/admin.sock mode 660 level admin
     maxconn 32000
     ulimit-n 65535
     nbthread 4
@@ -37,7 +39,7 @@ defaults
     log global
     option tcplog
     option dontlognull
-    option tcp-smart-connnect
+    option tcp-smart-connect
     option redispatch
     retries 3
     timeout connect 5s

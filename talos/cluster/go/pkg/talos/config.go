@@ -123,7 +123,7 @@ type templateData struct {
 func (nc *NodeConfig) GenerateBaseConfigs() error {
 	secretsDir := nc.cfg.SecretsDir
 	if err := os.MkdirAll(secretsDir, 0700); err != nil {
-		return fmt.Errorf("cannot create secrets directory %s: %v", secretsDir, err)
+		return fmt.Errorf("cannot create secrets directory %s: %w", secretsDir, err)
 	}
 
 	secretsFile := filepath.Join(secretsDir, "secrets.yaml")
@@ -133,7 +133,7 @@ func (nc *NodeConfig) GenerateBaseConfigs() error {
 		cmd := exec.Command("talosctl", "gen", "secrets", "-o", secretsFile)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("talosctl gen secrets: %w, output: %w", err, string(output))
+			return fmt.Errorf("talosctl gen secrets: %w, output: %s", err, string(output))
 		}
 		if err := os.Chmod(secretsFile, 0600); err != nil {
 			return fmt.Errorf("cannot chmod secrets: %w", err)

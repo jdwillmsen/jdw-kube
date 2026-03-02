@@ -65,7 +65,7 @@ func (c *Client) Update(ctx context.Context, config string) error {
 
 	// 1. Write new config to temp location using base64 to avoid heredoc injection
 	encoded := base64Encode(config)
-	writeCmd := fmt.Sprintf("echo '%s' | base64 decode -d > /tmphaproxy.cfg.new", encoded)
+	writeCmd := fmt.Sprintf("echo '%s' | base64 -d > /tmp/haproxy.cfg.new", encoded)
 	if err := c.runSSH(writeCmd); err != nil {
 		return fmt.Errorf("write temp config: %w", err)
 	}

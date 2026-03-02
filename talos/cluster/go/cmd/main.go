@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -183,7 +184,7 @@ func resetCmd() *cobra.Command {
 				}
 			}
 
-			clusterDir := fmt.Sprintf("clusters/%s", cfg.ClusterName)
+			clusterDir := filepath.Join("clusters", cfg.ClusterName)
 			if err := os.RemoveAll(clusterDir); err != nil {
 				return fmt.Errorf("remove cluster dir: %w", err)
 			}
@@ -334,7 +335,7 @@ func runStatus(ctx context.Context, cfg *types.Config) error {
 
 	if deployed.TerraformHash != "" {
 		currentHash, err := stateMgr.ComputeTerraformHash()
-		if err != nil {
+		if err == nil {
 			if currentHash == deployed.TerraformHash {
 				fmt.Printf("  Terraform Hash: %s (unchanged)\n", currentHash)
 			} else {
@@ -396,11 +397,15 @@ func executePlan(
 	k8sClient *kubectl.Client,
 ) error {
 
+	// Track which VMID was bootstrapped so we skip it in the add-CPs phase
+	var bootstrappedVMID types.VMID
+
 	// Phase 0: Bootstrap first CP if needed
 	if plan.NeedsBootstrap && len(plan.AddControlPlanes) > 0 {
 		logger.Info("executing bootstrap")
 
 		firstVMID := plan.AddControlPlanes[0]
+		bootstrappedVMID = firstVMID
 		spec := desired[firstVMID]
 
 		if cfg.DryRun {
@@ -446,7 +451,7 @@ func executePlan(
 			deployed.BootstrapCompleted = true
 
 			if err := stateMgr.Save(ctx, deployed); err != nil {
-				return fmt.Errorf("save state after bootstrap", zap.Error(err))
+				return fmt.Errorf("save state after bootstrap: %w", err)
 			}
 		}
 	}
@@ -456,7 +461,7 @@ func executePlan(
 		logger.Info("adding control planes", zap.Int("count", len(plan.AddControlPlanes)))
 
 		for _, vmid := range plan.AddControlPlanes {
-			if plan.NeedsBootstrap && vmid == plan.AddControlPlanes[0] {
+			if plan.NeedsBootstrap && vmid == bootstrappedVMID {
 				continue // Already handled in bootstrap phase
 			}
 
@@ -504,7 +509,7 @@ func executePlan(
 	// Phase 2: Fetch kubeconfig after bootstrap
 	if plan.NeedsBootstrap && deployed.BootstrapCompleted && !cfg.DryRun {
 		// Ensure DNS resolves for the control plane endpoint
-		ensureEnpointResolvable(cfg)
+		ensureEndpointResolvable(cfg)
 
 		kubeconfigMgr := talos.NewKubeconfigManager(talosClient, logger)
 		if len(deployed.ControlPlanes) > 0 {
@@ -645,7 +650,7 @@ func executePlan(
 
 				// Reset the Talos node
 				if err := talosClient.ResetNode(ctx, nodeIP, true); err != nil {
-					logger.Warn("failed to reset worker (tying insecure)", zap.Int("vmid", int(vmid)), zap.Error(err))
+					logger.Warn("graceful reset failed, trying forced reset", zap.Int("vmid", int(vmid)), zap.Error(err))
 					if err := talosClient.ResetNode(ctx, nodeIP, false); err != nil {
 						logger.Warn("failed to reset worker with insecure option", zap.Int("vmid", int(vmid)), zap.Error(err))
 					}
@@ -742,7 +747,7 @@ func executePlan(
 		}
 	}
 
-	// Phase 6: Updaet configs (apply changed configurations)
+	// Phase 6: Update configs (apply changed configurations)
 	if len(plan.UpdateConfigs) > 0 {
 		logger.Info("updating configurations", zap.Int("count", len(plan.UpdateConfigs)))
 
@@ -815,15 +820,31 @@ func executePlan(
 	return nil
 }
 
+// hostsFilePath returns the OS-appropriate hosts file path
+func hostsFilePath() string {
+	if runtime.GOOS == "windows" {
+		// Check for Git Bash / MSYS2 environment
+		if mingw := os.Getenv("MINGW_PREFIX"); mingw != "" {
+			return "/c/Windows/System32/drivers/etc/hosts"
+		}
+		sysRoot := os.Getenv("SystemRoot")
+		if sysRoot == "" {
+			sysRoot = `C:\Windows`
+		}
+		return filepath.Join(sysRoot, "System32", "drivers", "etc", "hosts")
+	}
+	return "/etc/hosts"
+}
+
 // ensureEndpointResolvable checks DNS for the control plane endpoint and
-// ands an /etc/hosts entry if resolution fails.
-func ensureEnpointResolvable(cfg *types.Config) {
+// adds a hosts file entry if resolution fails or points to the wrong IP.
+func ensureEndpointResolvable(cfg *types.Config) {
 	// Skip if endpoint is already an IP
 	if net.ParseIP(cfg.ControlPlaneEndpoint) != nil {
 		return
 	}
 
-	// Check if endpoint resolves
+	// Check if endpoint resolves correctly
 	addrs, err := net.LookupHost(cfg.ControlPlaneEndpoint)
 	if err == nil && len(addrs) > 0 {
 		for _, addr := range addrs {
@@ -833,49 +854,99 @@ func ensureEnpointResolvable(cfg *types.Config) {
 		}
 	}
 
-	// Try to add to /etc/hosts
 	entry := fmt.Sprintf("%s %s", cfg.HAProxyIP, cfg.ControlPlaneEndpoint)
-	hostsFile := "/etc/hosts"
+	hostsFile := hostsFilePath()
 
 	data, err := os.ReadFile(hostsFile)
 	if err != nil {
-		logger.Warn("cannot read hosts file", zap.Error(err))
+		logger.Warn("cannot read hosts file", zap.String("path", hostsFile), zap.Error(err))
+		logger.Warn("please add the following entry manually", zap.String("entry", entry))
 		return
 	}
 
-	// Check if entry already exists
-	if strings.Contains(string(data), cfg.ControlPlaneEndpoint) {
-		return
-	}
+	content := string(data)
 
-	// Try direct write, fallback to sudo
-	f, err := os.OpenFile(hostsFile, os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		// Try with sudo
-		cmd := exec.Command("sudo", "tee", "-a", hostsFile)
-		cmd.Stdin = strings.NewReader("\n" + entry + "\n")
-		if err := cmd.Run(); err != nil {
-			logger.Warn("failed to update /etc/hosts (may need manual DNS entry)",
+	// Check if endpoint already has an entry - update it if stale
+	if strings.Contains(content, cfg.ControlPlaneEndpoint) {
+		if strings.Contains(content, entry) {
+			return // Already correct
+		}
+		// Entry exists but with wrong IP - need to update it
+		lines := strings.Split(content, "\n")
+		for i, line := range lines {
+			if strings.Contains(line, cfg.ControlPlaneEndpoint) && !strings.HasPrefix(strings.TrimSpace(line), "#") {
+				lines[i] = entry
+			}
+		}
+		newContent := strings.Join(lines, "\n")
+		if err := writeHostsFile(hostsFile, []byte(newContent)); err != nil {
+			logger.Warn("failed to update hosts file entry (may need manual DNS entry)",
 				zap.String("entry", entry), zap.Error(err))
 		} else {
-			logger.Info("added hosts entry", zap.String("entry", entry))
+			logger.Info("updated hosts entry", zap.String("entry", entry))
 		}
 		return
 	}
-	defer f.Close()
 
-	if _, err := f.WriteString("\n" + entry + "\n"); err != nil {
-		logger.Warn("failed to write hosts entry", zap.Error(err))
+	appendData := "\n" + entry + "\n"
+	if err := appendHostsFile(hostsFile, appendData); err != nil {
+		logger.Warn("failed to update hosts file entry (may need manual DNS entry)",
+			zap.String("path", hostsFile), zap.String("entry", entry), zap.Error(err))
 	} else {
 		logger.Info("added hosts entry", zap.String("entry", entry))
 	}
+}
+
+// appendHostsFile appends to the hosts file, using privilege escalation if needed
+func appendHostsFile(hostsFile, data string) error {
+	// Try direct write first
+	f, err := os.OpenFile(hostsFile, os.O_APPEND|os.O_WRONLY, 0644)
+	if err == nil {
+		defer f.Close()
+		_, err = f.WriteString(data)
+		return err
+	}
+
+	// Fallback to privilege escalation
+	if runtime.GOOS == "windows" {
+		// On Windows, use PowerShell with elevated privileges
+		cmd := exec.Command("powersheel", "-Command",
+			fmt.Sprintf("Add-Content -Path '%s' -Value '%s'", hostsFile, strings.TrimSpace(data)))
+		return cmd.Run()
+	}
+
+	// On Unix, try sudo
+	cmd := exec.Command("sudo", "tee", "-a", hostsFile)
+	cmd.Stdin = strings.NewReader(data)
+	cmd.Stdout = nil // supress tee output
+	return cmd.Run()
+}
+
+// writeHostsFile writes the full hosts file content, using privilege escalation if needed
+func writeHostsFile(hostsFile string, data []byte) error {
+	// Try direct write first
+	if err := os.WriteFile(hostsFile, data, 0644); err != nil {
+		return nil
+	}
+
+	// Fallback to privilege escalation
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command("powersheel", "-Command",
+			fmt.Sprintf("Set-Content -Path '%s' -Value '%s'", hostsFile, string(data)))
+		return cmd.Run()
+	}
+
+	cmd := exec.Command("sudo", "tee", hostsFile)
+	cmd.Stdin = strings.NewReader(string(data))
+	cmd.Stdout = nil
+	return cmd.Run()
 }
 
 // configureTalosctlEndpoints sets talosctl endpoints and nodes
 func configureTalosctlEndpoints(cfg *types.Config, deployed *types.ClusterState) {
 	// Set endpoint to HAProxy IP
 	cmd := exec.Command("talosctl", "config", "endpoint", cfg.HAProxyIP.String())
-	cmd.Env = append(os.Environ(), "TALOSCONFIG="+filepath.Join(cfg.SecretsDir, "taloconfig"))
+	cmd.Env = append(os.Environ(), "TALOSCONFIG="+filepath.Join(cfg.SecretsDir, "talosconfig"))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		logger.Warn("failed to set talosctl endpoint", zap.Error(err), zap.String("output", string(output)))
 	}
@@ -883,7 +954,7 @@ func configureTalosctlEndpoints(cfg *types.Config, deployed *types.ClusterState)
 	// Set node to first control plane
 	if len(deployed.ControlPlanes) > 0 {
 		cmd = exec.Command("talosctl", "config", "node", deployed.ControlPlanes[0].IP.String())
-		cmd.Env = append(os.Environ(), "TALOSCONFIG="+filepath.Join(cfg.SecretsDir, "taloconfig"))
+		cmd.Env = append(os.Environ(), "TALOSCONFIG="+filepath.Join(cfg.SecretsDir, "talosconfig"))
 		if output, err := cmd.CombinedOutput(); err != nil {
 			logger.Warn("failed to set talosctl node", zap.Error(err), zap.String("output", string(output)))
 		}
@@ -923,8 +994,8 @@ func verifyCluster(ctx context.Context, talosClient *talos.Client, k8sClient *ku
 	// Print success summary
 	fmt.Println("\n=== BOOTSTRAP SUCCESSFUL ===")
 	fmt.Printf("  Cluster:    %s\n", deployed.ClusterName)
-	fmt.Printf("  CPs:        %s\n", len(deployed.ControlPlanes))
-	fmt.Printf("  Workers:    %s\n", len(deployed.Workers))
+	fmt.Printf("  CPs:        %d\n", len(deployed.ControlPlanes))
+	fmt.Printf("  Workers:    %d\n", len(deployed.Workers))
 	fmt.Println("\n  Quick Start:")
 	fmt.Printf("    kubectl get nodes\n")
 	fmt.Printf("    talosctl dashboard\n")
