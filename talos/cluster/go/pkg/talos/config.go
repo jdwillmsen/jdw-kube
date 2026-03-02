@@ -95,7 +95,7 @@ const workerPatchTemplate = `machine:
     extraMounts:
       - destination: /var/local
         type: bind
-         source: /var/local
+        source: /var/local
         options:
           - bind
           - rshared
