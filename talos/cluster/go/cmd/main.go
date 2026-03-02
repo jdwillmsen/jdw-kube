@@ -910,7 +910,7 @@ func appendHostsFile(hostsFile, data string) error {
 	// Fallback to privilege escalation
 	if runtime.GOOS == "windows" {
 		// On Windows, use PowerShell with elevated privileges
-		cmd := exec.Command("powersheel", "-Command",
+		cmd := exec.Command("powershell", "-Command",
 			fmt.Sprintf("Add-Content -Path '%s' -Value '%s'", hostsFile, strings.TrimSpace(data)))
 		return cmd.Run()
 	}
@@ -918,20 +918,20 @@ func appendHostsFile(hostsFile, data string) error {
 	// On Unix, try sudo
 	cmd := exec.Command("sudo", "tee", "-a", hostsFile)
 	cmd.Stdin = strings.NewReader(data)
-	cmd.Stdout = nil // supress tee output
+	cmd.Stdout = nil // suppress tee output
 	return cmd.Run()
 }
 
 // writeHostsFile writes the full hosts file content, using privilege escalation if needed
 func writeHostsFile(hostsFile string, data []byte) error {
 	// Try direct write first
-	if err := os.WriteFile(hostsFile, data, 0644); err != nil {
+	if err := os.WriteFile(hostsFile, data, 0644); err == nil {
 		return nil
 	}
 
 	// Fallback to privilege escalation
 	if runtime.GOOS == "windows" {
-		cmd := exec.Command("powersheel", "-Command",
+		cmd := exec.Command("powershell", "-Command",
 			fmt.Sprintf("Set-Content -Path '%s' -Value '%s'", hostsFile, string(data)))
 		return cmd.Run()
 	}

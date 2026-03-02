@@ -451,6 +451,6 @@ func (c *Client) Kubeconfig(ctx context.Context, endpoint net.IP, outputPath str
 
 func (c *Client) GenerateNodeConfig(ctx context.Context, spec *types.NodeSpec, secretsDir string) (string, error) {
 	nc := NewNodeConfig(c.config)
-	outputDir := filepath.Join("clusters", c.config.ClusterName, "nodes")
+	outputDir := filepath.Join(secretsDir, "..", "nodes")
 	return nc.Generate(spec, outputDir)
 }

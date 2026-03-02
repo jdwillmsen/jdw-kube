@@ -31,22 +31,22 @@ const controlPlanePatchTemplate = `machine:
     disk: /dev/{{ .DefaultDisk }}
     extraKernelArgs:
       - console=tty0
-	  - console=ttyS0
+      - console=ttyS0
   network:
-	interfaces:
-	  - interface: {{ .DefaultNetworkInterface }}
-		dhcp: true
-	extraHostEntries:
-	  - ip: {{ .HAProxyIP }}
+    interfaces:
+      - interface: {{ .DefaultNetworkInterface }}
+        dhcp: true
+    extraHostEntries:
+      - ip: {{ .HAProxyIP }}
         aliases:
-		  - {{ .ControlPlaneEndpoint }}
+          - {{ .ControlPlaneEndpoint }}
   sysctls:
     vm.nr_hugepages: "1024"
   kubelet:
     extraArgs:
-	  rotate-server-certificates: "true"
+      rotate-server-certificates: "true"
   kernel:
-	modules:
+    modules:
       - name: nvme_tcp
       - name: vfio_pci
       - name: zfs
@@ -58,7 +58,7 @@ cluster:
   apiServer:
     certSANs:
       - {{ .ControlPlaneEndpoint }}
-	  - {{ .HAProxyIP }}
+      - {{ .HAProxyIP }}
       - 127.0.0.1
     admissionControl:
       - name: PodSecurity
@@ -78,30 +78,30 @@ const workerPatchTemplate = `machine:
     disk: /dev/{{ .DefaultDisk }}
     extraKernelArgs:
       - console=tty0
-	  - console=ttyS0
+      - console=ttyS0
   network:
-	interfaces:
-	  - interface: {{ .DefaultNetworkInterface }}
-		dhcp: true
-	extraHostEntries:
-	  - ip: {{ .HAProxyIP }}
+    interfaces:
+      - interface: {{ .DefaultNetworkInterface }}
+        dhcp: true
+    extraHostEntries:
+      - ip: {{ .HAProxyIP }}
         aliases:
-		  - {{ .ControlPlaneEndpoint }}
+          - {{ .ControlPlaneEndpoint }}
   sysctls:
     vm.nr_hugepages: "1024"
   kubelet:
     extraArgs:
-	  rotate-server-certificates: "true"
+      rotate-server-certificates: "true"
     extraMounts:
       - destination: /var/local
         type: bind
-     	source: /var/local
-		options:
-		  - bind
-		  - rshared
-		  - rw
+         source: /var/local
+        options:
+          - bind
+          - rshared
+          - rw
   kernel:
-	modules:
+    modules:
       - name: nvme_tcp
       - name: vfio_pci
       - name: zfs

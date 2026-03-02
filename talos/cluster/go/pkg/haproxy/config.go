@@ -51,13 +51,13 @@ defaults
 listen stats
     mode http
     bind {{ .HAProxyIP }}:9000
-	stats enable
-	stats uri /
+    stats enable
+    stats uri /
     stats refresh 5s
     stats show-legends
     stats admin if TRUE
 {{- if and .StatsUser .StatsPassword }}
-	stats auth {{ .StatsUser }}:{{ .StatsPassword }}
+    stats auth {{ .StatsUser }}:{{ .StatsPassword }}
 {{- end }}
 
 frontend k8s-apiserver
@@ -70,7 +70,7 @@ backend k8s-controlplane
     option tcp-check
     tcp-check connect port 6443
 {{- range .ControlPlanes }}
-	server talos-cp-{{ .VMID }} {{ .IP }}:6443 check inter 5s fall 3 rise 2
+    server talos-cp-{{ .VMID }} {{ .IP }}:6443 check inter 5s fall 3 rise 2
 {{- end }}
 
 frontend talos-apiserver
@@ -80,12 +80,12 @@ frontend talos-apiserver
 
 backend talos-controlplane
     balance leastconn
-	option tcp-check
+    option tcp-check
     tcp-check connect port 50000
     timeout connect 10s
     timeout server 60s
 {{- range .ControlPlanes }}
-	server talos-cp-{{ .VMID }} {{ .IP }}:50000 check inter 5s fall 3 rise 2
+    server talos-cp-{{ .VMID }} {{ .IP }}:50000 check inter 5s fall 3 rise 2
 {{- end }}
 `
 
