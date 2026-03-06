@@ -519,7 +519,7 @@ func parseIP(s string) net.IP {
 
 // LoadTerraformExtras parses additional fields from terraform.tfvars that aren't
 // part of the node configuration arrays: cluster_name, proxmox_api_token_id,
-// proxmox_api_token_secret. Only updates field still at default/empty values
+// proxmox_api_token_secret. Only updates fields still at default/empty values
 // (CLI flags and env vars take precedence).
 func (m *Manager) LoadTerraformExtras(ctx context.Context) error {
 	data, err := os.ReadFile(m.config.TerraformTFVars)
@@ -557,10 +557,10 @@ func (m *Manager) LoadTerraformExtras(ctx context.Context) error {
 	return nil
 }
 
-// extractSimpleStringField extracts a top-level string assingment from HCL/tfvars content.
+// extractSimpleStringField extracts a top-level string assignment from HCL/tfvars content.
 // Matches patterns like: key = "value"
 func extractSimpleStringField(content, key string) string {
-	re := regexp.MustCompile(`(??m)&` + key + `\s*=\s*"([^"]*)"`)
+	re := regexp.MustCompile(`(?m)^` + key + `\s*=\s*"([^"]*)"`)
 	matches := re.FindStringSubmatch(content)
 	if len(matches) >= 2 {
 		return matches[1]

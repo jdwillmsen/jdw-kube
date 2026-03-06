@@ -15,7 +15,7 @@ type SummaryData struct {
 	RunDir      string
 	ExitError   error
 
-	// Optional operation counts (set by caller before Close)
+	// Optional operational counts (set by caller before Close)
 	ControlPlanes   int
 	Workers         int
 	AddedNodes      int
@@ -33,26 +33,26 @@ func WriteSummary(path string, data *SummaryData) error {
 		errMsg = "none"
 	}
 
-	content := fmt.Sprintf(`=== TALOS BOOTRAP RUN SUMMARY ===
+	content := fmt.Sprintf(`=== TALOS BOOTSTRAP RUN SUMMARY ===
 
- Status:       %s
- Cluster:      %s
- Start:        %s
- Duration:     %s
- Run Dir:      %s
- Error:        %s
+  Status:       %s
+  Cluster:      %s
+  Start:        %s
+  Duration:     %s
+  Run Dir:      %s
+  Error:        %s
 
- --- Cluster Nodes ---
- Control Planes: %d
- Workers:        %d
+  --- Cluster Nodes ---
+  Control Planes: %d
+  Workers:        %d
 
- --- Operations ---
- Added:          %d
- Removed:        %d
- Updated:        %d
- Bootstrap       %v
+  --- Operations ---
+  Added:          %d
+  Removed:        %d
+  Updated:        %d
+  Bootstrap:      %v
 
-===========================================
+=======================================
 `,
 		data.Status,
 		data.ClusterName,

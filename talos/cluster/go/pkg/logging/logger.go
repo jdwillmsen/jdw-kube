@@ -40,7 +40,7 @@ type RunSession struct {
 func NewRunSession(cfg *types.Config) (*RunSession, error) {
 	now := time.Now()
 	dateDir := now.Format("2006-01-02")
-	runName := "run-" + now.Format("2000601012_150405")
+	runName := "run-" + now.Format("20060102_150405")
 	runDir := filepath.Join(cfg.LogDir, dateDir, runName)
 
 	if err := os.MkdirAll(runDir, 0755); err != nil {
@@ -67,7 +67,7 @@ func NewRunSession(cfg *types.Config) (*RunSession, error) {
 	}
 
 	// Parse log level
-	level := parseZaplevel(cfg.LogLevel)
+	level := parseZapLevel(cfg.LogLevel)
 
 	// Build tee core
 	teeCore := buildTeeCore(level, cfg.NoColor, consoleFile, structuredFile)
@@ -111,7 +111,7 @@ func buildTeeCore(level zapcore.Level, noColor bool, consoleFile, structuredFile
 	jsonEncoder := zapcore.NewJSONEncoder(jsonCfg)
 
 	levelEnabler := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-		return lvl > level
+		return lvl >= level
 	})
 
 	return zapcore.NewTee(
@@ -119,6 +119,16 @@ func buildTeeCore(level zapcore.Level, noColor bool, consoleFile, structuredFile
 		zapcore.NewCore(consoleEncoder, zapcore.AddSync(consoleFile), levelEnabler),
 		zapcore.NewCore(jsonEncoder, zapcore.AddSync(structuredFile), levelEnabler),
 	)
+}
+
+// newConsoleEncoderConfig returns a console encoder config with custom ANSI colors
+func newConsoleEncoderConfig(noColor bool) zapcore.EncoderConfig {
+	cfg := zap.NewDevelopmentEncoderConfig()
+	cfg.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05")
+	if !noColor {
+		cfg.EncodeLevel = colorLevelEncoder
+	}
+	return cfg
 }
 
 // colorLevelEncoder maps zap levels to ANSI colors matching the bash script
@@ -152,16 +162,17 @@ func parseZapLevel(s string) zapcore.Level {
 	}
 }
 
-// registerRun append a pending entry to runs.log
+// registerRun appends a pending entry to runs.log
 func (s *RunSession) registerRun() {
 	runsLogPath := filepath.Join(s.runsLogDir, "runs.log")
 	// Ensure parent dir exists
-	os.MkdirAll(runsLogPath, 0755)
+	os.MkdirAll(filepath.Dir(runsLogPath), 0755)
 
 	entry := fmt.Sprintf("%s|%s|%s|pending\n",
 		s.StartTime.Format("2006-01-02 15:04:05"),
 		s.Config.ClusterName,
-		s.RunDir)
+		s.RunDir,
+	)
 
 	f, err := os.OpenFile(runsLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
@@ -197,7 +208,7 @@ func (s *RunSession) writeHeader() {
 // bypassing zap's structured formatting. Useful for banners and boxes.
 func (s *RunSession) WriteRaw(text string) {
 	fmt.Fprint(os.Stderr, text)
-	// Also write to console.log if hte run dir exists
+	// Also write to console.log if the run dir exists
 	consolePath := filepath.Join(s.RunDir, "console.log")
 	if f, err := os.OpenFile(consolePath, os.O_APPEND|os.O_WRONLY, 0644); err == nil {
 		f.WriteString(text)

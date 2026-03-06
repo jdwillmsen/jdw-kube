@@ -42,7 +42,7 @@ func main() {
 	var runErr error
 	defer func() {
 		if session != nil {
-			session.Close()
+			session.Close(runErr)
 		}
 	}()
 
@@ -97,7 +97,7 @@ func initSession() error {
 	checkPrerequisites(logger)
 
 	// Ensure cluster .gitignore
-	clusterDir := filtepath.Join("clusters", cfg.ClusterName)
+	clusterDir := filepath.Join("clusters", cfg.ClusterName)
 	ensureClusterGitignore(clusterDir)
 
 	return nil
@@ -138,7 +138,7 @@ func checkPrerequisites(logger *zap.Logger) {
 	for _, tool := range []string{"talosctl", "kubectl"} {
 		path, err := exec.LookPath(tool)
 		if err != nil {
-			logger.Warn("prequisite not found in PATH", zap.String("tool", tool))
+			logger.Warn("prerequisite not found in PATH", zap.String("tool", tool))
 			continue
 		}
 		// Get version
@@ -164,7 +164,7 @@ func ensureClusterGitignore(clusterDir string) {
 	if err := os.MkdirAll(clusterDir, 0755); err != nil {
 		return
 	}
-	content := "/nodes/\n/secrets/\n/state\n/*log\n"
+	content := "/nodes/\n/secrets/\n/state\n/*.log\n"
 	os.WriteFile(gitignorePath, []byte(content), 0644)
 }
 
@@ -437,7 +437,7 @@ func displayPlan(plan *types.ReconcilePlan) {
 		box.Item("=", fmt.Sprintf("%d node(s) unchanged", len(plan.NoOp)))
 	}
 	if plan.IsEmpty() {
-		box.Badge("OK", "Cluster matches desired state - no changes needed")
+		box.Badge("OK", "Cluster matches desired state — no changes needed")
 	}
 	box.Footer()
 	fmt.Fprintln(os.Stderr)
@@ -1049,7 +1049,7 @@ func verifyCluster(ctx context.Context, talosClient *talos.Client, k8sClient *ku
 	}
 
 	// Print success summary using box
-	box := logging.NewBox(os.Stderr, cfg.Nocolor)
+	box := logging.NewBox(os.Stderr, cfg.NoColor)
 	fmt.Fprintln(os.Stderr)
 	box.Header("BOOTSTRAP SUCCESSFUL")
 	box.Row("Cluster", deployed.ClusterName)

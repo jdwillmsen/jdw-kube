@@ -10,7 +10,7 @@ import (
 )
 
 // AuditLogger records command executions and state changes to an audit trail.
-// Uses io.Writer so test can inject bytes.Buffer.
+// Uses io.Writer so tests can inject bytes.Buffer.
 type AuditLogger struct {
 	w io.Writer
 }
@@ -83,7 +83,7 @@ func (c *AuditedCmd) Output() ([]byte, error) {
 	duration := time.Since(start)
 
 	if len(out) > 0 {
-		c.audit.WriteEntry("CMD-OUT", "\n"+string(out))
+		c.audit.WriteEntry("CMD-OUTPUT", "\n"+string(out))
 	}
 
 	exitCode := 0
