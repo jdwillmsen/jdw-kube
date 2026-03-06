@@ -166,6 +166,8 @@ type Config struct {
 	SkipPreflight    bool   `json:"skip_preflight"`
 	ForceReconfigure bool   `json:"force_reconfigure"`
 	LogLevel         string `json:"log_level"`
+	LogDir           string `json:"log_dir"`
+	NoColor          bool   `json:"no_color"`
 
 	// Internal
 	TerraformHash string `json:"-"` // Computed, not serialized
@@ -196,10 +198,24 @@ func DefaultConfig() *Config {
 			"pve4": net.ParseIP("192.168.1.203"),
 		},
 		LogLevel: "info",
+		LogDir:   "logs",
+		NoColor:  isNoColorEnv(),
 	}
 	// Set SecretsDir based on ClusterName
 	cfg.SecretsDir = filepath.Join("clusters", cfg.ClusterName, "secrets")
 	return cfg
+}
+
+// isNoColorEnv checks environment variables for color suppression.
+// Respects the NO_COLOR standard (https://no-color.org/) and TERM=dumb.
+func isNoColorEnv() bool {
+	if _, ok := os.LookupEnv("NO_COLOR"); ok {
+		return true
+	}
+	if os.Getenv("TERM") == "dumb" {
+		return true
+	}
+	return false
 }
 
 func defaultSSHKeyPath() string {

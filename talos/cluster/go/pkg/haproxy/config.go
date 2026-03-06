@@ -23,10 +23,15 @@ type Config struct {
 	ControlPlanes []Backend
 }
 
-const haproxyTemplate = `global
-    log /dev/log local0
+const haproxyTemplate = `# ======= GLOBAL =======
+global
+    log /dev/log local0 info
+    log /dev/log local1 notice
     chroot /var/lib/haproxy
     stats socket /run/haproxy/admin.sock mode 660 level admin
+    stats timeout 30s
+    user haproxy
+    group haproxy
     maxconn 32000
     ulimit-n 65535
     nbthread 4
@@ -34,10 +39,12 @@ const haproxyTemplate = `global
     tune.ssl.default-dh-param 2048
     daemon
 
+# ======= DEFAULTS =======
 defaults
     mode tcp
     log global
     option tcplog
+    option tcp-check
     option dontlognull
     option tcp-smart-connect
     option redispatch
@@ -48,6 +55,7 @@ defaults
     timeout check 5s
     maxconn 32000
 
+# ======= STATS =======
 listen stats
     mode http
     bind {{ .HAProxyIP }}:9000
@@ -60,32 +68,44 @@ listen stats
     stats auth {{ .StatsUser }}:{{ .StatsPassword }}
 {{- end }}
 
+# ======= KUBERNETES API =======
 frontend k8s-apiserver
+    mode tcp
     bind {{ .HAProxyIP }}:6443
+    option tcplog
     tcp-request inspect-delay 5s
+    tcp-request content accept if { req_ssl_hello_type 1 }
     default_backend k8s-controlplane
 
 backend k8s-controlplane
+    mode tcp
     balance leastconn
     option tcp-check
     tcp-check connect port 6443
+    default-server inter 5s fall 3 rise 2
 {{- range .ControlPlanes }}
-    server talos-cp-{{ .VMID }} {{ .IP }}:6443 check inter 5s fall 3 rise 2
+    server talos-cp-{{ .VMID }} {{ .IP }}:6443 check
 {{- end }}
 
+# ======= TALOS API =======
 frontend talos-apiserver
+    mode tcp
     bind {{ .HAProxyIP }}:50000
+    option tcplog
     tcp-request inspect-delay 5s
+    tcp-request content accept if { req_ssl_hello_type 1 }
     default_backend talos-controlplane
 
 backend talos-controlplane
+    mode tcp
     balance leastconn
     option tcp-check
     tcp-check connect port 50000
+    default-server inter 5s fall 3 rise 2
     timeout connect 10s
     timeout server 60s
 {{- range .ControlPlanes }}
-    server talos-cp-{{ .VMID }} {{ .IP }}:50000 check inter 5s fall 3 rise 2
+    server talos-cp-{{ .VMID }} {{ .IP }}:50000 check
 {{- end }}
 `
 

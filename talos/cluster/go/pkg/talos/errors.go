@@ -58,7 +58,8 @@ func ParseTalosError(err error) *TalosError {
 	// Certificate required - switch to secure mode
 	if strings.Contains(errStr, "certificate required") ||
 		strings.Contains(errStr, "tls handshake") ||
-		strings.Contains(errStr, "certificate is required") {
+		strings.Contains(errStr, "certificate is required") ||
+		strings.Contains(errStr, "certificate signed by unknown authority") {
 		return &TalosError{
 			Code:      ErrCertificateRequired,
 			Message:   "certificate required for secure connection",

@@ -168,7 +168,7 @@ func (nc *NodeConfig) GenerateBaseConfigs() error {
 
 	// Move generated files to secrets dir
 	moves := map[string]string{
-		"controlplane.yaml": filepath.Join(secretsDir, "controlplane.yaml"),
+		"controlplane.yaml": filepath.Join(secretsDir, "control-plane.yaml"),
 		"worker.yaml":       filepath.Join(secretsDir, "worker.yaml"),
 		"talosconfig":       filepath.Join(secretsDir, "talosconfig"),
 	}
@@ -208,7 +208,7 @@ func (nc *NodeConfig) Generate(spec *types.NodeSpec, outputDir string) (string, 
 	switch spec.Role {
 	case types.RoleControlPlane:
 		tmplStr = controlPlanePatchTemplate
-		baseConfigName = "controlplane.yaml"
+		baseConfigName = "control-plane.yaml"
 	case types.RoleWorker:
 		tmplStr = workerPatchTemplate
 		baseConfigName = "worker.yaml"

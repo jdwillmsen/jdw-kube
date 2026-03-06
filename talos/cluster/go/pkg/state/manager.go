@@ -516,3 +516,54 @@ func (m *Manager) RemoveNodeState(state *types.ClusterState, vmid types.VMID, ro
 func parseIP(s string) net.IP {
 	return net.ParseIP(s)
 }
+
+// LoadTerraformExtras parses additional fields from terraform.tfvars that aren't
+// part of the node configuration arrays: cluster_name, proxmox_api_token_id,
+// proxmox_api_token_secret. Only updates field still at default/empty values
+// (CLI flags and env vars take precedence).
+func (m *Manager) LoadTerraformExtras(ctx context.Context) error {
+	data, err := os.ReadFile(m.config.TerraformTFVars)
+	if err != nil {
+		return fmt.Errorf("read terraform.tfvars: %w", err)
+	}
+
+	content := string(data)
+
+	// Only update cluster name if it's still at the default value
+	if m.config.ClusterName == "cluster" {
+		if name := extractSimpleStringField(content, "cluster_name"); name != "" {
+			m.config.ClusterName = name
+			// Re-derive paths based on new cluster name
+			clusterDir := filepath.Join("clusters", m.config.ClusterName)
+			m.config.SecretsDir = filepath.Join(clusterDir, "secrets")
+			m.stateDir = filepath.Join(clusterDir, "state")
+			m.nodesDir = filepath.Join(clusterDir, "nodes")
+		}
+	}
+
+	// Only update Proxmox token fields if empty
+	if m.config.ProxmoxTokenID == "" {
+		if tokenID := extractSimpleStringField(content, "proxmox_api_token_id"); tokenID != "" {
+			m.config.ProxmoxTokenID = tokenID
+		}
+	}
+
+	if m.config.ProxmoxTokenSecret == "" {
+		if tokenSecret := extractSimpleStringField(content, "proxmox_api_token_secret"); tokenSecret != "" {
+			m.config.ProxmoxTokenSecret = tokenSecret
+		}
+	}
+
+	return nil
+}
+
+// extractSimpleStringField extracts a top-level string assingment from HCL/tfvars content.
+// Matches patterns like: key = "value"
+func extractSimpleStringField(content, key string) string {
+	re := regexp.MustCompile(`(??m)&` + key + `\s*=\s*"([^"]*)"`)
+	matches := re.FindStringSubmatch(content)
+	if len(matches) >= 2 {
+		return matches[1]
+	}
+	return ""
+}

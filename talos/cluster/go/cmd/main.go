@@ -15,20 +15,23 @@ import (
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/jdw/talos-bootstrap/pkg/discovery"
 	"github.com/jdw/talos-bootstrap/pkg/haproxy"
 	"github.com/jdw/talos-bootstrap/pkg/kubectl"
+	"github.com/jdw/talos-bootstrap/pkg/logging"
 	"github.com/jdw/talos-bootstrap/pkg/state"
 	"github.com/jdw/talos-bootstrap/pkg/talos"
 	"github.com/jdw/talos-bootstrap/pkg/types"
 )
 
+const version = "v0.1.0"
+
 var (
-	cfg    *types.Config
-	logger *zap.Logger
+	cfg     *types.Config
+	logger  *zap.Logger
+	session *logging.RunSession
 )
 
 func init() {
@@ -36,6 +39,13 @@ func init() {
 }
 
 func main() {
+	var runErr error
+	defer func() {
+		if session != nil {
+			session.Close()
+		}
+	}()
+
 	rootCmd := &cobra.Command{
 		Use:   "talos-bootstrap",
 		Short: "Smart reconciliation for Talos clusters",
@@ -43,7 +53,7 @@ func main() {
 			if err := initConfig(cmd); err != nil {
 				return err
 			}
-			return initLogger()
+			return initSession()
 		},
 	}
 
@@ -56,6 +66,8 @@ func main() {
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogLevel, "log-level", "l", "info", "Log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().StringVar(&cfg.ProxmoxSSHKeyPath, "ssh-key", cfg.ProxmoxSSHKeyPath, "Path to SSH private key")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.ForceReconfigure, "force-reconfigure", "f", false, "Force reconfigure all nodes")
+	rootCmd.PersistentFlags().StringVar(&cfg.LogDir, "log-dir", cfg.LogDir, "Log directory")
+	rootCmd.PersistentFlags().BoolVar(&cfg.NoColor, "no-color", cfg.NoColor, "Disable colored output")
 
 	rootCmd.AddCommand(
 		bootstrapCmd(),
@@ -64,34 +76,30 @@ func main() {
 		resetCmd(),
 	)
 
-	if err := rootCmd.Execute(); err != nil {
+	runErr = rootCmd.Execute()
+	if runErr != nil {
 		os.Exit(1)
 	}
 }
 
-func initLogger() error {
-	var level zapcore.Level
-	switch strings.ToLower(cfg.LogLevel) {
-	case "debug", "trace":
-		level = zap.DebugLevel
-	case "info":
-		level = zap.InfoLevel
-	case "warn", "warning":
-		level = zap.WarnLevel
-	case "error":
-		level = zap.ErrorLevel
-	default:
-		level = zap.InfoLevel
-	}
-
-	zapCfg := zap.NewDevelopmentConfig()
-	zapCfg.Level = zap.NewAtomicLevelAt(level)
-
+func initSession() error {
 	var err error
-	logger, err = zapCfg.Build()
+	session, err = logging.NewRunSession(cfg)
 	if err != nil {
-		return fmt.Errorf("initialize logger: %w", err)
+		return fmt.Errorf("initialize logging session: %w", err)
 	}
+	logger = session.Logger
+
+	// Print banner
+	logging.PrintBanner(os.Stderr, version, cfg.NoColor)
+
+	// Check prerequisites
+	checkPrerequisites(logger)
+
+	// Ensure cluster .gitignore
+	clusterDir := filtepath.Join("clusters", cfg.ClusterName)
+	ensureClusterGitignore(clusterDir)
+
 	return nil
 }
 
@@ -123,6 +131,41 @@ func initConfig(cmd *cobra.Command) error {
 	}
 
 	return nil
+}
+
+// checkPrerequisites verifies required CLI tools are available
+func checkPrerequisites(logger *zap.Logger) {
+	for _, tool := range []string{"talosctl", "kubectl"} {
+		path, err := exec.LookPath(tool)
+		if err != nil {
+			logger.Warn("prequisite not found in PATH", zap.String("tool", tool))
+			continue
+		}
+		// Get version
+		cmd := exec.Command(tool, "version", "--client")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			// Some tools use different version flags
+			cmd = exec.Command(tool, "version")
+			out, _ = cmd.CombinedOutput()
+		}
+		ver := strings.TrimSpace(strings.Split(string(out), "\n")[0])
+		logger.Debug("prerequisite found", zap.String("tool", tool), zap.String("path", path), zap.String("version", ver))
+	}
+}
+
+// ensureClusterGitignore creates a .gitignore in the cluster directory
+// to prevent committing generated secrets, node configs, state, and logs.
+func ensureClusterGitignore(clusterDir string) {
+	gitignorePath := filepath.Join(clusterDir, ".gitignore")
+	if _, err := os.Stat(gitignorePath); err == nil {
+		return // already exists
+	}
+	if err := os.MkdirAll(clusterDir, 0755); err != nil {
+		return
+	}
+	content := "/nodes/\n/secrets/\n/state\n/*log\n"
+	os.WriteFile(gitignorePath, []byte(content), 0644)
 }
 
 func bootstrapCmd() *cobra.Command {
@@ -195,13 +238,19 @@ func resetCmd() *cobra.Command {
 }
 
 func runReconcile(ctx context.Context, cfg *types.Config) error {
+	stateMgr := state.NewManager(cfg)
+
+	// Load additional fields from terraform.tfvars (cluster_name, proxmox tokens)
+	if err := stateMgr.LoadTerraformExtras(ctx); err != nil {
+		logger.Debug("could not load terraform extras", zap.Error(err))
+	}
+
 	logger.Info("starting reconciliation",
 		zap.String("cluster", cfg.ClusterName),
 		zap.Bool("dry_run", cfg.DryRun),
 		zap.Bool("plan_mode", cfg.PlanMode),
 	)
 
-	stateMgr := state.NewManager(cfg)
 	scanner := discovery.NewScanner(cfg.ProxmoxSSHUser, cfg.ProxmoxNodeIPs)
 	talosClient := talos.NewClient(cfg)
 	k8sClient := kubectl.NewClient(logger)
@@ -306,6 +355,11 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 func runStatus(ctx context.Context, cfg *types.Config) error {
 	stateMgr := state.NewManager(cfg)
 
+	// Load additional fields from terraform.tfvars
+	if err := stateMgr.LoadTerraformExtras(ctx); err != nil {
+		logger.Debug("could not load terraform extras", zap.Error(err))
+	}
+
 	desired, err := stateMgr.LoadDesiredState(ctx)
 	if err != nil {
 		return err
@@ -358,32 +412,35 @@ func countByRole(specs map[types.VMID]*types.NodeSpec, role types.Role) int {
 }
 
 func displayPlan(plan *types.ReconcilePlan) {
-	fmt.Println("\n=== RECONCILIATION PLAN ===")
+	box := logging.NewBox(os.Stderr, cfg.NoColor)
+	fmt.Fprintln(os.Stderr)
+	box.Header("RECONCILIATION PLAN")
 	if plan.NeedsBootstrap {
-		fmt.Println("  [BOOTSTRAP] Cluster needs bootstrap")
+		box.Badge("BOOTSTRAP", "Cluster needs initial bootstrap")
 	}
 	if len(plan.AddControlPlanes) > 0 {
-		fmt.Printf("  [ADD CP]    %d control plane(s): %v\n", len(plan.AddControlPlanes), plan.AddControlPlanes)
+		box.Item("+", fmt.Sprintf("Add %d control plane(s): %v", len(plan.AddControlPlanes), plan.AddControlPlanes))
 	}
 	if len(plan.AddWorkers) > 0 {
-		fmt.Printf("  [ADD WORK]  %d worker(s): %v\n", len(plan.AddWorkers), plan.AddWorkers)
+		box.Item("+", fmt.Sprintf("Add %d worker(s): %v", len(plan.AddWorkers), plan.AddWorkers))
 	}
 	if len(plan.RemoveControlPlanes) > 0 {
-		fmt.Printf("  [REM CP]    %d control plane(s): %v\n", len(plan.RemoveControlPlanes), plan.RemoveControlPlanes)
+		box.Item("-", fmt.Sprintf("Remove %d control plane(s): %v", len(plan.RemoveControlPlanes), plan.RemoveControlPlanes))
 	}
 	if len(plan.RemoveWorkers) > 0 {
-		fmt.Printf("  [REM WORK]  %d worker(s): %v\n", len(plan.RemoveWorkers), plan.RemoveWorkers)
+		box.Item("-", fmt.Sprintf("Remove %d worker(s): %v", len(plan.RemoveWorkers), plan.RemoveWorkers))
 	}
 	if len(plan.UpdateConfigs) > 0 {
-		fmt.Printf("  [UPDATE]    %d node(s): %v\n", len(plan.UpdateConfigs), plan.UpdateConfigs)
+		box.Item("~", fmt.Sprintf("Update %d node config(s): %v", len(plan.UpdateConfigs), plan.UpdateConfigs))
 	}
 	if len(plan.NoOp) > 0 {
-		fmt.Printf("  [NOOP]      %d node(s) unchanged\n", len(plan.NoOp))
+		box.Item("=", fmt.Sprintf("%d node(s) unchanged", len(plan.NoOp)))
 	}
 	if plan.IsEmpty() {
-		fmt.Println("  [NO CHANGES] Cluster matches desired state")
+		box.Badge("OK", "Cluster matches desired state - no changes needed")
 	}
-	fmt.Println()
+	box.Footer()
+	fmt.Fprintln(os.Stderr)
 }
 
 func executePlan(
@@ -991,14 +1048,18 @@ func verifyCluster(ctx context.Context, talosClient *talos.Client, k8sClient *ku
 		}
 	}
 
-	// Print success summary
-	fmt.Println("\n=== BOOTSTRAP SUCCESSFUL ===")
-	fmt.Printf("  Cluster:    %s\n", deployed.ClusterName)
-	fmt.Printf("  CPs:        %d\n", len(deployed.ControlPlanes))
-	fmt.Printf("  Workers:    %d\n", len(deployed.Workers))
-	fmt.Println("\n  Quick Start:")
-	fmt.Printf("    kubectl get nodes\n")
-	fmt.Printf("    talosctl dashboard\n")
-	fmt.Printf("    talosctl etcd members\n")
-	fmt.Println()
+	// Print success summary using box
+	box := logging.NewBox(os.Stderr, cfg.Nocolor)
+	fmt.Fprintln(os.Stderr)
+	box.Header("BOOTSTRAP SUCCESSFUL")
+	box.Row("Cluster", deployed.ClusterName)
+	box.Row("Control Planes", fmt.Sprintf("%d", len(deployed.ControlPlanes)))
+	box.Row("Workers", fmt.Sprintf("%d", len(deployed.Workers)))
+	box.Divider()
+	box.Section("Quick Start")
+	box.Item("$", "kubectl get nodes")
+	box.Item("$", "talosctl dashboard")
+	box.Item("$", "talosctl etcd members")
+	box.Footer()
+	fmt.Fprintln(os.Stderr)
 }
