@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 const boxWidth = 63
@@ -97,7 +98,7 @@ func (b *Box) c(code string) string {
 // writeLine writes content with heavy vertical borders and padding.
 func (b *Box) writeLine(content string) {
 	visible := stripANSI(content)
-	padding := boxWidth - 2 - len(visible)
+	padding := boxWidth - 2 - utf8.RuneCountInString(visible)
 	if padding < 0 {
 		padding = 0
 	}
@@ -172,7 +173,7 @@ func (b *Box) Section(label string) {
 		b.c(cDim), mDiamond, b.c(cReset))
 
 	visible := stripANSI(text)
-	padding := boxWidth - 2 - len(visible)
+	padding := boxWidth - 2 - utf8.RuneCountInString(visible)
 	leftPad := padding / 2
 	rightPad := padding - leftPad
 
