@@ -133,16 +133,17 @@ func initConfig(cmd *cobra.Command) error {
 }
 
 // promptConfirm writes a prompt to session.Console, reads a y/N response from
-// stdin, and logs the response. Returns true if the user confirmed.
+// stdin, and logs the result. Returns true if the user confirmed.
 func promptConfirm(prompt string) bool {
 	fmt.Fprint(session.Console, prompt)
 	var response string
 	fmt.Scanln(&response)
-	fmt.Fprintf(session.Console, "%s\n", response)
+	fmt.Fprintln(session.ConsoleFile)
 	if response != "y" && response != "Y" {
-		fmt.Fprintln(session.Console, "Cancelled")
+		session.Logger.Warn("cancelled by user", zap.String("response", response))
 		return false
 	}
+	session.Logger.Info("confirmed by user", zap.String("response", response))
 	return true
 }
 

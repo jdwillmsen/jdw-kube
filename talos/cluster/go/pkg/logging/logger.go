@@ -29,15 +29,16 @@ const (
 
 // RunSession manages a single bootstrap run's log files and lifecycle
 type RunSession struct {
-	RunDir     string
-	StartTime  time.Time
-	Logger     *zap.Logger
-	AuditLog   *AuditLogger
-	Console    io.Writer // tees to stderr + console.log; use for banner/box output
-	NoColor    bool
-	Config     *types.Config
-	closers    []io.Closer
-	runsLogDir string
+	RunDir      string
+	StartTime   time.Time
+	Logger      *zap.Logger
+	AuditLog    *AuditLogger
+	Console     io.Writer // tees to stderr + console.log; use for banner/box output
+	ConsoleFile io.Writer // console.log only; use for recording input without echoing
+	NoColor     bool
+	Config      *types.Config
+	closers     []io.Closer
+	runsLogDir  string
 
 	// Operational counters for SUMMARY.txt (set by caller during execution)
 	ControlPlanes   int
@@ -88,15 +89,16 @@ func NewRunSession(cfg *types.Config) (*RunSession, error) {
 	logger := zap.New(teeCore, zap.AddStacktrace(zap.FatalLevel))
 
 	session := &RunSession{
-		RunDir:     runDir,
-		StartTime:  now,
-		Logger:     logger,
-		AuditLog:   NewAuditLogger(auditFile),
-		Console:    io.MultiWriter(os.Stderr, consoleFile),
-		NoColor:    cfg.NoColor,
-		Config:     cfg,
-		closers:    []io.Closer{consoleFile, structuredFile, auditFile},
-		runsLogDir: cfg.LogDir,
+		RunDir:      runDir,
+		StartTime:   now,
+		Logger:      logger,
+		AuditLog:    NewAuditLogger(auditFile),
+		Console:     io.MultiWriter(os.Stderr, consoleFile),
+		ConsoleFile: consoleFile,
+		NoColor:     cfg.NoColor,
+		Config:      cfg,
+		closers:     []io.Closer{consoleFile, structuredFile, auditFile},
+		runsLogDir:  cfg.LogDir,
 	}
 
 	// Write to runs.log registry
