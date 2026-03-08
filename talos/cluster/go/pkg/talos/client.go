@@ -7,25 +7,40 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
-	"github.com/jdw/talos-bootstrap/pkg/types"
-
+	"github.com/jdw/talos-bootstrap/pkg/logging"
 	"github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	"github.com/siderolabs/talos/pkg/machinery/client/config"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+
+	"github.com/jdw/talos-bootstrap/pkg/types"
 )
 
 type Client struct {
 	config      *types.Config
 	talosConfig *config.Config
 	ctxName     string
+	audit       *logging.AuditLogger
+	logger      *zap.Logger
+}
+
+// SetLogger attaches a structured logger. Falls back to fmt if nil.
+func (c *Client) SetLogger(logger *zap.Logger) {
+	c.logger = logger
 }
 
 func NewClient(cfg *types.Config) *Client {
 	return &Client{config: cfg}
+}
+
+// SetAuditLogger attaches an audit logger for command tracking
+func (c *Client) SetAuditLogger(audit *logging.AuditLogger) {
+	c.audit = audit
 }
 
 func (c *Client) Initialize(ctx context.Context) error {
@@ -34,6 +49,9 @@ func (c *Client) Initialize(ctx context.Context) error {
 	if _, err := os.Stat(talosConfigPath); os.IsNotExist(err) {
 		// Auto-generate secrets and base configs
 		nc := NewNodeConfig(c.config)
+		if c.audit != nil {
+			nc.SetAuditLogger(c.audit)
+		}
 		if err := nc.GenerateBaseConfigs(); err != nil {
 			return fmt.Errorf("generate base configs: %w", err)
 		}
@@ -97,15 +115,18 @@ func (c *Client) ApplyConfig(ctx context.Context, ip net.IP, configPath string, 
 
 	if len(resp.Messages) > 0 && len(resp.Messages[0].Warnings) > 0 {
 		for _, warning := range resp.Messages[0].Warnings {
-			fmt.Printf("Warning: %s\n", warning)
+			if c.logger != nil {
+				c.logger.Warn("talos apply-config warning", zap.String("reason", warning))
+			}
 		}
 	}
 
 	return nil
 }
 
-// ApplyConfigWithRetry applies configuration with intelligent retry logic
-func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath string, maxAttempts int) error {
+// ApplyConfigWithRetry applies configuration with intelligent retry logic.
+// The role parameter is used to determine readiness checks (e.g., etcd for control planes).
+func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath string, role types.Role, maxAttempts int) error {
 	if maxAttempts <= 0 {
 		maxAttempts = 5
 	}
@@ -125,7 +146,7 @@ func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath
 
 		switch talosErr.Code {
 		case ErrAlreadyConfigured:
-			ready, checkErr := c.checkReadyByIP(ctx, ip, types.RoleWorker)
+			ready, checkErr := c.checkReadyByIP(ctx, ip, role)
 			if checkErr == nil && ready {
 				// Node is configured and ready, this is success
 				return nil
@@ -141,7 +162,11 @@ func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath
 				if talosErr.Code == ErrConnectionTimeout {
 					waitTime = time.Duration(attempt*10) * time.Second
 				}
-				fmt.Printf("Attempt %d/%d failed: %v. Retrying in %s...\n", attempt, maxAttempts, err, waitTime)
+				if c.logger != nil {
+					c.logger.Warn("talos config attempt failed, retrying",
+						zap.Int("attempt", attempt), zap.Int("max", maxAttempts),
+						zap.Duration("wait", waitTime), zap.Error(err))
+				}
 				time.Sleep(waitTime)
 				continue
 			}
@@ -153,6 +178,11 @@ func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath
 			if attempt < maxAttempts && talosErr.IsRetryable() {
 				waitTime := time.Duration(attempt*5) * time.Second
 				fmt.Printf("Attempt %d/%d failed with retryable error: %v. Retrying in %s...\n", attempt, maxAttempts, err, waitTime)
+				if c.logger != nil {
+					c.logger.Warn("apply config retryable error",
+						zap.Int("attempt", attempt), zap.Int("max", maxAttempts),
+						zap.Duration("wait", waitTime), zap.Error(err))
+				}
 				time.Sleep(waitTime)
 				continue
 			}
@@ -277,6 +307,11 @@ func (c *Client) WaitForReady(ctx context.Context, ip net.IP, role types.Role) e
 
 func (c *Client) checkReady(ctx context.Context, tc *client.Client, role types.Role) (bool, error) {
 	if _, err := tc.Version(ctx); err != nil {
+		// Workers in maintenance mode respond on port 50000 but Version() fails.
+		// Treat maintenance-mode workers as ready - they can accept ApplyConfig.
+		if role == types.RoleWorker && isMaintenanceModeError(err) {
+			return true, nil
+		}
 		return false, err
 	}
 
@@ -308,6 +343,18 @@ func (c *Client) checkReady(ctx context.Context, tc *client.Client, role types.R
 	}
 
 	return true, nil
+}
+
+// isMaintenanceModeError returns true when the gRPC error indicates Talos is in
+// maintenance mode (listening but not fully initialised).
+func isMaintenanceModeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Unavailable") ||
+		strings.Contains(msg, "maintenance") ||
+		strings.Contains(msg, "unimplemented")
 }
 
 // EtcdMember represents a member in the etcd cluster
@@ -344,6 +391,20 @@ func (c *Client) GetEtcdMembers(ctx context.Context, ip net.IP) ([]EtcdMember, e
 	}
 
 	return members, nil
+}
+
+// GetClusterMembers returns the peer URLs/hostnames of all current etcd members.
+// Used to mark live nodes with StatusJoined.
+func (c *Client) GetClusterMembers(ctx context.Context, endpoint net.IP) ([]string, error) {
+	members, err := c.GetEtcdMembers(ctx, endpoint)
+	if err != nil {
+		return nil, err
+	}
+	addrs := make([]string, 0, len(members))
+	for _, m := range members {
+		addrs = append(addrs, m.Hostname)
+	}
+	return addrs, nil
 }
 
 // ValidateRemovalQuorum checks if removing a control plane would violate the etcd quorum
@@ -395,18 +456,35 @@ func (c *Client) RemoveEtcdMember(ctx context.Context, endpoint net.IP, memberID
 	return nil
 }
 
-// GetEtcdMemberIDByIP finds the etcd member ID for a given node IP
+// GetEtcdMemberIDByIP finds the etcd member ID for a given node IP.
+// Matches against hostname and peer URLs for robust identification.
 func (c *Client) GetEtcdMemberIDByIP(ctx context.Context, endpoint net.IP, nodeIP net.IP) (uint64, error) {
-	members, err := c.GetEtcdMembers(ctx, endpoint)
+	tc, err := c.getClient(ctx, nodeIP, false)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to create talos client: %w", err)
+	}
+	defer tc.Close()
+
+	resp, err := tc.EtcdMemberList(ctx, &machine.EtcdMemberListRequest{})
+	if err != nil {
+		return 0, fmt.Errorf("failed to get etcd members: %w", err)
 	}
 
-	// Try to match by hostname (IP String)
+	if len(resp.Messages) == 0 {
+		return 0, fmt.Errorf("no etcd members response")
+	}
+
 	nodeIPStr := nodeIP.String()
-	for _, member := range members {
+	for _, member := range resp.Messages[0].Members {
+		// Match by hostname
 		if member.Hostname == nodeIPStr {
-			return member.ID, nil
+			return member.Id, nil
+		}
+		// Match by peer URLs (e.g., "https://192.168.1.50:2300")
+		for _, peerURL := range member.PeerUrls {
+			if strings.Contains(peerURL, nodeIPStr) {
+				return member.Id, nil
+			}
 		}
 	}
 
@@ -451,6 +529,9 @@ func (c *Client) Kubeconfig(ctx context.Context, endpoint net.IP, outputPath str
 
 func (c *Client) GenerateNodeConfig(ctx context.Context, spec *types.NodeSpec, secretsDir string) (string, error) {
 	nc := NewNodeConfig(c.config)
+	if c.audit != nil {
+		nc.SetAuditLogger(c.audit)
+	}
 	outputDir := filepath.Join(secretsDir, "..", "nodes")
 	return nc.Generate(spec, outputDir)
 }

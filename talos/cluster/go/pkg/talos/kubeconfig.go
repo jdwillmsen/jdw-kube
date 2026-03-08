@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -64,10 +65,20 @@ type kubeUser struct {
 // FetchAndMerge fetches kubeconfig from a healthy control plane, updates the server URL
 // to use the FQDN endpoint, renames the context to the cluster name, and merges it with
 // the user's existing kubeconfig.
+//
+// haproxyIP is the HAProxy load-balancer IP. We first verify the Kubernetes API is
+// reachable via the IP (before DNS may be configured) by fetching via IP, then set
+// the final server URL to the FQDN endpoint.
 func (km *KubeconfigManager) FetchAndMerge(ctx context.Context, endpoint net.IP, clusterName string, controlPlaneEndpoint string) error {
 	km.logger.Info("fetching kubeconfig",
 		zap.String("endpoint", endpoint.String()),
 		zap.String("cluster", clusterName))
+
+	// Verify API reachability via the direct CP IP before relying on DNS
+	if err := km.verifyKubernetesAPI(ctx, endpoint); err != nil {
+		return fmt.Errorf("kubernetes API not reachable at %s: %w", endpoint, err)
+	}
+	km.logger.Debug("kubernetes API reachable via CP IP", zap.String("ip", endpoint.String()))
 
 	// 1. Fetch raw kubeconfig to a temp file
 	tmpDir, err := os.MkdirTemp("", "talos-kubeconfig-*")
@@ -131,6 +142,18 @@ func (km *KubeconfigManager) FetchAndMerge(ctx context.Context, endpoint net.IP,
 
 	// 7. Merge with existing kubeconfig using kubectl
 	existingPath := km.kubeconfigPath()
+	if _, statErr := os.Stat(existingPath); statErr == nil {
+		backupPath := existingPath + ".backup"
+		if backupData, readErr := os.ReadFile(existingPath); readErr == nil {
+			if writeErr := os.WriteFile(backupPath, backupData, 0600); writeErr != nil {
+				km.logger.Warn("failed to backup kubeconfig", zap.Error(writeErr))
+			} else {
+				km.logger.Debug("backed up kubeconfig", zap.String("path", backupPath))
+			}
+		}
+	}
+
+	// 8. Merge with existing kubeconfig using kubectl
 	if err := km.mergeKubeconfig(existingPath, modifiedPath); err != nil {
 		// If merge fails, just write the new kubeconfig directly
 		km.logger.Warn("merge failed, writing kubeconfig directly", zap.Error(err))
@@ -225,4 +248,23 @@ func (km *KubeconfigManager) writeDirectly(path string, data []byte) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0600)
+}
+
+// verifyKubernetesAPI checks that the Kubernetes API port (6443) is reachable on the
+// given IP. This is a lightweight TCP probe - it does not authenticate.
+func (km *KubeconfigManager) verifyKubernetesAPI(ctx context.Context, ip net.IP) error {
+	addr := fmt.Sprintf("%s:6443", ip)
+	deadline, ok := ctx.Deadline()
+	timeout := 10 * time.Second
+	if ok {
+		if remaining := time.Until(deadline); remaining < timeout {
+			timeout = remaining
+		}
+	}
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return fmt.Errorf("tcp dial %s: %w", addr, err)
+	}
+	conn.Close()
+	return nil
 }

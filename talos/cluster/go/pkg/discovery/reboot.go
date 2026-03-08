@@ -120,7 +120,9 @@ func (m *RebootMonitor) tickMonitoring(ctx context.Context) (net.IP, bool, error
 	m.transitionTo(StateRebooting)
 
 	// Kick off immediate ARP repopulation
-	m.scanner.repopulateARP(ctx)
+	if err := m.scanner.repopulateARP(ctx); err != nil {
+		m.logger.Warn("ARP repopulation failed during monitoring", zap.Error(err))
+	}
 	m.lastARPRepop = time.Now()
 
 	return nil, false, nil
@@ -132,7 +134,9 @@ func (m *RebootMonitor) tickRebooting(ctx context.Context) (net.IP, bool, error)
 	// Aggressive ARP repopulation every 5s
 	if time.Since(m.lastARPRepop) > 5*time.Second {
 		m.logger.Debug("repopulating ARP tables")
-		m.scanner.repopulateARP(ctx)
+		if err := m.scanner.repopulateARP(ctx); err != nil {
+			m.logger.Warn("ARP repopulation failed during rebooting", zap.Error(err))
+		}
 		m.lastARPRepop = time.Now()
 	}
 

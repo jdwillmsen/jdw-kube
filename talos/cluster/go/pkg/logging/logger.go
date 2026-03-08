@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdw/talos-bootstrap/pkg/types"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/jdw/talos-bootstrap/pkg/types"
 )
 
 // ANSI color codes matching bash script
@@ -33,6 +34,14 @@ type RunSession struct {
 	Config     *types.Config
 	closers    []io.Closer
 	runsLogDir string
+
+	// Operational counters for SUMMARY.txt (set by caller during execution)
+	ControlPlanes   int
+	Workers         int
+	AddedNodes      int
+	RemovedNodes    int
+	UpdatedConfigs  int
+	BootstrapNeeded bool
 }
 
 // NewRunSession creates a timestamped run directory, opens log files,
@@ -204,18 +213,6 @@ func (s *RunSession) writeHeader() {
 	s.Logger.Info(header)
 }
 
-// WriteRaw writes unformatted text to stderr and console.log,
-// bypassing zap's structured formatting. Useful for banners and boxes.
-func (s *RunSession) WriteRaw(text string) {
-	fmt.Fprint(os.Stderr, text)
-	// Also write to console.log if the run dir exists
-	consolePath := filepath.Join(s.RunDir, "console.log")
-	if f, err := os.OpenFile(consolePath, os.O_APPEND|os.O_WRONLY, 0644); err == nil {
-		f.WriteString(text)
-		f.Close()
-	}
-}
-
 // Close finalizes the run session: writes SUMMARY.txt, updates runs.log status,
 // flushes the logger, and closes all file handles.
 func (s *RunSession) Close(exitErr error) {
@@ -229,12 +226,18 @@ func (s *RunSession) Close(exitErr error) {
 
 	// Write SUMMARY.txt
 	summary := SummaryData{
-		StartTime:   s.StartTime,
-		Duration:    duration,
-		Status:      status,
-		ClusterName: s.Config.ClusterName,
-		RunDir:      s.RunDir,
-		ExitError:   exitErr,
+		StartTime:       s.StartTime,
+		Duration:        duration,
+		Status:          status,
+		ClusterName:     s.Config.ClusterName,
+		RunDir:          s.RunDir,
+		ExitError:       exitErr,
+		ControlPlanes:   s.ControlPlanes,
+		Workers:         s.Workers,
+		AddedNodes:      s.AddedNodes,
+		RemovedNodes:    s.RemovedNodes,
+		UpdatedConfigs:  s.UpdatedConfigs,
+		BootstrapNeeded: s.BootstrapNeeded,
 	}
 	WriteSummary(filepath.Join(s.RunDir, "SUMMARY.txt"), &summary)
 

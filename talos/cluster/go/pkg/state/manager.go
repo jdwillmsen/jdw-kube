@@ -18,7 +18,9 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsimple"
+	"github.com/jdw/talos-bootstrap/pkg/talos"
 	"github.com/jdw/talos-bootstrap/pkg/types"
+	"go.uber.org/zap"
 )
 
 // Manager handles the three-way state reconciliation
@@ -27,15 +29,17 @@ type Manager struct {
 	config   *types.Config
 	stateDir string
 	nodesDir string
+	logger   *zap.Logger
 }
 
 // NewManager creates a new state manager
-func NewManager(cfg *types.Config) *Manager {
+func NewManager(cfg *types.Config, logger *zap.Logger) *Manager {
 	clusterDir := filepath.Join("clusters", cfg.ClusterName)
 	return &Manager{
 		config:   cfg,
 		stateDir: filepath.Join(clusterDir, "state"),
 		nodesDir: filepath.Join(clusterDir, "nodes"),
+		logger:   logger,
 	}
 }
 
@@ -358,7 +362,7 @@ func (m *Manager) BuildReconcilePlan(
 			continue
 		}
 		configFile := m.NodeConfigPath(vmid, spec.Role)
-		currentHash, err := m.computeHash(configFile)
+		currentHash, err := talos.HashFile(configFile)
 		if err != nil {
 			// Config doesn't exist, needs generation
 			plan.UpdateConfigs = append(plan.UpdateConfigs, vmid)
@@ -393,6 +397,73 @@ func (m *Manager) BuildReconcilePlan(
 		}
 	}
 
+	// Use live discovery data for IP synchronization and unreachable node warnings
+	if live != nil {
+		for vmid, liveNode := range live {
+			if liveNode.IP != nil && liveNode.Status == types.StatusDiscovered {
+				// Sync discovered IP into deployed state if it has changed
+				if cp, ok := deployedCPs[vmid]; ok {
+					if cp.IP == nil || !cp.IP.Equal(liveNode.IP) {
+						if m.logger != nil {
+							m.logger.Info("IP changed for deployed CP (live sync)",
+								zap.Int("vmid", int(vmid)),
+								zap.String("old_ip", cp.IP.String()),
+								zap.String("new_ip", liveNode.IP.String()))
+						}
+						cp.IP = liveNode.IP
+						deployedCPs[vmid] = cp
+						// Update in actual deployed state
+						for i := range deployed.ControlPlanes {
+							if deployed.ControlPlanes[i].VMID == vmid {
+								deployed.ControlPlanes[i].IP = liveNode.IP
+								break
+							}
+						}
+					}
+				}
+				if w, ok := deployedWorkers[vmid]; ok {
+					if w.IP == nil || !w.IP.Equal(liveNode.IP) {
+						if m.logger != nil {
+							m.logger.Info("IP changed for deployed worker (live sync)",
+								zap.Int("vmid", int(vmid)),
+								zap.String("old_ip", w.IP.String()),
+								zap.String("new_ip", liveNode.IP.String()))
+						}
+						w.IP = liveNode.IP
+						deployedWorkers[vmid] = w
+						for i := range deployed.Workers {
+							if deployed.Workers[i].VMID == vmid {
+								deployed.Workers[i].IP = liveNode.IP
+								break
+							}
+						}
+					}
+				}
+			} else if liveNode.Status == types.StatusNotFound {
+				// Warn about deployed nodes that are unreachable
+				if _, ok := deployedCPs[vmid]; ok {
+					if m.logger != nil {
+						m.logger.Warn("deployed control plane not reachable in live discovery",
+							zap.Int("vmid", int(vmid)))
+					}
+				}
+				if _, ok := deployedWorkers[vmid]; ok {
+					if m.logger != nil {
+						m.logger.Warn("deployed worker not reachable in live discovery",
+							zap.Int("vmid", int(vmid)))
+					}
+				}
+			}
+		}
+	}
+
+	// Warn about even control plane counts (etcd split-brain risk)
+	finalCPCount := len(deployed.ControlPlanes) + len(plan.AddControlPlanes) - len(plan.RemoveControlPlanes)
+	if finalCPCount > 0 && finalCPCount%2 == 0 && m.logger != nil {
+		m.logger.Warn("event number of control planes detected - odd count recommended for etcd quorum",
+			zap.Int("final_cp_count", finalCPCount))
+	}
+
 	// Sort for deterministic output
 	sort.Slice(plan.AddControlPlanes, func(i, j int) bool { return plan.AddControlPlanes[i] < plan.AddControlPlanes[j] })
 	sort.Slice(plan.AddWorkers, func(i, j int) bool { return plan.AddWorkers[i] < plan.AddWorkers[j] })
@@ -401,15 +472,6 @@ func (m *Manager) BuildReconcilePlan(
 	sort.Slice(plan.UpdateConfigs, func(i, j int) bool { return plan.UpdateConfigs[i] < plan.UpdateConfigs[j] })
 
 	return plan, nil
-}
-
-func (m *Manager) computeHash(filePath string) (string, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", err
-	}
-	hash := sha256.Sum256(data)
-	return hex.EncodeToString(hash[:]), nil
 }
 
 // Save persists state to disk atomically
@@ -551,6 +613,29 @@ func (m *Manager) LoadTerraformExtras(ctx context.Context) error {
 	if m.config.ProxmoxTokenSecret == "" {
 		if tokenSecret := extractSimpleStringField(content, "proxmox_api_token_secret"); tokenSecret != "" {
 			m.config.ProxmoxTokenSecret = tokenSecret
+		}
+	}
+
+	// Extract Proxmox endpoint if not set
+	if m.config.ProxmoxSSHHost == "" || m.config.ProxmoxSSHHost == "192.168.1.199" {
+		if endpoint := extractStringField(content, "proxmox_endpoint"); endpoint != "" {
+			m.config.ProxmoxSSHHost = endpoint
+		}
+	}
+
+	// Extract control_plane_endpoint if still at default
+	if m.config.ControlPlaneEndpoint == "cluster.jdwlabs.com" {
+		if ep := extractSimpleStringField(content, "control_plane_endpoint"); ep != "" {
+			m.config.ControlPlaneEndpoint = ep
+		}
+	}
+
+	// Extract haproxy_ip if still at default
+	if m.config.HAProxyIP.Equal(net.ParseIP("192.168.1.199")) {
+		if ipStr := extractStringField(content, "haproxy_ip"); ipStr != "" {
+			if ip := net.ParseIP(ipStr); ip != nil {
+				m.config.HAProxyIP = ip
+			}
 		}
 	}
 

@@ -13,7 +13,9 @@ import (
 
 // Client wraps kubectl operations for node lifecycle management
 type Client struct {
-	logger *zap.Logger
+	logger     *zap.Logger
+	kubeconfig string // explicit kubeconfig path (empty = use default)
+	context    string // explicit context name (empty = use default)
 }
 
 // NewClient creates a new kubectl client
@@ -21,9 +23,32 @@ func NewClient(logger *zap.Logger) *Client {
 	return &Client{logger: logger}
 }
 
+// SetContext sets an explicit context name
+func (c *Client) SetContext(name string) {
+	c.context = name
+}
+
+// baseArgs returns the common args that should prepend all kubectl commands
+func (c *Client) baseArgs() []string {
+	var args []string
+	if c.kubeconfig != "" {
+		args = append(args, "--kubeconfig", c.kubeconfig)
+	}
+	if c.context != "" {
+		args = append(args, "--context", c.context)
+	}
+	return args
+}
+
+// command builds an exec.Cmd with the base args prepended
+func (c *Client) command(ctx context.Context, args ...string) *exec.Cmd {
+	fullArgs := append(c.baseArgs(), args...)
+	return exec.CommandContext(ctx, "kubectl", fullArgs...)
+}
+
 // GetNodeNameByIP finds the Kubernetes node name for a given IP address
 func (c *Client) GetNodeNameByIP(ctx context.Context, ip net.IP) (string, error) {
-	cmd := exec.CommandContext(ctx, "kubectl", "get", "nodes", "-o", "wide", "--no-headers")
+	cmd := c.command(ctx, "get", "nodes", "-o", "wide", "--no-headers")
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("kubectl get nodes: %w", err)
@@ -44,7 +69,7 @@ func (c *Client) GetNodeNameByIP(ctx context.Context, ip net.IP) (string, error)
 func (c *Client) DrainNode(ctx context.Context, nodeName string) error {
 	c.logger.Info("cordoning node", zap.String("node", nodeName))
 
-	cmd := exec.CommandContext(ctx, "kubectl", "cordon", nodeName)
+	cmd := c.command(ctx, "cordon", nodeName)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("kubectl cordon: %w, output: %s", err, string(output))
 	}
@@ -54,7 +79,7 @@ func (c *Client) DrainNode(ctx context.Context, nodeName string) error {
 	drainCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
-	cmd = exec.CommandContext(drainCtx, "kubectl", "drain", nodeName,
+	cmd = c.command(drainCtx, "drain", nodeName,
 		"--ignore-daemonsets",
 		"--delete-emptydir-data",
 		"--timeout=30s",
@@ -70,7 +95,7 @@ func (c *Client) DrainNode(ctx context.Context, nodeName string) error {
 func (c *Client) DeleteNode(ctx context.Context, nodeName string) error {
 	c.logger.Info("deleting node from kubernetes", zap.String("node", nodeName))
 
-	cmd := exec.CommandContext(ctx, "kubectl", "delete", "node", nodeName)
+	cmd := c.command(ctx, "delete", "node", nodeName)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("kubectl delete node: %w, output: %s", err, string(output))
 	}
@@ -80,7 +105,7 @@ func (c *Client) DeleteNode(ctx context.Context, nodeName string) error {
 
 // ClusterInfo runs kubectl cluster-info and returns the output
 func (c *Client) ClusterInfo(ctx context.Context) (string, error) {
-	cmd := exec.CommandContext(ctx, "kubectl", "cluster-info")
+	cmd := c.command(ctx, "cluster-info")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("kubectl cluster-info: %w, output: %s", err, string(output))
@@ -90,7 +115,7 @@ func (c *Client) ClusterInfo(ctx context.Context) (string, error) {
 
 // GetNodes runs kubectl get nodes -o wide and returns the output
 func (c *Client) GetNodes(ctx context.Context) (string, error) {
-	cmd := exec.CommandContext(ctx, "kubectl", "get", "nodes", "-o", "wide")
+	cmd := c.command(ctx, "get", "nodes", "-o", "wide")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("kubectl get nodes: %w, output: %s", err, string(output))

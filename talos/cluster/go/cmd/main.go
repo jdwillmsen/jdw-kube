@@ -13,10 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/jdw/talos-bootstrap/pkg/discovery"
 	"github.com/jdw/talos-bootstrap/pkg/haproxy"
 	"github.com/jdw/talos-bootstrap/pkg/kubectl"
@@ -24,6 +20,9 @@ import (
 	"github.com/jdw/talos-bootstrap/pkg/state"
 	"github.com/jdw/talos-bootstrap/pkg/talos"
 	"github.com/jdw/talos-bootstrap/pkg/types"
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 const version = "v0.1.0"
@@ -164,7 +163,7 @@ func ensureClusterGitignore(clusterDir string) {
 	if err := os.MkdirAll(clusterDir, 0755); err != nil {
 		return
 	}
-	content := "/nodes/\n/secrets/\n/state\n/*.log\n"
+	content := "/nodes/\n/secrets/\n/state/\n/*.log\n"
 	os.WriteFile(gitignorePath, []byte(content), 0644)
 }
 
@@ -238,7 +237,7 @@ func resetCmd() *cobra.Command {
 }
 
 func runReconcile(ctx context.Context, cfg *types.Config) error {
-	stateMgr := state.NewManager(cfg)
+	stateMgr := state.NewManager(cfg, logger)
 
 	// Load additional fields from terraform.tfvars (cluster_name, proxmox tokens)
 	if err := stateMgr.LoadTerraformExtras(ctx); err != nil {
@@ -252,14 +251,27 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 	)
 
 	scanner := discovery.NewScanner(cfg.ProxmoxSSHUser, cfg.ProxmoxNodeIPs)
+	defer scanner.Close()
 	talosClient := talos.NewClient(cfg)
+	talosCleint.SetLogger(logger)
+	if session != nil && session.AuditLog != nil {
+		talosClient.SetAuditLogger(session.AuditLog)
+	}
 	k8sClient := kubectl.NewClient(logger)
+	k8sClient.SetClient(cfg.ClusterName)
 
 	// Configure SSH authentication for scanner
 	if cfg.ProxmoxSSHKeyPath != "" {
 		if err := scanner.SetPrivateKey(cfg.ProxmoxSSHKeyPath); err != nil {
 			logger.Warn("failed to set SSH private key for scanner", zap.String("key_path", cfg.ProxmoxSSHKeyPath), zap.Error(err))
 		}
+	}
+
+	// Refresh Proxmox node IP map from the cluster - updates the static default map
+	// with live IPs. Fails silently if all nodes are unreachable.
+	if !cfg.SkipPreflight {
+		logger.Info("refreshing proxmox node IPs")
+		scanner.RefreshProxmoxNodes(ctx)
 	}
 
 	// Initialize Talos client
@@ -309,6 +321,13 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 			return fmt.Errorf("discover VMs: %w", err)
 		}
 		logger.Info("discovered live state", zap.Int("found", len(live)))
+
+		// Mark nodes that are already joined Talos cluster members
+		if deployed.BootstrapCompleted && len(deployed.ControlPlanes) > 0 {
+			if members, err := talosClient.GetClusterMembers(ctx, deployed.ControlPlanes[0].IP); err == nil {
+				scanner.MarkJoinedNodes(members, live)
+			}
+		}
 	} else {
 		live = make(map[types.VMID]*types.LiveNode)
 	}
@@ -353,7 +372,7 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 }
 
 func runStatus(ctx context.Context, cfg *types.Config) error {
-	stateMgr := state.NewManager(cfg)
+	stateMgr := state.NewManager(cfg, logger)
 
 	// Load additional fields from terraform.tfvars
 	if err := stateMgr.LoadTerraformExtras(ctx); err != nil {
@@ -443,6 +462,53 @@ func displayPlan(plan *types.ReconcilePlan) {
 	fmt.Fprintln(os.Stderr)
 }
 
+// deployNode handles the common discover -> apply -> reboot -> wait -> hash flow
+// for adding a node (control plane or worker). Returns the post-reboot IP.
+func deployNode(
+	ctx context.Context,
+	vmid types.VMID,
+	role types.Role,
+	deployed *types.ClusterState,
+	stateMgr *state.Manager,
+	scanner *discovery.Scanner,
+	talosClient *talos.Client,
+) (net.IP, error) {
+	liveNodes, err := scanner.DiscoverVMs(ctx, []types.VMID{vmid})
+	if err != nil {
+		return nil, fmt.Errorf("discover VM %d: %w", vmid, err)
+	}
+
+	node, ok := liveNodes[vmid]
+	if !ok || node.IP == nil {
+		return nil, fmt.Errorf("VM %d IP not discovered", vmid)
+	}
+
+	configPath := stateMgr.NodeConfigPath(vmid, role)
+	logger.Info("applying config", zap.Int("vmid", int(vmid)), zap.String("role", string(role)))
+	if err := talosClient.ApplyConfigWithRetry(ctx, node.IP, configPath, role, 5); err != nil {
+		return nil, fmt.Errorf("apply config to %s %d: %w", role, vmid, err)
+	}
+
+	monitor := discovery.NewRebootMonitor(vmid, node.IP, node.MAC, scanner, logger)
+	newIP, err := monitor.WaitForReady(ctx, 3*time.Minute)
+	if err != nil {
+		return nil, fmt.Errorf("wait for %s %d reboot: %w", role, vmid, err)
+	}
+
+	if err := talosClient.WaitForReady(ctx, newIP, role); err != nil {
+		return nil, fmt.Errorf("wait for %s %d ready: %w", role, vmid, err)
+	}
+
+	configHash, hashErr := talos.HashFile(configPath)
+	if hashErr != nil {
+		logger.Warn("failed to hash config file", zap.Int("vmid", int(vmid)), zap.Error(hashErr))
+	}
+	stateMgr.UpdateNodeState(deployed, vmid, newIP.String(), configHash, role)
+
+	logger.Info("node deployed and joined", zap.Int("vmid", int(vmid)), zap.String("role", string(role)), zap.String("ip", newIP.String()), zap.String("status", string(types.StatusJoined)))
+	return newIP, nil
+}
+
 func executePlan(
 	ctx context.Context,
 	plan *types.ReconcilePlan,
@@ -458,222 +524,68 @@ func executePlan(
 	var bootstrappedVMID types.VMID
 
 	// Phase 0: Bootstrap first CP if needed
-	if plan.NeedsBootstrap && len(plan.AddControlPlanes) > 0 {
+	//
+	// Two cases:
+	// (a) Fresh cluster: NeedsBootstrap + AddControlPlanes non-empty - deploy first CP then bootstrap etcd.
+	// (b) Deferred bootstrap: NeedsBootstrap + no AddControlPlanes but deployed CPs already exist
+	//     (e.g., previous run applied configs but was interrupted before BootstrapEtcd) - Just run etcd bootstrap.
+	if plan.NeedsBootstrap {
 		logger.Info("executing bootstrap")
 
-		firstVMID := plan.AddControlPlanes[0]
-		bootstrappedVMID = firstVMID
-		spec := desired[firstVMID]
+		if len(plan.AddControlPlanes) > 0 {
+			firstVMID := plan.AddControlPlanes[0]
+			bootstrappedVMID = firstVMID
+			spec := desired[firstVMID]
 
-		if cfg.DryRun {
-			logger.Info("would bootstrap first control plane",
-				zap.Int("vmid", int(firstVMID)),
-				zap.String("name", spec.Name))
-		} else {
-			liveNodes, err := scanner.DiscoverVMs(ctx, []types.VMID{firstVMID})
-			if err != nil {
-				return fmt.Errorf("discover first control plane: %w", err)
+			if cfg.DryRun {
+				logger.Info("would bootstrap first control plane",
+					zap.Int("vmid", int(firstVMID)),
+					zap.String("name", spec.Name))
+			} else {
+				newIP, err := deployNode(ctx, firstVMID, types.RoleControlPlane, deployed, stateMgr, scanner, talosClient)
+				if err != nil {
+					return fmt.Errorf("bootstrap first CP: %w", err)
+				}
+
+				logger.Info("bootstrapping etcd on first control plane", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)))
+				if err := talosClient.BootstrapEtcd(ctx, newIP); err != nil {
+					return fmt.Errorf("bootstrap etcd: %w", err)
+				}
+
+				if err := talosClient.WaitForEtcdHealthy(ctx, newIP, 5*time.Minute); err != nil {
+					return fmt.Errorf("wait for etcd healthy: %w", err)
+				}
 			}
 
-			node, ok := liveNodes[firstVMID]
-			if !ok || node.IP == nil {
-				return fmt.Errorf("first control plane IP not discovered")
-			}
-
-			configPath := stateMgr.NodeConfigPath(firstVMID, types.RoleControlPlane)
-
-			logger.Info("applying config to first control plane", zap.Int("vmid", int(firstVMID)))
-			if err := talosClient.ApplyConfigWithRetry(ctx, node.IP, configPath, 5); err != nil {
-				return fmt.Errorf("apply config to first CP: %w", err)
-			}
-
-			monitor := discovery.NewRebootMonitor(firstVMID, node.IP, node.MAC, scanner, logger)
-			newIP, err := monitor.WaitForReady(ctx, 3*time.Minute)
-			if err != nil {
-				return fmt.Errorf("wait for first CP reboot: %w", err)
-			}
-
-			logger.Info("bootstrapping etcd on first control plane", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)))
-			if err := talosClient.BootstrapEtcd(ctx, newIP); err != nil {
-				return fmt.Errorf("bootstrap etcd: %w", err)
-			}
-
-			// Wait for etcd to become healthy
-			if err := talosClient.WaitForEtcdHealthy(ctx, newIP, 5*time.Minute); err != nil {
-				return fmt.Errorf("wait for etcd healthy: %w", err)
-			}
-
-			configHash, _ := talos.HashFile(configPath)
-			stateMgr.UpdateNodeState(deployed, firstVMID, newIP.String(), configHash, types.RoleControlPlane)
 			deployed.BootstrapCompleted = true
-
 			if err := stateMgr.Save(ctx, deployed); err != nil {
 				return fmt.Errorf("save state after bootstrap: %w", err)
 			}
 		}
-	}
-
-	// Phase 1: Add remaining control planes (sequential for etcd safety)
-	if len(plan.AddControlPlanes) > 0 {
-		logger.Info("adding control planes", zap.Int("count", len(plan.AddControlPlanes)))
-
-		for _, vmid := range plan.AddControlPlanes {
-			if plan.NeedsBootstrap && vmid == bootstrappedVMID {
-				continue // Already handled in bootstrap phase
+	} else if len(deployed.ControlPlanes) > 0 {
+		if cfg.DryRun {
+			logger.Info("would bootstrap etcd on existing first control plane",
+				zap.Int("vmid", int(deployed.ControlPlanes[0].VMID)))
+		} else {
+			firstCP := deployed.ControlPlanes[0]
+			logger.Info("bootstrapping etcd on already-deployed control plane",
+				zap.String("ip", firstCP.IP.String()), zap.Int("vmid", int(firstCP.VMID)))
+			if err := talosClient.BootstrapEtcd(ctx, firstCP.IP); err != nil {
+				return fmt.Errorf("deferred bootstrap etcd: %w", err)
 			}
 
-			spec := desired[vmid]
-
-			if cfg.DryRun {
-				logger.Info("would add control plane",
-					zap.Int("vmid", int(vmid)),
-					zap.String("name", spec.Name),
-				)
-				continue
+			if err := talosClient.WaitForEtcdHealthy(ctx, firstCP.IP, 5*time.Minute); err != nil {
+				return fmt.Errorf("wait for etcd healthy: %w", err)
 			}
 
-			liveNodes, err := scanner.DiscoverVMs(ctx, []types.VMID{vmid})
-			if err != nil {
-				return fmt.Errorf("discover VM %d: %w", vmid, err)
+			deployed.BootstrapCompleted = true
+			if err := stateMgr.Save(ctx, deployed); err != nil {
+				return fmt.Errorf("save state after deferred bootstrap: %w", err)
 			}
-
-			node, ok := liveNodes[vmid]
-			if !ok || node.IP == nil {
-				return fmt.Errorf("VM %d IP not discovered", vmid)
-			}
-
-			configPath := stateMgr.NodeConfigPath(vmid, types.RoleControlPlane)
-			logger.Info("applying config to control plane", zap.Int("vmid", int(vmid)))
-			if err := talosClient.ApplyConfigWithRetry(ctx, node.IP, configPath, 5); err != nil {
-				return fmt.Errorf("apply config to CP %d: %w", vmid, err)
-			}
-
-			monitor := discovery.NewRebootMonitor(vmid, node.IP, node.MAC, scanner, logger)
-			newIP, err := monitor.WaitForReady(ctx, 3*time.Minute)
-			if err != nil {
-				return fmt.Errorf("wait for CP %d reboot: %w", vmid, err)
-			}
-
-			if err := talosClient.WaitForReady(ctx, newIP, types.RoleControlPlane); err != nil {
-				return fmt.Errorf("wait for CP %d ready: %w", vmid, err)
-			}
-
-			configHash, _ := talos.HashFile(configPath)
-			stateMgr.UpdateNodeState(deployed, vmid, newIP.String(), configHash, types.RoleControlPlane)
 		}
 	}
 
-	// Phase 2: Fetch kubeconfig after bootstrap
-	if plan.NeedsBootstrap && deployed.BootstrapCompleted && !cfg.DryRun {
-		// Ensure DNS resolves for the control plane endpoint
-		ensureEndpointResolvable(cfg)
-
-		kubeconfigMgr := talos.NewKubeconfigManager(talosClient, logger)
-		if len(deployed.ControlPlanes) > 0 {
-			if err := kubeconfigMgr.FetchAndMerge(ctx, deployed.ControlPlanes[0].IP, cfg.ClusterName, cfg.ControlPlaneEndpoint); err != nil {
-				logger.Warn("kubeconfig fetch failed (can retry later)", zap.Error(err))
-			} else {
-				if err := kubeconfigMgr.Verify(ctx, cfg.ClusterName); err != nil {
-					logger.Warn("kubeconfig verification failed", zap.Error(err))
-				}
-			}
-		}
-
-		// Configure talosctl endpoints
-		configureTalosctlEndpoints(cfg, deployed)
-	}
-
-	// Phase 3: Update HAProxy after any CP membership changes
-	if len(plan.AddControlPlanes) > 0 || len(plan.RemoveControlPlanes) > 0 || len(plan.UpdateConfigs) > 0 {
-		if !cfg.DryRun && len(deployed.ControlPlanes) > 0 {
-			haproxyConfig := haproxy.ConfigFromClusterState(cfg, deployed)
-			configStr, err := haproxyConfig.Generate()
-			if err != nil {
-				logger.Warn("failed to generate HAProxy config", zap.Error(err))
-			} else {
-				haproxyClient := haproxy.NewClient(cfg.HAProxyLoginUser, cfg.HAProxyIP.String(), logger)
-				if cfg.ProxmoxSSHKeyPath != "" {
-					if err := haproxyClient.SetPrivateKey(cfg.ProxmoxSSHKeyPath); err != nil {
-						logger.Warn("failed to set SSH private key for HAProxy client", zap.String("key_path", cfg.ProxmoxSSHKeyPath), zap.Error(err))
-					}
-				}
-				if err := haproxyClient.Update(ctx, configStr); err != nil {
-					logger.Warn("HAProxy update failed", zap.Error(err))
-				}
-			}
-		} else if cfg.DryRun {
-			logger.Info("would update HAProxy configuration", zap.Int("backends", len(deployed.ControlPlanes)))
-		}
-	}
-
-	// Phase 4: Add workers (parallel, max 3 concurrent)
-	if len(plan.AddWorkers) > 0 {
-		logger.Info("adding workers", zap.Int("count", len(plan.AddWorkers)))
-
-		g, gctx := errgroup.WithContext(ctx)
-		sem := make(chan struct{}, 3)
-
-		for _, vmid := range plan.AddWorkers {
-			vmid, spec := vmid, desired[vmid]
-
-			g.Go(func() error {
-				sem <- struct{}{}
-				defer func() { <-sem }()
-
-				select {
-				case <-gctx.Done():
-					return gctx.Err()
-				default:
-				}
-
-				if cfg.DryRun {
-					logger.Info("would add worker",
-						zap.Int("vmid", int(vmid)),
-						zap.String("name", spec.Name),
-					)
-					return nil
-				}
-
-				liveNodes, err := scanner.DiscoverVMs(gctx, []types.VMID{vmid})
-				if err != nil {
-					return fmt.Errorf("discover worker %d: %w", vmid, err)
-				}
-
-				node, ok := liveNodes[vmid]
-				if !ok || node.IP == nil {
-					return fmt.Errorf("worker %d IP not discovered", vmid)
-				}
-
-				configPath := stateMgr.NodeConfigPath(vmid, types.RoleWorker)
-				logger.Info("applying config to worker", zap.Int("vmid", int(vmid)))
-				if err := talosClient.ApplyConfigWithRetry(gctx, node.IP, configPath, 5); err != nil {
-					return fmt.Errorf("apply config to worker %d: %w", vmid, err)
-				}
-
-				// Use RebootMonitor for workers too (consistent with CPs)
-				monitor := discovery.NewRebootMonitor(vmid, node.IP, node.MAC, scanner, logger)
-				newIP, err := monitor.WaitForReady(gctx, 3*time.Minute)
-				if err != nil {
-					return fmt.Errorf("wait for worker %d reboot: %w", vmid, err)
-				}
-
-				if err := talosClient.WaitForReady(gctx, newIP, types.RoleWorker); err != nil {
-					return fmt.Errorf("wait for worker %d ready: %w", vmid, err)
-				}
-
-				configHash, _ := talos.HashFile(configPath)
-				stateMgr.UpdateNodeState(deployed, vmid, newIP.String(), configHash, types.RoleWorker)
-
-				return nil
-			})
-		}
-
-		if err := g.Wait(); err != nil {
-			return err
-		}
-	}
-
-	// Phase 5a: Remove workers (with kubectl drain)
+	// Phase 1: Remove workers (before additions to free resources)
 	if len(plan.RemoveWorkers) > 0 {
 		logger.Info("removing workers", zap.Int("count", len(plan.RemoveWorkers)))
 
@@ -692,7 +604,6 @@ func executePlan(
 			}
 
 			if nodeIP != nil {
-				// Drain and delete from Kubernetes first
 				nodeName, err := k8sClient.GetNodeNameByIP(ctx, nodeIP)
 				if err != nil {
 					logger.Warn("failed to get node name for worker", zap.Int("vmid", int(vmid)), zap.Error(err))
@@ -705,11 +616,10 @@ func executePlan(
 					}
 				}
 
-				// Reset the Talos node
 				if err := talosClient.ResetNode(ctx, nodeIP, true); err != nil {
 					logger.Warn("graceful reset failed, trying forced reset", zap.Int("vmid", int(vmid)), zap.Error(err))
 					if err := talosClient.ResetNode(ctx, nodeIP, false); err != nil {
-						logger.Warn("failed to reset worker with insecure option", zap.Int("vmid", int(vmid)), zap.Error(err))
+						logger.Warn("forced reset also failed", zap.Int("vmid", int(vmid)), zap.Error(err))
 					}
 				}
 			}
@@ -718,11 +628,10 @@ func executePlan(
 		}
 	}
 
-	// Phase 5b: Remove control planes (with quorum check, kubectl drain, etcd removal, reset)
+	// Phase 2: Remove control planes (with quorum check, before additions)
 	if len(plan.RemoveControlPlanes) > 0 {
 		logger.Info("removing control planes", zap.Int("count", len(plan.RemoveControlPlanes)))
 
-		// Validate quorum safety with decrementing count
 		if len(deployed.ControlPlanes) > 0 && !cfg.DryRun {
 			firstHealthyCP := deployed.ControlPlanes[0].IP
 			remainingCPs := len(deployed.ControlPlanes)
@@ -754,7 +663,6 @@ func executePlan(
 			}
 
 			if nodeIP != nil {
-				// Drain and delete from Kubernetes
 				nodeName, err := k8sClient.GetNodeNameByIP(ctx, nodeIP)
 				if err != nil {
 					logger.Warn("could not find k8s node name for CP", zap.Int("vmid", int(vmid)), zap.Error(err))
@@ -764,7 +672,6 @@ func executePlan(
 					}
 				}
 
-				// Find a healthy CP endpoint that's not the one being removed
 				var healthyEndpoint net.IP
 				for _, cp := range deployed.ControlPlanes {
 					if cp.VMID != vmid {
@@ -784,18 +691,16 @@ func executePlan(
 					}
 				}
 
-				// Delete from Kubernetes after etcd removal
 				if nodeName != "" {
 					if err := k8sClient.DeleteNode(ctx, nodeName); err != nil {
 						logger.Warn("failed to delete CP from k8s", zap.Error(err))
 					}
 				}
 
-				// Reset the Talos node
 				if err := talosClient.ResetNode(ctx, nodeIP, true); err != nil {
-					logger.Warn("graceful reset failed, trying insecure", zap.Int("vmid", int(vmid)), zap.Error(err))
+					logger.Warn("graceful reset failed, trying forced", zap.Int("vmid", int(vmid)), zap.Error(err))
 					if err := talosClient.ResetNode(ctx, nodeIP, false); err != nil {
-						logger.Warn("insecure reset also failed", zap.Int("vmid", int(vmid)), zap.Error(err))
+						logger.Warn("forced reset also failed", zap.Int("vmid", int(vmid)), zap.Error(err))
 					}
 				}
 			}
@@ -804,7 +709,121 @@ func executePlan(
 		}
 	}
 
-	// Phase 6: Update configs (apply changed configurations)
+	// Phase 3: Add Remaining control planes (sequential for etcd safety)
+	if len(plan.AddControlPlanes) > 0 {
+		logger.Info("adding control planes", zap.Int("count", len(plan.AddControlPlanes)))
+
+		for _, vmid := range plan.AddControlPlanes {
+			if plan.NeedsBootstrap && vmid == bootstrappedVMID {
+				continue
+			}
+
+			spec := desired[vmid]
+
+			if cfg.DryRun {
+				logger.Info("would add control plane",
+					zap.Int("vmid", int(vmid)),
+					zap.String("name", spec.Name),
+				)
+				continue
+			}
+
+			if _, err := deployNode(ctx, vmid, types.RoleControlPlane, deployed, stateMgr, scanner, talosClient); err != nil {
+				return fmt.Errorf("add CP %d: %w", vmid, err)
+			}
+		}
+	}
+
+	// Phase 4: Update HAProxy after any CP membership changes.
+	// This MUST run before workers join so they can reach the API server via HAProxy.
+	if len(plan.AddControlPlanes) > 0 || len(plan.RemoveControlPlanes) > 0 || plan.NeedsBootstrap {
+		if !cfg.DryRun && len(deployed.ControlPlanes) > 0 {
+			haproxyConfig := haproxy.ConfigFromClusterState(cfg, deployed)
+			configStr, err := haproxyConfig.Generate()
+			if err != nil {
+				logger.Warn("failed to generate HAProxy config", zap.Error(err))
+			} else {
+				haproxyClient := haproxy.NewClient(cfg.HAProxyLoginUser, cfg.HAProxyIP.String(), logger)
+				if cfg.ProxmoxSSHKeyPath != "" {
+					if err := haproxyClient.SetPrivateKey(cfg.ProxmoxSSHKeyPath); err != nil {
+						logger.Warn("failed to set SSH private key for HAProxy client", zap.String("key_path", cfg.ProxmoxSSHKeyPath), zap.Error(err))
+					}
+				}
+				if err := haproxyClient.Update(ctx, configStr); err != nil {
+					logger.Warn("HAProxy update failed", zap.Error(err))
+				}
+			}
+		} else if cfg.DryRun {
+			logger.Info("would update HAProxy configuration", zap.Int("backends", len(deployed.ControlPlanes)))
+		}
+	}
+
+	// Phase 5: Fetch kubeconfig after bootstrap
+	if plan.NeedsBootstrap && deployed.BootstrapCompleted && !cfg.DryRun {
+		ensureEndpointResolvable(cfg)
+
+		kubeconfigMgr := talos.NewKubeconfigManager(talosClient, logger)
+		if len(deployed.ControlPlanes) > 0 {
+			cpIP := deployed.ControlPlanes[0].IP
+
+			logger.Info("waiting for control plane readiness before kubeconfig fetch",
+				zap.String("ip", cpIP.String()))
+			if err := talosClient.WaitForReady(ctx, cpIP, types.RoleControlPlane); err != nil {
+				logger.Warn("CP readiness wait timed out, attempting kubeconfig fetch anyway", zap.Error(err))
+			}
+
+			if err := kubeconfigMgr.FetchAndMerge(ctx, cpIP, cfg.ClusterName, cfg.ControlPlaneEndpoint); err != nil {
+				logger.Warn("kubeconfig fetch failed (can retry later)", zap.Error(err))
+			} else {
+				if err := kubeconfigMgr.Verify(ctx, cfg.ClusterName); err != nil {
+					logger.Warn("kubeconfig verification failed", zap.Error(err))
+				}
+			}
+		}
+
+		configureTalosctlEndpoints(cfg, deployed)
+	}
+
+	// Phase 6: Add workers (parallel, max 3 concurrent)
+	if len(plan.AddWorkers) > 0 {
+		logger.Info("adding workers", zap.Int("count", len(plan.AddWorkers)))
+
+		g, gctx := errgroup.WithContext(ctx)
+		sem := make(chan struct{}, 3)
+
+		for _, vmid := range plan.AddWorkers {
+			vmid, spec := vmid, desired[vmid]
+
+			g.Go(func() error {
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				select {
+				case <-gctx.Done():
+					return gctx.Err()
+				default:
+				}
+
+				if cfg.DryRun {
+					logger.Info("would add worker",
+						zap.Int("vmid", int(vmid)),
+						zap.String("name", spec.Name))
+					return nil
+				}
+
+				if _, err := deployNode(gctx, vmid, types.RoleWorker, deployed, stateMgr, scanner, talosClient); err != nil {
+					return fmt.Errorf("add worker %d: %w", vmid, err)
+				}
+				return nil
+			})
+		}
+
+		if err := g.Wait(); err != nil {
+			return err
+		}
+	}
+
+	// Phase 7: Update configs (apply changed configurations)
 	if len(plan.UpdateConfigs) > 0 {
 		logger.Info("updating configurations", zap.Int("count", len(plan.UpdateConfigs)))
 
@@ -856,12 +875,15 @@ func executePlan(
 				continue
 			}
 
-			configHash, _ := talos.HashFile(configPath)
+			configHash, hashErr := talos.HashFile(configPath)
+			if hashErr != nil {
+				logger.Warn("failed to hash config file", zap.Int("vmid", int(vmid)), zap.Error(hashErr))
+			}
 			stateMgr.UpdateNodeState(deployed, vmid, nodeIP.String(), configHash, spec.Role)
 		}
 	}
 
-	// Phase 7: Save final state
+	// Phase 8: Save final state
 	if !cfg.DryRun {
 		deployed.Timestamp = time.Now()
 		if err := stateMgr.Save(ctx, deployed); err != nil {
@@ -869,32 +891,27 @@ func executePlan(
 		}
 	}
 
-	// Phase 8: Post-reconciliation verification (e.g. check all nodes healthy)
+	// Phase 9: Post-reconciliation verification
 	if !cfg.DryRun && deployed.BootstrapCompleted {
 		verifyCluster(ctx, talosClient, k8sClient, deployed)
+	}
+
+	// Populate session counters for SUMMARY.txt
+	if session != nil {
+		session.ControlPlanes = len(deployed.ControlPlanes)
+		session.Workers = len(deployed.Workers)
+		session.AddedNodes = len(plan.AddControlPlanes) + len(plan.AddWorkers)
+		session.RemovedNodes = len(plan.RemoveControlPlanes) + len(plan.RemoveWorkers)
+		session.UpdatedConfigs = len(plan.UpdateConfigs)
+		session.BootstrapNeeded = plan.NeedsBootstrap
 	}
 
 	return nil
 }
 
-// hostsFilePath returns the OS-appropriate hosts file path
-func hostsFilePath() string {
-	if runtime.GOOS == "windows" {
-		// Check for Git Bash / MSYS2 environment
-		if mingw := os.Getenv("MINGW_PREFIX"); mingw != "" {
-			return "/c/Windows/System32/drivers/etc/hosts"
-		}
-		sysRoot := os.Getenv("SystemRoot")
-		if sysRoot == "" {
-			sysRoot = `C:\Windows`
-		}
-		return filepath.Join(sysRoot, "System32", "drivers", "etc", "hosts")
-	}
-	return "/etc/hosts"
-}
-
 // ensureEndpointResolvable checks DNS for the control plane endpoint and
-// adds a hosts file entry if resolution fails or points to the wrong IP.
+// adds a /etc/hosts entry (via sudo tee -a) if resolution fails or points
+// to the wrong IP.
 func ensureEndpointResolvable(cfg *types.Config) {
 	// Skip if endpoint is already an IP
 	if net.ParseIP(cfg.ControlPlaneEndpoint) != nil {
@@ -912,87 +929,55 @@ func ensureEndpointResolvable(cfg *types.Config) {
 	}
 
 	entry := fmt.Sprintf("%s %s", cfg.HAProxyIP, cfg.ControlPlaneEndpoint)
-	hostsFile := hostsFilePath()
+	const hostsFile = "/etc/hosts"
 
 	data, err := os.ReadFile(hostsFile)
 	if err != nil {
 		logger.Warn("cannot read hosts file", zap.String("path", hostsFile), zap.Error(err))
-		logger.Warn("please add the following entry manually", zap.String("entry", entry))
+		logger.Warn("add the following entry manually", zap.String("entry", entry))
 		return
 	}
 
 	content := string(data)
 
-	// Check if endpoint already has an entry - update it if stale
+	// Already correct
+	if strings.Contains(content, entry) {
+		return
+	}
+
+	// Entry exists with wrong IP - update it
 	if strings.Contains(content, cfg.ControlPlaneEndpoint) {
-		if strings.Contains(content, entry) {
-			return // Already correct
-		}
-		// Entry exists but with wrong IP - need to update it
 		lines := strings.Split(content, "\n")
 		for i, line := range lines {
 			if strings.Contains(line, cfg.ControlPlaneEndpoint) && !strings.HasPrefix(strings.TrimSpace(line), "#") {
 				lines[i] = entry
 			}
 		}
-		newContent := strings.Join(lines, "\n")
-		if err := writeHostsFile(hostsFile, []byte(newContent)); err != nil {
-			logger.Warn("failed to update hosts file entry (may need manual DNS entry)",
-				zap.String("entry", entry), zap.Error(err))
+		if err := writeHostsFileSudo(hostsFile, []byte(strings.Join(lines, "\n"))); err != nil {
+			logger.Warn("failed to update hosts file (add manually)", zap.String("path", hostsFile), zap.String("entry", entry), zap.Error(err))
 		} else {
 			logger.Info("updated hosts entry", zap.String("entry", entry))
 		}
 		return
 	}
 
-	appendData := "\n" + entry + "\n"
-	if err := appendHostsFile(hostsFile, appendData); err != nil {
-		logger.Warn("failed to update hosts file entry (may need manual DNS entry)",
-			zap.String("path", hostsFile), zap.String("entry", entry), zap.Error(err))
+	// Append new entry
+	cmd := exec.Command("sudo", "tee", "-a", hostsFile)
+	cmd.Stdin = strings.NewReader("\n" + entry + "\n")
+	cmd.Stdout = nil
+	if err := cmd.Run(); err != nil {
+		logger.Warn("failed to append to hosts file (add manually)", zap.String("path", hostsFile), zap.String("entry", entry), zap.Error(err))
 	} else {
 		logger.Info("added hosts entry", zap.String("entry", entry))
 	}
 }
 
-// appendHostsFile appends to the hosts file, using privilege escalation if needed
-func appendHostsFile(hostsFile, data string) error {
-	// Try direct write first
-	f, err := os.OpenFile(hostsFile, os.O_APPEND|os.O_WRONLY, 0644)
-	if err == nil {
-		defer f.Close()
-		_, err = f.WriteString(data)
-		return err
-	}
-
-	// Fallback to privilege escalation
-	if runtime.GOOS == "windows" {
-		// On Windows, use PowerShell with elevated privileges
-		cmd := exec.Command("powershell", "-Command",
-			fmt.Sprintf("Add-Content -Path '%s' -Value '%s'", hostsFile, strings.TrimSpace(data)))
-		return cmd.Run()
-	}
-
-	// On Unix, try sudo
-	cmd := exec.Command("sudo", "tee", "-a", hostsFile)
-	cmd.Stdin = strings.NewReader(data)
-	cmd.Stdout = nil // suppress tee output
-	return cmd.Run()
-}
-
-// writeHostsFile writes the full hosts file content, using privilege escalation if needed
-func writeHostsFile(hostsFile string, data []byte) error {
+// writeHostsFileSudo writes the full hosts file content
+func writeHostsFileSudo(hostsFile string, data []byte) error {
 	// Try direct write first
 	if err := os.WriteFile(hostsFile, data, 0644); err == nil {
 		return nil
 	}
-
-	// Fallback to privilege escalation
-	if runtime.GOOS == "windows" {
-		cmd := exec.Command("powershell", "-Command",
-			fmt.Sprintf("Set-Content -Path '%s' -Value '%s'", hostsFile, string(data)))
-		return cmd.Run()
-	}
-
 	cmd := exec.Command("sudo", "tee", hostsFile)
 	cmd.Stdin = strings.NewReader(string(data))
 	cmd.Stdout = nil
