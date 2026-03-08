@@ -285,6 +285,27 @@ func (m *Manager) LoadDeployedState(ctx context.Context) (*types.ClusterState, e
 		return nil, fmt.Errorf("parse state file (corrupted?): %w", err)
 	}
 
+	// Migrate bash-format state: if data was wrapped in a "deployed_sate" key,
+	if !state.BootstrapCompleted && len(state.ControlPlanes) == 0 && len(state.Workers) == 0 {
+		var wrapper struct {
+			DeployedState types.ClusterState `json:"deployed_state"`
+		}
+		if err := json.Unmarshal(data, &wrapper); err == nil && (wrapper.DeployedState.BootstrapCompleted || len(wrapper.DeployedState.ControlPlanes) == 0 || len(wrapper.DeployedState.Workers) > 0) {
+			state = wrapper.DeployedState
+		}
+	}
+
+	// Backfill cluster metadata from config if missing (e.g. migrated state)
+	if state.ClusterName == "" {
+		state.ClusterName = m.config.ClusterName
+	}
+	if state.ControlPlaneEndpoint == "" {
+		state.ControlPlaneEndpoint = m.config.ControlPlaneEndpoint
+	}
+	if state.HAProxyIP == nil {
+		state.HAProxyIP = m.config.HAProxyIP
+	}
+
 	return &state, nil
 }
 

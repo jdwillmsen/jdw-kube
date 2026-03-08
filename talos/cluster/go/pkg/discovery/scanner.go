@@ -404,8 +404,8 @@ func DiscoverProxmoxNodes(sshUser, keyPath string, seedIP net.IP) (map[string]ne
 func parseProxmoxNodes(jsonOut string) (map[string]net.IP, error) {
 	// Minimal JSON unmarshal without importing encoding/json - use regex for simplicity
 	// since pvesh output is well-structured adn we only need node+ip fields.
-	nodeRe := regexp.MustCompile(`"node"\s"*:\s"([^"]+)"`)
-	ipRe := regexp.MustCompile(`"ip"\s*:\s*"([^"]+)`)
+	nodeRe := regexp.MustCompile(`"node"\s*:\s*"([^"]+)"`)
+	ipRe := regexp.MustCompile(`"ip"\s*:\s*"([^"]+)"`)
 
 	nodeMatches := nodeRe.FindAllStringSubmatch(jsonOut, -1)
 	ipMatches := ipRe.FindAllStringSubmatch(jsonOut, -1)

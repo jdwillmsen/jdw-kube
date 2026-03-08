@@ -142,9 +142,9 @@ func (b *Box) Row(key, value string) {
 	b.writeLine(fmt.Sprintf("  %s%s:%s %s", b.c(cBold), key, cReset, value))
 }
 
-// Item writes a bulleted item.
-func (b *Box) Item(text string) {
-	b.writeLine(fmt.Sprintf("  %s %s", mBullet, text))
+// Item writes a bulleted item. An optional marker overrides the default bullet
+func (b *Box) Item(marker, text string) {
+	b.writeLine(fmt.Sprintf("  %s %s", marker, text))
 }
 
 // Section writes a centered section header with diamond markers and dotted line.

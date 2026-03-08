@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -253,12 +252,12 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 	scanner := discovery.NewScanner(cfg.ProxmoxSSHUser, cfg.ProxmoxNodeIPs)
 	defer scanner.Close()
 	talosClient := talos.NewClient(cfg)
-	talosCleint.SetLogger(logger)
+	talosClient.SetLogger(logger)
 	if session != nil && session.AuditLog != nil {
 		talosClient.SetAuditLogger(session.AuditLog)
 	}
 	k8sClient := kubectl.NewClient(logger)
-	k8sClient.SetClient(cfg.ClusterName)
+	k8sClient.SetContext(cfg.ClusterName)
 
 	// Configure SSH authentication for scanner
 	if cfg.ProxmoxSSHKeyPath != "" {
