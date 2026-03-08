@@ -1,0 +1,26 @@
+16:12:14	INFO 	session started	{"cluster": "cluster", "config": "../terraform.tfvars", "log_dir": "logs\\2026-03-08\\run-20260308_161214"}
+[36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
+╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
+   ██║   ███████║██║     ██║   ██║███████╗
+   ██║   ██╔══██║██║     ██║   ██║╚════██║
+   ██║   ██║  ██║███████╗╚██████╔╝███████║
+   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
+[0m[2m ━━━ Kubernetes Bootstrap Tool v0.1.0 ━━━[0m
+16:12:15	INFO 	starting reconciliation	{"cluster": "core", "dry_run": false, "plan_mode": false}
+16:12:15	INFO 	refreshing proxmox node IPs
+16:12:20	INFO 	loading desired state from terraform
+16:12:20	INFO 	loaded desired state	{"nodes": 7}
+16:12:20	INFO 	loading deployed state
+16:12:20	INFO 	discovering live state
+16:12:26	INFO 	discovered live state	{"found": 7}
+16:12:26	INFO 	building reconciliation plan
+
+[2m┌─────────────────────────────────────────────────────────────┐[0m
+[2m│[0m [36m[1mRECONCILIATION PLAN[0m[2m                                         [2m│[0m
+[2m├─────────────────────────────────────────────────────────────┤[0m
+[2m│[0m  [33m[BOOTSTRAP][0m Cluster needs initial bootstrap                [2m│[0m
+[2m│[0m  [32m+[0m Add 3 control plane(s): [200 201 202]                    [2m│[0m
+[2m│[0m  [32m+[0m Add 4 worker(s): [300 301 302 303]                       [2m│[0m
+[2m└─────────────────────────────────────────────────────────────┘[0m
+16:12:29	INFO 	executing bootstrap
+16:12:31	INFO 	applying config	{"vmid": 200, "role": "control-plane"}

@@ -82,7 +82,7 @@ func NewRunSession(cfg *types.Config) (*RunSession, error) {
 	// Build tee core
 	teeCore := buildTeeCore(level, cfg.NoColor, consoleFile, structuredFile)
 
-	logger := zap.New(teeCore, zap.AddCaller(), zap.AddStacktrace(zap.FatalLevel))
+	logger := zap.New(teeCore, zap.AddStacktrace(zap.FatalLevel))
 
 	session := &RunSession{
 		RunDir:     runDir,
@@ -109,9 +109,9 @@ func NewRunSession(cfg *types.Config) (*RunSession, error) {
 }
 
 // buildTeeCore creates a zapcore.Core that fans out to 3 sinks:
-// stderr (colored console), console.log (colored console), structured.log (JSON)
+// stderr + console.log (simple colored), structured.log (JSON)
 func buildTeeCore(level zapcore.Level, noColor bool, consoleFile, structuredFile io.Writer) zapcore.Core {
-	// Console encoder config (colored for stderr and console.log)
+	// Simple console encoder (time + colored level + message + fields)
 	consoleCfg := newConsoleEncoderConfig(noColor)
 	consoleEncoder := zapcore.NewConsoleEncoder(consoleCfg)
 
@@ -132,17 +132,30 @@ func buildTeeCore(level zapcore.Level, noColor bool, consoleFile, structuredFile
 	)
 }
 
-// newConsoleEncoderConfig returns a console encoder config with custom ANSI colors
+// newConsoleEncoderConfig returns a simple console encoder config.
+// Format: 15:04:05 LEVEL message key=value
 func newConsoleEncoderConfig(noColor bool) zapcore.EncoderConfig {
-	cfg := zap.NewDevelopmentEncoderConfig()
-	cfg.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02 15:04:05")
+	cfg := zapcore.EncoderConfig{
+		TimeKey:        "ts",
+		LevelKey:       "level",
+		MessageKey:     "msg",
+		EncodeTime:     zapcore.TimeEncoderOfLayout("15:04:05"),
+		EncodeDuration: zapcore.SecondsDurationEncoder,
+	}
 	if !noColor {
+		cfg.EncodeLevel = paddedLevelEncoder
+	} else {
 		cfg.EncodeLevel = colorLevelEncoder
 	}
 	return cfg
 }
 
-// colorLevelEncoder maps zap levels to ANSI colors matching the bash script
+// paddedLevelEncoder writes the level name padded to 5 chars (no color).
+func paddedLevelEncoder(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
+	enc.AppendString(fmt.Sprintf("%-5s", l.CapitalString()))
+}
+
+// colorLevelEncoder writes a colored, padded level name.
 func colorLevelEncoder(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 	var color string
 	switch l {
@@ -157,7 +170,7 @@ func colorLevelEncoder(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 	default: // Info
 		color = colorWhite
 	}
-	enc.AppendString(color + l.CapitalString() + colorReset)
+	enc.AppendString(color + fmt.Sprintf("%-5s", l.CapitalString()) + colorReset)
 }
 
 func parseZapLevel(s string) zapcore.Level {

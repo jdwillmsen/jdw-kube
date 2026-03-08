@@ -92,12 +92,12 @@ func TestBox_Header(t *testing.T) {
 
 	output := buf.String()
 
-	// Should have box drawing characters
-	if !strings.Contains(output, hTL) || !strings.Contains(output, hTR) {
-		t.Error("Expected heavy top corners in header")
+	// Should have light box drawing characters
+	if !strings.Contains(output, sTL) || !strings.Contains(output, sTR) {
+		t.Error("Expected light top corners in header")
 	}
-	if !strings.Contains(output, hL) || !strings.Contains(output, hR) {
-		t.Error("Expected heavy left/right junctions in header")
+	if !strings.Contains(output, sL) || !strings.Contains(output, sR) {
+		t.Error("Expected light left/right junctions in header")
 	}
 
 	// Should contain title
@@ -113,9 +113,9 @@ func TestBox_Footer(t *testing.T) {
 
 	output := buf.String()
 
-	// Should have bottom corners
+	// Should have light bottom corners
 	if !strings.Contains(output, hBL) || !strings.Contains(output, hBR) {
-		t.Error("Expected heavy bottom corners in footer")
+		t.Error("Expected light bottom corners in footer")
 	}
 }
 
@@ -150,9 +150,9 @@ func TestBox_Row(t *testing.T) {
 		t.Error("Expected 'Value' in row output")
 	}
 
-	// Should have vertical borders
-	if !strings.Contains(output, hV) && !strings.Contains(output, sV) {
-		t.Error("Expected vertical borders in row")
+	// Should have light vertical borders
+	if !strings.Contains(output, sV) {
+		t.Error("Expected light vertical borders in row")
 	}
 }
 
@@ -190,15 +190,13 @@ func TestBox_Section(t *testing.T) {
 
 	output := buf.String()
 
-	// Should contain section name with diamonds
+	// Should contain section name
 	if !strings.Contains(output, "Section Name") {
 		t.Error("Expected section name in output")
 	}
-	if !strings.Contains(output, mDiamond) {
-		t.Error("Expected diamond markers in section")
-	}
-	if !strings.Contains(output, mDot) {
-		t.Error("Expected dotted line in section")
+	// Should have a divider line above
+	if !strings.Contains(output, sL) || !strings.Contains(output, sR) {
+		t.Error("Expected light divider in section")
 	}
 }
 

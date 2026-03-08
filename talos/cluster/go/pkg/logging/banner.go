@@ -95,7 +95,7 @@ func (b *Box) c(code string) string {
 	return code
 }
 
-// writeLine writes content with heavy vertical borders and padding.
+// writeLine writes content with light vertical borders and padding.
 func (b *Box) writeLine(content string) {
 	visible := stripANSI(content)
 	padding := boxWidth - 2 - utf8.RuneCountInString(visible)
@@ -103,33 +103,33 @@ func (b *Box) writeLine(content string) {
 		padding = 0
 	}
 	fmt.Fprintf(b.w, "%s%s%s%s%s%s%s%s\n",
-		b.c(cDim), hV, b.c(cReset),
+		b.c(cDim), sV, b.c(cReset),
 		content,
 		strings.Repeat(" ", padding),
-		b.c(cDim), hV, b.c(cReset))
+		b.c(cDim), sV, b.c(cReset))
 }
 
-// Header writes the heavy top border and title with subtitle.
+// Header writes the light top border and title with subtitle.
 func (b *Box) Header(title string) {
-	top := strings.Repeat(hH, boxWidth-2)
+	top := strings.Repeat(sH, boxWidth-2)
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
-		b.c(cDim), hTL, top, hTR, b.c(cReset))
+		b.c(cDim), sTL, top, sTR, b.c(cReset))
 
 	b.writeLine(fmt.Sprintf(" %s%s%s%s%s", b.c(cCyan), b.c(cBold), title, b.c(cReset), b.c(cDim)))
 
-	sep := strings.Repeat(hH, boxWidth-2)
+	sep := strings.Repeat(sH, boxWidth-2)
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
-		b.c(cDim), hL, sep, hR, b.c(cReset))
+		b.c(cDim), sL, sep, sR, b.c(cReset))
 }
 
-// Footer writes the heavy bottom border.
+// Footer writes the light bottom border.
 func (b *Box) Footer() {
-	bottom := strings.Repeat(hH, boxWidth-2)
+	bottom := strings.Repeat(sH, boxWidth-2)
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
-		b.c(cDim), hBL, bottom, hBR, b.c(cReset))
+		b.c(cDim), sBL, bottom, sBR, b.c(cReset))
 }
 
-// Divider writes a standard horizontal separator.
+// Divider writes a light horizontal separator.
 func (b *Box) Divider() {
 	sep := strings.Repeat(sH, boxWidth-2)
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
@@ -165,23 +165,12 @@ func (b *Box) Item(marker, text string) {
 	}
 }
 
-// Section writes a centered section header with diamond markers and dotted line.
+// Section writes a section header with a divider line above it.
 func (b *Box) Section(label string) {
-	text := fmt.Sprintf("%s%s %s%s %s%s",
-		b.c(cDim), mDiamond,
-		b.c(cBold)+label+b.c(cReset),
-		b.c(cDim), mDiamond, b.c(cReset))
-
-	visible := stripANSI(text)
-	padding := boxWidth - 2 - utf8.RuneCountInString(visible)
-	leftPad := padding / 2
-	rightPad := padding - leftPad
-
-	content := strings.Repeat(" ", leftPad) + text + strings.Repeat(" ", rightPad)
-	b.writeLine(content)
-
-	dots := strings.Repeat(mDot, boxWidth-2)
-	b.writeLine(b.c(cDim) + dots + b.c(cReset))
+	sep := strings.Repeat(sH, boxWidth-2)
+	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
+		b.c(cDim), sL, sep, sR, b.c(cReset))
+	b.writeLine(fmt.Sprintf(" %s%s%s", b.c(cBold), label, b.c(cReset)))
 }
 
 // Badge writes a colored [BADGE] message. Color is chosen by badge name:

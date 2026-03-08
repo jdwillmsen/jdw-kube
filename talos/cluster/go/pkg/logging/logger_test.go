@@ -78,18 +78,23 @@ func TestNewConsoleEncoderConfig(t *testing.T) {
 	if cfg.EncodeTime == nil {
 		t.Error("Expected EncodeTime to be set")
 	}
-	// EncodeLevel is always set in the current implementation
 	if cfg.EncodeLevel == nil {
 		t.Error("Expected EncodeLevel to be set")
 	}
 
-	// Test without color
+	// Test without color - uses paddedLevelEncoder
 	cfgNoColor := newConsoleEncoderConfig(true)
 	if cfgNoColor.EncodeTime == nil {
 		t.Error("Expected EncodeTime to be set for noColor=true")
 	}
-	// Note: Current implementation doesn't nil out EncodeLevel for noColor
-	// The color handling happens inside the encoder function itself
+	if cfgNoColor.EncodeTime == nil {
+		t.Error("Expected EncodeLevel to be set for noColor=true")
+	}
+
+	// Caller key should be empty (no caller in console output)
+	if cfg.CallerKey != "" {
+		t.Error("Expected CallerKey to be empty")
+	}
 }
 
 func TestBuildTeeCore(t *testing.T) {
