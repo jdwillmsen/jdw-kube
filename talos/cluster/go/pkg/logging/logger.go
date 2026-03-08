@@ -204,7 +204,7 @@ func (s *RunSession) writeHeader() {
 		"  Start:   %s\n"+
 		"  Cluster: %s\n"+
 		"  Config:  %s\n"+
-		"  Log Dir: %s\n",
+		"  Log Dir: %s",
 		s.StartTime.Format("2006-01-02 15:04:05"),
 		s.Config.ClusterName,
 		s.Config.TerraformTFVars,

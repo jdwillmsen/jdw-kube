@@ -33,26 +33,22 @@ func WriteSummary(path string, data *SummaryData) error {
 		errMsg = "none"
 	}
 
-	content := fmt.Sprintf(`=== TALOS BOOTSTRAP RUN SUMMARY ===
-
+	content := fmt.Sprintf(`━━━ TALOS BOOTSTRAP RUN SUMMARY ━━━
   Status:       %s
   Cluster:      %s
   Start:        %s
   Duration:     %s
   Run Dir:      %s
   Error:        %s
-
-  --- Cluster Nodes ---
+  ─── Cluster Nodes ───
   Control Planes: %d
   Workers:        %d
-
-  --- Operations ---
+  ─── Operations ───
   Added:          %d
   Removed:        %d
   Updated:        %d
   Bootstrap:      %v
-
-=======================================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `,
 		data.Status,
 		data.ClusterName,

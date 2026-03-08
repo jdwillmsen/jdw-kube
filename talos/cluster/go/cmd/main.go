@@ -389,34 +389,37 @@ func runStatus(ctx context.Context, cfg *types.Config) error {
 		return err
 	}
 
-	fmt.Printf("\n=== Cluster: %s ===\n\n", cfg.ClusterName)
+	box := logging.NewBox(os.Stdout, cfg.NoColor)
+	box.Header(fmt.Sprintf("CLUSTER STATUS: %s", cfg.ClusterName))
 
-	fmt.Printf("Desired State (Terraform):\n")
-	fmt.Printf("  Control Planes: %d\n", countByRole(desired, types.RoleControlPlane))
-	fmt.Printf("  Workers: %d\n", countByRole(desired, types.RoleWorker))
+	box.Section("Desired State (Terraform)")
+	box.Row("Control Planes", fmt.Sprintf("%d", countByRole(desired, types.RoleControlPlane)))
+	box.Row("Workers", fmt.Sprintf("%d", countByRole(desired, types.RoleWorker)))
 
-	fmt.Printf("\nDeployed State:\n")
-	fmt.Printf("  Control Planes: %d\n", len(deployed.ControlPlanes))
+	box.Section("Deployed State")
+	box.Row("Control Planes", fmt.Sprintf("%d", len(deployed.ControlPlanes)))
 	for _, cp := range deployed.ControlPlanes {
-		fmt.Printf("    - VMID %d: %s\n", cp.VMID, cp.IP)
+		box.Item("•", fmt.Sprintf("VMID %d: %s", cp.VMID, cp.IP))
 	}
-	fmt.Printf("  Workers: %d\n", len(deployed.Workers))
+	box.Row("Workers", fmt.Sprintf("%d", len(deployed.Workers)))
 	for _, w := range deployed.Workers {
-		fmt.Printf("    - VMID %d: %s\n", w.VMID, w.IP)
+		box.Item("•", fmt.Sprintf("VMID %d: %s", w.VMID, w.IP))
 	}
-	fmt.Printf("  Bootstrap Completed: %v\n", deployed.BootstrapCompleted)
+	box.Row("Bootstrap Completed", fmt.Sprintf("%v", deployed.BootstrapCompleted))
 
 	if deployed.TerraformHash != "" {
 		currentHash, err := stateMgr.ComputeTerraformHash()
 		if err == nil {
 			if currentHash == deployed.TerraformHash {
 				fmt.Printf("  Terraform Hash: %s (unchanged)\n", currentHash)
+				box.Row("Terraform Hash", fmt.Sprintf("%s (unchanged)", currentHash))
 			} else {
-				fmt.Printf("  Terraform Hash: %s (CHANGED from %s)\n", currentHash, deployed.TerraformHash)
+				box.Row("Terraform Hash", fmt.Sprintf("%s (CHANGED from %s)", currentHash, deployed.TerraformHash))
 			}
 		}
 	}
 
+	box.Footer()
 	return nil
 }
 

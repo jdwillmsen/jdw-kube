@@ -183,9 +183,19 @@ func (b *Box) Section(label string) {
 	b.writeLine(b.c(cDim) + dots + b.c(cReset))
 }
 
-// Badge writes a [BADGE] message in green.
+// Badge writes a colored [BADGE] message. Color is chosen by badge name:
+// OK/SUCCESS -> green, BOOTSTRAP/INFO/WARN -> yellow, ERROR/FAIL -> red.
 func (b *Box) Badge(badge, msg string) {
-	b.writeLine(fmt.Sprintf("  %s[%s]%s %s", b.c(cGreen), badge, b.c(cReset), msg))
+	var color string
+	switch badge {
+	case "OK", "SUCCESS", "PASS":
+		color = cGreen
+	case "ERROR", "FAIL":
+		color = cRed
+	default:
+		color = cYellow
+	}
+	b.writeLine(fmt.Sprintf("  %s[%s]%s %s", b.c(color), badge, b.c(cReset), msg))
 }
 
 // stripANSI removes ANSI escape sequences.
