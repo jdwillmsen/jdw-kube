@@ -3,12 +3,14 @@ package logging
 import (
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/jdw/talos-bootstrap/pkg/types"
@@ -111,10 +113,13 @@ func NewRunSession(cfg *types.Config) (*RunSession, error) {
 
 // buildTeeCore creates a zapcore.Core that fans out to 3 sinks:
 // stderr + console.log (simple colored), structured.log (JSON)
+// stderr + console.log (simple colored with key=value fields), structured.log (JSON)
 func buildTeeCore(level zapcore.Level, noColor bool, consoleFile, structuredFile io.Writer) zapcore.Core {
-	// Simple console encoder (time + colored level + message + fields)
 	consoleCfg := newConsoleEncoderConfig(noColor)
-	consoleEncoder := zapcore.NewConsoleEncoder(consoleCfg)
+	consoleEncoder := &kvEncoder{
+		Encoder: zapcore.NewConsoleEncoder(consoleCfg),
+		noColor: noColor,
+	}
 
 	// JSON encoder config (for structured.log)
 	jsonCfg := zap.NewProductionEncoderConfig()
@@ -128,9 +133,82 @@ func buildTeeCore(level zapcore.Level, noColor bool, consoleFile, structuredFile
 
 	return zapcore.NewTee(
 		zapcore.NewCore(consoleEncoder, zapcore.Lock(os.Stderr), levelEnabler),
-		zapcore.NewCore(consoleEncoder, zapcore.AddSync(consoleFile), levelEnabler),
+		zapcore.NewCore(consoleEncoder.Clone().(zapcore.Encoder), zapcore.AddSync(consoleFile), levelEnabler),
 		zapcore.NewCore(jsonEncoder, zapcore.AddSync(structuredFile), levelEnabler),
 	)
+}
+
+// kvEncoder wraps a console encoder and formats a structured fields as key=value
+// instead of JSON.
+type kvEncoder struct {
+	zapcore.Encoder
+	noColor bool
+	fields  []zapcore.Field
+}
+
+func (e *kvEncoder) Clone() zapcore.Encoder {
+	return &kvEncoder{
+		Encoder: e.Encoder.Clone(),
+		noColor: e.noColor,
+		fields:  append([]zapcore.Field{}, e.fields...),
+	}
+}
+
+func (e *kvEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
+	all := append(e.fields, fields...)
+
+	// Encode the base line (time + level + message) with no fields
+	buf, err := e.Encoder.EncodeEntry(entry, nil)
+	if err != nil {
+		return buf, err
+	}
+
+	if len(all) > 0 {
+		// Remove trailing newline so we can append fields
+		data := buf.Bytes()
+		if len(data) > 0 && data[len(data)-1] == '\n' {
+			buf.TrimNewline()
+		}
+
+		dim, reset := colorDim, colorReset
+		if e.noColor {
+			dim, reset = "", ""
+		}
+
+		for _, f := range all {
+			buf.AppendString(" " + dim + f.Key + "=" + reset)
+			switch f.Type {
+			case zapcore.StringType:
+				buf.AppendString(f.String)
+			case zapcore.Int64Type, zapcore.Int32Type, zapcore.Int16Type, zapcore.Int8Type:
+				buf.AppendString(fmt.Sprintf("%d", f.Integer))
+			case zapcore.BoolType:
+				if f.Integer == 1 {
+					buf.AppendString("true")
+				} else {
+					buf.AppendString("false")
+				}
+			case zapcore.Float32Type, zapcore.Float64Type:
+				buf.AppendString(fmt.Sprintf("%g", math.Float64bits(float64(uint64(f.Integer)))))
+			case zapcore.ErrorType:
+				if f.Interface != nil {
+					buf.AppendString(f.Interface.(error).Error())
+				}
+			default:
+				buf.AppendString(fmt.Sprintf("%v", f.Interface))
+			}
+		}
+		buf.AppendString("\n")
+	}
+
+	return buf, nil
+}
+
+// With returns a new encoder with additional fields stored for later encoding.
+func (e *kvEncoder) With(fields []zapcore.Field) zapcore.Encoder {
+	clone := e.Clone().(*kvEncoder)
+	clone.fields = append(clone.fields, fields...)
+	return clone
 }
 
 // newConsoleEncoderConfig returns a simple console encoder config.

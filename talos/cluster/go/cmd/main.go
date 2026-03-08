@@ -132,6 +132,20 @@ func initConfig(cmd *cobra.Command) error {
 	return nil
 }
 
+// promptConfirm writes a prompt to session.Console, reads a y/N response from
+// stdin, and logs the response. Returns true if the user confirmed.
+func promptConfirm(prompt string) bool {
+	fmt.Fprint(session.Console, prompt)
+	var response string
+	fmt.Scanln(&response)
+	fmt.Fprintf(session.Console, "%s\n", response)
+	if response != "y" && response != "Y" {
+		fmt.Fprintln(session.Console, "Cancelled")
+		return false
+	}
+	return true
+}
+
 // checkPrerequisites verifies required CLI tools are available
 func checkPrerequisites(logger *zap.Logger) {
 	for _, tool := range []string{"talosctl", "kubectl"} {
@@ -217,11 +231,7 @@ func resetCmd() *cobra.Command {
 		Short: "Reset cluster state",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !cfg.AutoApprove {
-				fmt.Print("Are you sure you want to reset? [y/N]: ")
-				var response string
-				fmt.Scanln(&response)
-				if response != "y" && response != "Y" {
-					fmt.Println("Cancelled")
+				if !promptConfirm("Are you sure you want to reset? [y/N]: ") {
 					return nil
 				}
 			}
@@ -230,7 +240,7 @@ func resetCmd() *cobra.Command {
 			if err := os.RemoveAll(clusterDir); err != nil {
 				return fmt.Errorf("remove cluster dir: %w", err)
 			}
-			fmt.Printf("Reset cluster %s\n", cfg.ClusterName)
+			fmt.Fprintf(session.Console, "Reset cluster %s\n", cfg.ClusterName)
 			return nil
 		},
 	}
@@ -353,11 +363,7 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 
 	// Confirm if not auto-approved
 	if !cfg.AutoApprove && !cfg.DryRun {
-		fmt.Print("\nProceed with changes? [y/N]: ")
-		var response string
-		fmt.Scanln(&response)
-		if response != "y" && response != "Y" {
-			fmt.Println("Cancelled")
+		if !promptConfirm("Proceed with changes? [y/N]: ") {
 			return nil
 		}
 	}
@@ -438,7 +444,6 @@ func displayPlan(plan *types.ReconcilePlan) {
 
 func displayPlanTo(plan *types.ReconcilePlan, w io.Writer) {
 	box := logging.NewBox(w, cfg.NoColor)
-	fmt.Fprintln(w)
 	box.Header("RECONCILIATION PLAN")
 	if plan.NeedsBootstrap {
 		box.Badge("BOOTSTRAP", "Cluster needs initial bootstrap")
