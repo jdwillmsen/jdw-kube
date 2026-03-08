@@ -21,7 +21,7 @@ const (
 	cRed    = "\033[31m"
 )
 
-// Heavy box-drawing (for Header/Footer)
+// Heavy box-drawing (outer frame)
 const (
 	hTL = "┏" // U+250F
 	hTR = "┓" // U+2513
@@ -33,7 +33,7 @@ const (
 	hR  = "┫" // U+252B
 )
 
-// Standard box-drawing (for Divider)
+// Light box-drawing (internal dividers)
 const (
 	sTL = "┌" // U+250C
 	sTR = "┐" // U+2510
@@ -46,6 +46,12 @@ const (
 	sT  = "┬" // U+252C
 	sB  = "┴" // U+2534
 	sC  = "┼" // U+253C
+)
+
+// Mixed junctions (heavy vertical + light horization)
+const (
+	mL = "┠" // U+2520 - heavy vertical, light right
+	mR = "┨" // U+2528 - heavy vertical, light left
 )
 
 // Markers
@@ -95,7 +101,7 @@ func (b *Box) c(code string) string {
 	return code
 }
 
-// writeLine writes content with light vertical borders and padding.
+// writeLine writes content with heavy vertical borders and padding.
 func (b *Box) writeLine(content string) {
 	visible := stripANSI(content)
 	padding := boxWidth - 2 - utf8.RuneCountInString(visible)
@@ -103,37 +109,37 @@ func (b *Box) writeLine(content string) {
 		padding = 0
 	}
 	fmt.Fprintf(b.w, "%s%s%s%s%s%s%s%s\n",
-		b.c(cDim), sV, b.c(cReset),
+		b.c(cDim), hV, b.c(cReset),
 		content,
 		strings.Repeat(" ", padding),
-		b.c(cDim), sV, b.c(cReset))
+		b.c(cDim), hV, b.c(cReset))
 }
 
-// Header writes the light top border and title with subtitle.
+// Header writes the heavy top border and title.
 func (b *Box) Header(title string) {
-	top := strings.Repeat(sH, boxWidth-2)
+	top := strings.Repeat(hH, boxWidth-2)
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
-		b.c(cDim), sTL, top, sTR, b.c(cReset))
+		b.c(cDim), hTL, top, hTR, b.c(cReset))
 
 	b.writeLine(fmt.Sprintf(" %s%s%s%s%s", b.c(cCyan), b.c(cBold), title, b.c(cReset), b.c(cDim)))
 
-	sep := strings.Repeat(sH, boxWidth-2)
+	sep := strings.Repeat(hH, boxWidth-2)
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
-		b.c(cDim), sL, sep, sR, b.c(cReset))
+		b.c(cDim), hL, sep, hR, b.c(cReset))
 }
 
-// Footer writes the light bottom border.
+// Footer writes the heavy bottom border.
 func (b *Box) Footer() {
-	bottom := strings.Repeat(sH, boxWidth-2)
+	bottom := strings.Repeat(hH, boxWidth-2)
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
-		b.c(cDim), sBL, bottom, sBR, b.c(cReset))
+		b.c(cDim), hBL, bottom, hBR, b.c(cReset))
 }
 
-// Divider writes a light horizontal separator.
+// Divider writes a light horizontal separator with proper heavy-to-light junctions.
 func (b *Box) Divider() {
-	sep := strings.Repeat(sH, boxWidth-2)
+	inner := strings.Repeat(sH, boxWidth-2)
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
-		b.c(cDim), sL, sep, sR, b.c(cReset))
+		b.c(cDim), mL, inner, mR, b.c(cReset))
 }
 
 // Row writes a key: value pair.
@@ -165,11 +171,9 @@ func (b *Box) Item(marker, text string) {
 	}
 }
 
-// Section writes a section header with a divider line above it.
+// Section writes a section header with a light divider line above it.
 func (b *Box) Section(label string) {
-	sep := strings.Repeat(sH, boxWidth-2)
-	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
-		b.c(cDim), sL, sep, sR, b.c(cReset))
+	b.Divider()
 	b.writeLine(fmt.Sprintf(" %s%s%s", b.c(cBold), label, b.c(cReset)))
 }
 

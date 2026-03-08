@@ -1,4 +1,4 @@
-2026-03-08 15:38:11	[37mINFO[0m	logging/logger.go:205	session started	{"cluster": "cluster", "config": "../terraform.tfvars", "log_dir": "logs\\2026-03-08\\run-20260308_153811"}
+16:44:39 [37mINFO [0m session started {"cluster": "cluster", "config": "../terraform.tfvars", "log_dir": "logs\\2026-03-08\\run-20260308_164439"}
 [36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
 ╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
    ██║   ███████║██║     ██║   ██║███████╗
@@ -6,14 +6,14 @@
    ██║   ██║  ██║███████╗╚██████╔╝███████║
    ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
 [0m[2m ━━━ Kubernetes Bootstrap Tool v0.1.0 ━━━[0m
-2026-03-08 15:38:11	[37mINFO[0m	cmd/main.go:247	starting reconciliation	{"cluster": "core", "dry_run": false, "plan_mode": false}
-2026-03-08 15:38:11	[37mINFO[0m	cmd/main.go:273	refreshing proxmox node IPs
-2026-03-08 15:38:16	[37mINFO[0m	cmd/main.go:283	loading desired state from terraform
-2026-03-08 15:38:16	[37mINFO[0m	cmd/main.go:291	loaded desired state	{"nodes": 7}
-2026-03-08 15:38:16	[37mINFO[0m	cmd/main.go:304	loading deployed state
-2026-03-08 15:38:16	[37mINFO[0m	cmd/main.go:311	discovering live state
-2026-03-08 15:38:22	[37mINFO[0m	cmd/main.go:323	discovered live state	{"found": 7}
-2026-03-08 15:38:22	[37mINFO[0m	cmd/main.go:336	building reconciliation plan
+16:44:40 [37mINFO [0m starting reconciliation {"cluster": "core", "dry_run": false, "plan_mode": false}
+16:44:40 [37mINFO [0m refreshing proxmox node IPs
+16:44:45 [37mINFO [0m loading desired state from terraform
+16:44:45 [37mINFO [0m loaded desired state {"nodes": 7}
+16:44:45 [37mINFO [0m loading deployed state
+16:44:45 [37mINFO [0m discovering live state
+16:44:52 [37mINFO [0m discovered live state {"found": 7}
+16:44:52 [37mINFO [0m building reconciliation plan
 
 [2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
 [2m┃[0m [36m[1mRECONCILIATION PLAN[0m[2m                                         [2m┃[0m
@@ -22,5 +22,5 @@
 [2m┃[0m  [32m+[0m Add 3 control plane(s): [200 201 202]                    [2m┃[0m
 [2m┃[0m  [32m+[0m Add 4 worker(s): [300 301 302 303]                       [2m┃[0m
 [2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
-2026-03-08 15:40:17	[37mINFO[0m	cmd/main.go:538	executing bootstrap
-2026-03-08 15:40:19	[37mINFO[0m	cmd/main.go:492	applying config	{"vmid": 200, "role": "control-plane"}
+16:45:42 [37mINFO [0m executing bootstrap
+16:45:44 [37mINFO [0m applying config {"vmid": 200, "role": "control-plane"}

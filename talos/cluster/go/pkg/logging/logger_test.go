@@ -82,12 +82,12 @@ func TestNewConsoleEncoderConfig(t *testing.T) {
 		t.Error("Expected EncodeLevel to be set")
 	}
 
-	// Test without color - uses paddedLevelEncoder
+	// Test without color uses paddedLevelEncoder
 	cfgNoColor := newConsoleEncoderConfig(true)
 	if cfgNoColor.EncodeTime == nil {
 		t.Error("Expected EncodeTime to be set for noColor=true")
 	}
-	if cfgNoColor.EncodeTime == nil {
+	if cfgNoColor.EncodeLevel == nil {
 		t.Error("Expected EncodeLevel to be set for noColor=true")
 	}
 

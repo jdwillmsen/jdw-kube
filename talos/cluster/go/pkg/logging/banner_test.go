@@ -92,12 +92,12 @@ func TestBox_Header(t *testing.T) {
 
 	output := buf.String()
 
-	// Should have light box drawing characters
-	if !strings.Contains(output, sTL) || !strings.Contains(output, sTR) {
-		t.Error("Expected light top corners in header")
+	// Should have heavy box drawing characters
+	if !strings.Contains(output, hTL) || !strings.Contains(output, hTR) {
+		t.Error("Expected heavy top corners in header")
 	}
-	if !strings.Contains(output, sL) || !strings.Contains(output, sR) {
-		t.Error("Expected light left/right junctions in header")
+	if !strings.Contains(output, hL) || !strings.Contains(output, hR) {
+		t.Error("Expected heavy left/right junctions in header")
 	}
 
 	// Should contain title
@@ -113,9 +113,9 @@ func TestBox_Footer(t *testing.T) {
 
 	output := buf.String()
 
-	// Should have light bottom corners
+	// Should have heavy bottom corners
 	if !strings.Contains(output, hBL) || !strings.Contains(output, hBR) {
-		t.Error("Expected light bottom corners in footer")
+		t.Error("Expected heavy bottom corners in footer")
 	}
 }
 
@@ -126,12 +126,12 @@ func TestBox_Divider(t *testing.T) {
 
 	output := buf.String()
 
-	// Should have standard drawing characters
-	if !strings.Contains(output, sL) || !strings.Contains(output, sR) {
-		t.Error("Expected standard left/right junctions in divider")
+	// Should have mixed junction characters (heavy verticial + light horizontal)
+	if !strings.Contains(output, mL) || !strings.Contains(output, mR) {
+		t.Error("Expected mixed junction characters in divider")
 	}
 	if !strings.Contains(output, sH) {
-		t.Error("Expected standard horizontal line in divider")
+		t.Error("Expected light horizontal line in divider")
 	}
 }
 
@@ -150,9 +150,9 @@ func TestBox_Row(t *testing.T) {
 		t.Error("Expected 'Value' in row output")
 	}
 
-	// Should have light vertical borders
-	if !strings.Contains(output, sV) {
-		t.Error("Expected light vertical borders in row")
+	// Should have heavy vertical borders
+	if !strings.Contains(output, hV) {
+		t.Error("Expected heavy vertical borders in row")
 	}
 }
 
@@ -194,9 +194,12 @@ func TestBox_Section(t *testing.T) {
 	if !strings.Contains(output, "Section Name") {
 		t.Error("Expected section name in output")
 	}
-	// Should have a divider line above
-	if !strings.Contains(output, sL) || !strings.Contains(output, sR) {
-		t.Error("Expected light divider in section")
+	// Should have mixed junction divider above
+	if !strings.Contains(output, mL) || !strings.Contains(output, mR) {
+		t.Error("Expected mixed junction characters in section divider")
+	}
+	if !strings.Contains(output, hV) {
+		t.Error("Expected heavy verticial borders in section")
 	}
 }
 
@@ -297,6 +300,7 @@ func TestConstantsDefined(t *testing.T) {
 		cReset, cBold, cDim, cCyan, cGreen, cBlue, cYellow, cRed,
 		hTL, hTR, hBL, hBR, hH, hV, hL, hR,
 		sTL, sTR, sBL, sBR, sH, sV, sL, sR, sT, sB, sC,
+		mL, mR,
 		mBullet, mDiamond, mDot, mCheck, mCross, mWarning, mInfo,
 	}
 

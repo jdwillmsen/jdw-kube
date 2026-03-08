@@ -136,13 +136,14 @@ func buildTeeCore(level zapcore.Level, noColor bool, consoleFile, structuredFile
 // Format: 15:04:05 LEVEL message key=value
 func newConsoleEncoderConfig(noColor bool) zapcore.EncoderConfig {
 	cfg := zapcore.EncoderConfig{
-		TimeKey:        "ts",
-		LevelKey:       "level",
-		MessageKey:     "msg",
-		EncodeTime:     zapcore.TimeEncoderOfLayout("15:04:05"),
-		EncodeDuration: zapcore.SecondsDurationEncoder,
+		TimeKey:          "ts",
+		LevelKey:         "level",
+		MessageKey:       "msg",
+		ConsoleSeparator: " ",
+		EncodeTime:       zapcore.TimeEncoderOfLayout("15:04:05"),
+		EncodeDuration:   zapcore.StringDurationEncoder,
 	}
-	if !noColor {
+	if noColor {
 		cfg.EncodeLevel = paddedLevelEncoder
 	} else {
 		cfg.EncodeLevel = colorLevelEncoder
