@@ -394,12 +394,13 @@ func TestGenerateBaseConfigs_ReadOnlyDir(t *testing.T) {
 
 	cfg := types.DefaultConfig()
 	tmpDir := t.TempDir()
-	secretsDir := filepath.Join(tmpDir, "readonly")
+	readonlyDir := filepath.Join(tmpDir, "readonly")
 
-	err := os.Mkdir(secretsDir, 0555)
+	err := os.Mkdir(readonlyDir, 0555)
 	require.NoError(t, err)
 
-	cfg.SecretsDir = secretsDir
+	// Point SecretsDir inside the read-only dir so MkdirAll fails
+	cfg.SecretsDir = filepath.Join(readonlyDir, "secrets")
 	nc := NewNodeConfig(cfg)
 
 	err = nc.GenerateBaseConfigs()

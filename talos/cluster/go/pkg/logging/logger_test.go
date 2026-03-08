@@ -393,19 +393,14 @@ func TestRunSession_WriteHeader(t *testing.T) {
 	content, _ := os.ReadFile(consolePath)
 
 	expectedParts := []string{
-		"Talos Bootstrap Session",
-		"Cluster: header-test",
+		"session started",
+		"header-test",
 	}
 
 	for _, part := range expectedParts {
 		if !strings.Contains(string(content), part) {
 			t.Errorf("Expected header to contain %q", part)
 		}
-	}
-
-	// Config path might have different separators on Windows, so check flexibly
-	if !strings.Contains(string(content), "Config:") {
-		t.Error("Expected Config field in header")
 	}
 }
 

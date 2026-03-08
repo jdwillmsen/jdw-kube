@@ -90,7 +90,7 @@ func initSession() error {
 	logger = session.Logger
 
 	// Print banner
-	logging.PrintBanner(os.Stderr, version, cfg.NoColor)
+	logging.PrintBanner(session.Console, version, cfg.NoColor)
 
 	// Check prerequisites
 	checkPrerequisites(logger)
@@ -389,7 +389,7 @@ func runStatus(ctx context.Context, cfg *types.Config) error {
 		return err
 	}
 
-	box := logging.NewBox(os.Stdout, cfg.NoColor)
+	box := logging.NewBox(session.Console, cfg.NoColor)
 	box.Header(fmt.Sprintf("CLUSTER STATUS: %s", cfg.ClusterName))
 
 	box.Section("Desired State (Terraform)")
@@ -411,7 +411,6 @@ func runStatus(ctx context.Context, cfg *types.Config) error {
 		currentHash, err := stateMgr.ComputeTerraformHash()
 		if err == nil {
 			if currentHash == deployed.TerraformHash {
-				fmt.Printf("  Terraform Hash: %s (unchanged)\n", currentHash)
 				box.Row("Terraform Hash", fmt.Sprintf("%s (unchanged)", currentHash))
 			} else {
 				box.Row("Terraform Hash", fmt.Sprintf("%s (CHANGED from %s)", currentHash, deployed.TerraformHash))
@@ -434,7 +433,7 @@ func countByRole(specs map[types.VMID]*types.NodeSpec, role types.Role) int {
 }
 
 func displayPlan(plan *types.ReconcilePlan) {
-	displayPlanTo(plan, os.Stderr)
+	displayPlanTo(plan, session.Console)
 }
 
 func displayPlanTo(plan *types.ReconcilePlan, w io.Writer) {
@@ -466,7 +465,6 @@ func displayPlanTo(plan *types.ReconcilePlan, w io.Writer) {
 		box.Badge("OK", "Cluster matches desired state — no changes needed")
 	}
 	box.Footer()
-	fmt.Fprintln(os.Stderr)
 }
 
 // deployNode handles the common discover -> apply -> reboot -> wait -> hash flow
@@ -1041,8 +1039,7 @@ func verifyCluster(ctx context.Context, talosClient *talos.Client, k8sClient *ku
 	}
 
 	// Print success summary using box
-	box := logging.NewBox(os.Stderr, cfg.NoColor)
-	fmt.Fprintln(os.Stderr)
+	box := logging.NewBox(session.Console, cfg.NoColor)
 	box.Header("BOOTSTRAP SUCCESSFUL")
 	box.Row("Cluster", deployed.ClusterName)
 	box.Row("Control Planes", fmt.Sprintf("%d", len(deployed.ControlPlanes)))
@@ -1053,5 +1050,4 @@ func verifyCluster(ctx context.Context, talosClient *talos.Client, k8sClient *ku
 	box.Item("$", "talosctl dashboard")
 	box.Item("$", "talosctl etcd members")
 	box.Footer()
-	fmt.Fprintln(os.Stderr)
 }

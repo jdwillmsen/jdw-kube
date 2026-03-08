@@ -2,11 +2,10 @@ package main
 
 import (
 	"bytes"
-	"io"
-	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/jdw/talos-bootstrap/pkg/logging"
 	"github.com/jdw/talos-bootstrap/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -185,44 +184,14 @@ func TestCountByRole(t *testing.T) {
 	}
 }
 
-// captureOutput redirects stderr and captures it
-func captureOutput(t *testing.T, fn func()) string {
-	t.Helper()
-
-	// Save original stderr
-	oldStderr := os.Stderr
-
-	// Create pipe
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-
-	// Redirect stderr
-	os.Stderr = w
-
-	// Capture in goroutine
-	outChan := make(chan string, 1)
-	go func() {
-		var buf bytes.Buffer
-		_, _ = io.Copy(&buf, r)
-		outChan <- buf.String()
-	}()
-
-	// Run function
-	fn()
-
-	// Close writer and restore stderr
-	w.Close()
-	os.Stderr = oldStderr
-
-	// Get output with timeout protection
-	return <-outChan
-}
-
 func TestDisplayPlan(t *testing.T) {
 	// Set NoColor for consistent output (no ANSI codes)
 	oldCfg := cfg
+	oldSession := session
 	cfg = &types.Config{NoColor: true}
-	defer func() { cfg = oldCfg }()
+	var buf bytes.Buffer
+	session = &logging.RunSession{Console: &buf}
+	defer func() { cfg = oldCfg; session = oldSession }()
 
 	tests := []struct {
 		name        string
@@ -308,10 +277,9 @@ func TestDisplayPlan(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Not parallel - stdout/stderr capture is not thread-safe
-			output := captureOutput(t, func() {
-				displayPlan(tt.plan)
-			})
+			buf.Reset()
+			displayPlan(tt.plan)
+			output := buf.String()
 
 			for _, want := range tt.wantContain {
 				assert.Contains(t, output, want, "expected output to contain %q", want)

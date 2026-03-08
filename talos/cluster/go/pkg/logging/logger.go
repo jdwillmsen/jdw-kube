@@ -30,6 +30,7 @@ type RunSession struct {
 	StartTime  time.Time
 	Logger     *zap.Logger
 	AuditLog   *AuditLogger
+	Console    io.Writer // tees to stderr + console.log; use for banner/box output
 	NoColor    bool
 	Config     *types.Config
 	closers    []io.Closer
@@ -88,6 +89,7 @@ func NewRunSession(cfg *types.Config) (*RunSession, error) {
 		StartTime:  now,
 		Logger:     logger,
 		AuditLog:   NewAuditLogger(auditFile),
+		Console:    io.MultiWriter(os.Stderr, consoleFile),
 		NoColor:    cfg.NoColor,
 		Config:     cfg,
 		closers:    []io.Closer{consoleFile, structuredFile, auditFile},
@@ -200,17 +202,10 @@ func (s *RunSession) updateLatest() {
 
 // writeHeader writes a session header to all log outputs
 func (s *RunSession) writeHeader() {
-	header := fmt.Sprintf("=== Talos Bootstrap Session ===\n"+
-		"  Start:   %s\n"+
-		"  Cluster: %s\n"+
-		"  Config:  %s\n"+
-		"  Log Dir: %s",
-		s.StartTime.Format("2006-01-02 15:04:05"),
-		s.Config.ClusterName,
-		s.Config.TerraformTFVars,
-		s.RunDir,
-	)
-	s.Logger.Info(header)
+	s.Logger.Info("session started",
+		zap.String("cluster", s.Config.ClusterName),
+		zap.String("config", s.Config.TerraformTFVars),
+		zap.String("log_dir", s.RunDir))
 }
 
 // Close finalizes the run session: writes SUMMARY.txt, updates runs.log status,
