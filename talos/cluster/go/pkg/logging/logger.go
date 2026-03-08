@@ -170,13 +170,8 @@ func (e *kvEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*b
 			buf.TrimNewline()
 		}
 
-		dim, reset := colorDim, colorReset
-		if e.noColor {
-			dim, reset = "", ""
-		}
-
 		for _, f := range all {
-			buf.AppendString(" " + dim + f.Key + "=" + reset)
+			buf.AppendString(" " + f.Key + "=")
 			switch f.Type {
 			case zapcore.StringType:
 				buf.AppendString(f.String)
