@@ -392,7 +392,7 @@ func runStatus(ctx context.Context, cfg *types.Config) error {
 	box := logging.NewBox(session.Console, cfg.NoColor)
 	box.Header(fmt.Sprintf("CLUSTER STATUS: %s", cfg.ClusterName))
 
-	box.Section("Desired State (Terraform)")
+	box.Label("Desired State (Terraform)")
 	box.Row("Control Planes", fmt.Sprintf("%d", countByRole(desired, types.RoleControlPlane)))
 	box.Row("Workers", fmt.Sprintf("%d", countByRole(desired, types.RoleWorker)))
 

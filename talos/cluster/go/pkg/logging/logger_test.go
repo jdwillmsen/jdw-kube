@@ -52,7 +52,7 @@ func TestColorLevelEncoder(t *testing.T) {
 		{zapcore.ErrorLevel, colorRed},
 		{zapcore.WarnLevel, colorYellow},
 		{zapcore.DebugLevel, colorBlue},
-		{zapcore.InfoLevel, colorWhite},
+		{zapcore.InfoLevel, colorGreen},
 	}
 
 	for _, tt := range tests {

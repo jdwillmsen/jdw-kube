@@ -14,13 +14,14 @@ import (
 	"github.com/jdw/talos-bootstrap/pkg/types"
 )
 
-// ANSI color codes matching bash script
+// ANSI color codes
 const (
 	colorReset     = "\033[0m"
+	colorDim       = "\033[2m"
 	colorRed       = "\033[31m"
+	colorGreen     = "\033[32m"
 	colorYellow    = "\033[33m"
 	colorBlue      = "\033[34m"
-	colorWhite     = "\033[37m"
 	colorWhiteOnRd = "\033[37;41m" // white text on red background
 )
 
@@ -133,22 +134,33 @@ func buildTeeCore(level zapcore.Level, noColor bool, consoleFile, structuredFile
 }
 
 // newConsoleEncoderConfig returns a simple console encoder config.
-// Format: 15:04:05 LEVEL message key=value
+// Format: [15:04:05] LEVEL message key=value
 func newConsoleEncoderConfig(noColor bool) zapcore.EncoderConfig {
 	cfg := zapcore.EncoderConfig{
 		TimeKey:          "ts",
 		LevelKey:         "level",
 		MessageKey:       "msg",
 		ConsoleSeparator: " ",
-		EncodeTime:       zapcore.TimeEncoderOfLayout("15:04:05"),
 		EncodeDuration:   zapcore.StringDurationEncoder,
 	}
 	if noColor {
+		cfg.EncodeTime = plainTimeEncoder
 		cfg.EncodeLevel = paddedLevelEncoder
 	} else {
+		cfg.EncodeTime = dimTimeEncoder
 		cfg.EncodeLevel = colorLevelEncoder
 	}
 	return cfg
+}
+
+// plainTimeEncoder writes time as [15:04:05] (no color).
+func plainTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+	enc.AppendString(t.Format("15:04:05"))
+}
+
+// dimTimeEncoder writes time as [15:04:05] in dim.
+func dimTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+	enc.AppendString(colorDim + t.Format("15:04:05") + colorReset)
 }
 
 // paddedLevelEncoder writes the level name padded to 5 chars (no color).
@@ -169,7 +181,7 @@ func colorLevelEncoder(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 	case zapcore.DebugLevel:
 		color = colorBlue
 	default: // Info
-		color = colorWhite
+		color = colorGreen
 	}
 	enc.AppendString(color + fmt.Sprintf("%-5s", l.CapitalString()) + colorReset)
 }
@@ -216,7 +228,7 @@ func (s *RunSession) updateLatest() {
 
 // writeHeader writes a session header to all log outputs
 func (s *RunSession) writeHeader() {
-	s.Logger.Info("session started",
+	s.Logger.Debug("session started",
 		zap.String("cluster", s.Config.ClusterName),
 		zap.String("config", s.Config.TerraformTFVars),
 		zap.String("log_dir", s.RunDir))

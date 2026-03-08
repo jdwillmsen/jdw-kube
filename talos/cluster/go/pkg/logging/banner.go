@@ -142,9 +142,14 @@ func (b *Box) Divider() {
 		b.c(cDim), mL, inner, mR, b.c(cReset))
 }
 
+// Label writes a bold label line without a preceding divider.
+func (b *Box) Label(label string) {
+	b.writeLine(fmt.Sprintf(" %s%s%s", b.c(cBold), label, b.c(cReset)))
+}
+
 // Row writes a key: value pair.
 func (b *Box) Row(key, value string) {
-	b.writeLine(fmt.Sprintf("  %s%s:%s %s%s%s", b.c(cBold), key, b.c(cReset), b.c(cCyan), value, b.c(cReset)))
+	b.writeLine(fmt.Sprintf("  %s: %s%s%s", key, b.c(cCyan), value, b.c(cReset)))
 }
 
 // Item writes a bulleted item with color based on the marker.

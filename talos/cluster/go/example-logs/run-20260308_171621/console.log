@@ -1,0 +1,25 @@
+[36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
+╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
+   ██║   ███████║██║     ██║   ██║███████╗
+   ██║   ██╔══██║██║     ██║   ██║╚════██║
+   ██║   ██║  ██║███████╗╚██████╔╝███████║
+   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
+[0m[2m ━━━ Kubernetes Bootstrap Tool v0.1.0 ━━━[0m
+[2m17:16:21[0m [32mINFO [0m starting reconciliation {"cluster": "core", "dry_run": false, "plan_mode": false}
+[2m17:16:21[0m [32mINFO [0m refreshing proxmox node IPs
+[2m17:16:26[0m [32mINFO [0m loading desired state from terraform
+[2m17:16:26[0m [32mINFO [0m loaded desired state {"nodes": 7}
+[2m17:16:26[0m [32mINFO [0m loading deployed state
+[2m17:16:26[0m [32mINFO [0m discovering live state
+[2m17:16:32[0m [32mINFO [0m discovered live state {"found": 7}
+[2m17:16:32[0m [32mINFO [0m building reconciliation plan
+
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mRECONCILIATION PLAN[0m[2m                                         [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  [33m[BOOTSTRAP][0m Cluster needs initial bootstrap                [2m┃[0m
+[2m┃[0m  [32m+[0m Add 3 control plane(s): [200 201 202]                    [2m┃[0m
+[2m┃[0m  [32m+[0m Add 4 worker(s): [300 301 302 303]                       [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m17:17:02[0m [32mINFO [0m executing bootstrap
+[2m17:17:04[0m [32mINFO [0m applying config {"vmid": 200, "role": "control-plane"}
