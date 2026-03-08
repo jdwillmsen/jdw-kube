@@ -59,14 +59,12 @@ const (
 )
 
 // talosASCIIArt is the filled block art for TALOS
-const talosASCIIArt = `
-████████╗ █████╗ ██╗      ██████╗ ███████╗
+const talosASCIIArt = `████████╗ █████╗ ██╗      ██████╗ ███████╗
 ╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
    ██║   ███████║██║     ██║   ██║███████╗
    ██║   ██╔══██║██║     ██║   ██║╚════██║
    ██║   ██║  ██║███████╗╚██████╔╝███████║
-   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
-`
+   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝`
 
 // PrintBanner writes the TALOS banner to w.
 func PrintBanner(w io.Writer, version string, noColor bool) {
@@ -74,7 +72,7 @@ func PrintBanner(w io.Writer, version string, noColor bool) {
 	if noColor {
 		cc, cb, cd, cr = "", "", "", ""
 	}
-	fmt.Fprintf(w, "%s%s\n%s%s%s ━━━ Kubernetes Bootstrap Tool %s ━━━%s\n\n",
+	fmt.Fprintf(w, "%s%s%s\n%s%s ━━━ Kubernetes Bootstrap Tool %s ━━━%s\n",
 		cc, cb, talosASCIIArt, cr, cd, version, cr)
 }
 
@@ -104,55 +102,74 @@ func (b *Box) writeLine(content string) {
 		padding = 0
 	}
 	fmt.Fprintf(b.w, "%s%s%s%s%s%s%s%s\n",
-		b.c(cDim), hV, cReset,
+		b.c(cDim), hV, b.c(cReset),
 		content,
 		strings.Repeat(" ", padding),
-		b.c(cDim), hV, cReset)
+		b.c(cDim), hV, b.c(cReset))
 }
 
 // Header writes the heavy top border and title with subtitle.
 func (b *Box) Header(title string) {
 	top := strings.Repeat(hH, boxWidth-2)
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
-		b.c(cDim), hTL, top, hTR, cReset)
+		b.c(cDim), hTL, top, hTR, b.c(cReset))
 
-	b.writeLine(fmt.Sprintf(" %s%s%s%s", b.c(cBold), title, cReset, b.c(cDim)))
+	b.writeLine(fmt.Sprintf(" %s%s%s%s%s", b.c(cCyan), b.c(cBold), title, b.c(cReset), b.c(cDim)))
 
 	sep := strings.Repeat(hH, boxWidth-2)
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
-		b.c(cDim), hL, sep, hR, cReset)
+		b.c(cDim), hL, sep, hR, b.c(cReset))
 }
 
 // Footer writes the heavy bottom border.
 func (b *Box) Footer() {
 	bottom := strings.Repeat(hH, boxWidth-2)
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
-		b.c(cDim), hBL, bottom, hBR, cReset)
+		b.c(cDim), hBL, bottom, hBR, b.c(cReset))
 }
 
 // Divider writes a standard horizontal separator.
 func (b *Box) Divider() {
 	sep := strings.Repeat(sH, boxWidth-2)
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
-		b.c(cDim), sL, sep, sR, cReset)
+		b.c(cDim), sL, sep, sR, b.c(cReset))
 }
 
 // Row writes a key: value pair.
 func (b *Box) Row(key, value string) {
-	b.writeLine(fmt.Sprintf("  %s%s:%s %s", b.c(cBold), key, cReset, value))
+	b.writeLine(fmt.Sprintf("  %s%s:%s %s%s%s", b.c(cBold), key, b.c(cReset), b.c(cCyan), value, b.c(cReset)))
 }
 
-// Item writes a bulleted item. An optional marker overrides the default bullet
+// Item writes a bulleted item with color based on the marker.
 func (b *Box) Item(marker, text string) {
-	b.writeLine(fmt.Sprintf("  %s %s", marker, text))
+	var color string
+	switch marker {
+	case "+":
+		color = cGreen
+	case "-":
+		color = cRed
+	case "~":
+		color = cYellow
+	case mCheck:
+		color = cGreen
+	case mCross:
+		color = cRed
+	case mWarning:
+		color = cYellow
+	}
+	if color != "" {
+		b.writeLine(fmt.Sprintf("  %s%s%s %s", b.c(color), marker, b.c(cReset), text))
+	} else {
+		b.writeLine(fmt.Sprintf("  %s %s", marker, text))
+	}
 }
 
 // Section writes a centered section header with diamond markers and dotted line.
 func (b *Box) Section(label string) {
 	text := fmt.Sprintf("%s%s %s%s %s%s",
 		b.c(cDim), mDiamond,
-		b.c(cBold)+label+cReset,
-		b.c(cDim), mDiamond, cReset)
+		b.c(cBold)+label+b.c(cReset),
+		b.c(cDim), mDiamond, b.c(cReset))
 
 	visible := stripANSI(text)
 	padding := boxWidth - 2 - len(visible)
@@ -163,12 +180,12 @@ func (b *Box) Section(label string) {
 	b.writeLine(content)
 
 	dots := strings.Repeat(mDot, boxWidth-2)
-	b.writeLine(b.c(cDim) + dots + cReset)
+	b.writeLine(b.c(cDim) + dots + b.c(cReset))
 }
 
 // Badge writes a [BADGE] message in green.
 func (b *Box) Badge(badge, msg string) {
-	b.writeLine(fmt.Sprintf("  %s[%s]%s %s", b.c(cGreen), badge, cReset, msg))
+	b.writeLine(fmt.Sprintf("  %s[%s]%s %s", b.c(cGreen), badge, b.c(cReset), msg))
 }
 
 // stripANSI removes ANSI escape sequences.
