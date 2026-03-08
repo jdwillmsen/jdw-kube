@@ -91,9 +91,21 @@ func ParseTalosError(err error) *TalosError {
 		}
 	}
 
-	// Maintenance mode - node is in maintenance
+	// Node not ready - still booting (check this BEFORE maintenance mode)
+	if strings.Contains(errStr, "node not ready") ||
+		strings.Contains(errStr, "service not running") {
+		return &TalosError{
+			Code:      ErrNodeNotReady,
+			Message:   "node not ready",
+			Wrapped:   err,
+			Retryable: true,
+		}
+	}
+
+	// Maintenance mode - node is in maintenance (broader check after specific ones)
+	// Only match standalone "not ready" here, not "node not ready"
 	if strings.Contains(errStr, "maintenance") ||
-		strings.Contains(errStr, "not ready") {
+		(strings.Contains(errStr, "not ready") && !strings.Contains(errStr, "node not ready")) {
 		return &TalosError{
 			Code:      ErrMaintenanceMode,
 			Message:   "node is in maintenance mode",
@@ -122,17 +134,6 @@ func ParseTalosError(err error) *TalosError {
 			Message:   "permission denied",
 			Wrapped:   err,
 			Retryable: false,
-		}
-	}
-
-	// Node not ready - still booting
-	if strings.Contains(errStr, "node not ready") ||
-		strings.Contains(errStr, "service not running") {
-		return &TalosError{
-			Code:      ErrNodeNotReady,
-			Message:   "node not ready",
-			Wrapped:   err,
-			Retryable: true,
 		}
 	}
 

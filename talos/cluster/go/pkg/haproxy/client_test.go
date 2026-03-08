@@ -128,6 +128,7 @@ func (s *mockSSHServer) handleConn(t *testing.T, netConn net.Conn) {
 							if failNow != nil {
 								channel.Write([]byte(failNow.Error() + "\n"))
 								channel.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{1}))
+								return // Exit after handling exec
 							} else {
 								if exists {
 									channel.Write([]byte(response.output))
@@ -136,6 +137,7 @@ func (s *mockSSHServer) handleConn(t *testing.T, netConn net.Conn) {
 									// Default success response
 									channel.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
 								}
+								return // Exit after handling exec
 							}
 						}
 					}
@@ -408,10 +410,11 @@ func TestClient_Update_RollbackAlsoFails(t *testing.T) {
 	client := createTestClient(t, server)
 
 	server.SetResponse("echo", "", 0)
-	server.SetResponse("sudo cp", "", 0)
+	// Use a pattern that distinguishes backup from rollback - backup copies FROM haproxy.cfg, rollback copies TO haproxy.cfg
+	server.SetResponse("sudo cp /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.backup.", "", 0) // backup succeeds
 	server.SetResponse("sudo mv /tmp/haproxy.cfg.new /etc/haproxy/haproxy.cfg", "", 0)
 	server.SetResponse("sudo haproxy -c -f /etc/haproxy/haproxy.cfg", "[ALERT] Configuration invalid\n", 1)
-	server.SetResponse("sudo cp /etc/haproxy/haproxy.cfg.backup.", "cp: cannot stat", 1)
+	server.SetResponse("sudo cp /etc/haproxy/haproxy.cfg.backup.", "cp: cannot stat", 1) // rollback fails
 
 	ctx := context.Background()
 	config := "bad config"

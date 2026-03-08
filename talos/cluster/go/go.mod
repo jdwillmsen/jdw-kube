@@ -46,6 +46,7 @@ require (
 	github.com/siderolabs/go-pointer v1.0.0 // indirect
 	github.com/siderolabs/protoenc v0.2.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/zclconf/go-cty v1.13.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.32.0 // indirect

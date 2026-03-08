@@ -1,11 +1,13 @@
 package kubectl
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,16 +18,17 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-// mockCommandContext creates a mock exec.Cmd that returns predefined output
-func mockCommandContext(output string, err error) func(ctx context.Context, name string, args ...string) *exec.Cmd {
-	return func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		// Create a command that just echoes the output or returns an error
-		if err != nil {
-			return exec.Command("cmd", "/c", "exit", "1") // Windows
-		}
-		// Use echo to return output (cross-platform via shell)
-		return exec.Command("echo", output)
+// mockExecCmd creates a mock exec.Cmd that returns predefined output
+func mockExecCmd(output string, exitCode int) *exec.Cmd {
+	if runtime.GOOS == "windows" {
+		// Use PowerShell with [Console]::Write which outputs raw text
+		// Escape single quotes by doubling them
+		escaped := strings.ReplaceAll(output, "'", "''")
+		psCmd := fmt.Sprintf("[Console]::Write('%s'); exit %d", escaped, exitCode)
+		return exec.Command("powershell", "-Command", psCmd)
 	}
+	// Unix: use printf for reliable output without trailing newline
+	return exec.Command("printf", "%s", output)
 }
 
 // Helper to create a test client
@@ -54,14 +57,10 @@ func TestNewClient(t *testing.T) {
 func TestClient_SetContext(t *testing.T) {
 	client, _ := newTestClient(t)
 
-	// Context should be empty initially
 	assert.Empty(t, client.context)
-
-	// Set context
 	client.SetContext("test-context")
 	assert.Equal(t, "test-context", client.context)
 
-	// Verify baseArgs includes context
 	args := client.baseArgs()
 	assert.Contains(t, args, "--context")
 	assert.Contains(t, args, "test-context")
@@ -98,7 +97,6 @@ func TestClient_baseArgs(t *testing.T) {
 }
 
 func TestClient_GetNodeNameByIP(t *testing.T) {
-	// Save and restore original execCommandContext
 	originalExec := execCommandContext
 	defer func() { execCommandContext = originalExec }()
 
@@ -112,12 +110,11 @@ func TestClient_GetNodeNameByIP(t *testing.T) {
 		errContains string
 	}{
 		{
-			name: "node found by IP - control plane",
-			mockOutput: "node-1   Ready    control-plane   5d    v1.28.0   192.168.1.10   <none>   Talos (v1.5.0)   5.15.0   containerd://1.7.0\n" +
-				"node-2   Ready    <none>          5d    v1.28.0   192.168.1.11   <none>   Talos (v1.5.0)   5.15.0   containerd://1.7.0",
-			ip:       mustParseIP("192.168.1.10"),
-			wantNode: "node-1",
-			wantErr:  false,
+			name:       "node found by IP - control plane",
+			mockOutput: "node-1   Ready    control-plane   5d    v1.28.0   192.168.1.10   <none>   Talos (v1.5.0)   5.15.0   containerd://1.7.0",
+			ip:         mustParseIP("192.168.1.10"),
+			wantNode:   "node-1",
+			wantErr:    false,
 		},
 		{
 			name: "node found by IP - worker",
@@ -160,19 +157,24 @@ func TestClient_GetNodeNameByIP(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Mock the exec command
 			execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-				// Verify kubectl is being called
 				assert.Equal(t, "kubectl", name)
 				assert.Contains(t, args, "get")
 				assert.Contains(t, args, "nodes")
 
 				if tt.mockErr != nil {
-					// Return a command that will fail
-					return exec.Command("cmd", "/c", "exit", "1")
+					if runtime.GOOS == "windows" {
+						return exec.Command("cmd", "/c", "exit", "1")
+					}
+					return exec.Command("false")
 				}
-				// Return echo with mock output (use printf for cross-platform or just echo)
-				return exec.Command("cmd", "/c", "echo", tt.mockOutput)
+
+				output := tt.mockOutput
+				if runtime.GOOS == "windows" {
+					output = strings.ReplaceAll(output, "\n", "\r\n")
+				}
+
+				return mockExecCmd(output, 0)
 			}
 
 			client, _ := newTestClient(t)
@@ -219,8 +221,7 @@ func TestClient_DrainNode(t *testing.T) {
 		{
 			name:     "empty node name",
 			nodeName: "",
-			// kubectl will still try to run, behavior depends on kubectl
-			wantErr: false, // Or true if kubectl returns error for empty name
+			wantErr:  false,
 		},
 	}
 
@@ -231,7 +232,6 @@ func TestClient_DrainNode(t *testing.T) {
 				callCount++
 				assert.Equal(t, "kubectl", name)
 
-				// First call should be cordon, second should be drain
 				if callCount == 1 {
 					assert.Contains(t, args, "cordon")
 				} else if callCount == 2 {
@@ -241,9 +241,12 @@ func TestClient_DrainNode(t *testing.T) {
 				}
 
 				if tt.mockErr != nil {
-					return exec.Command("cmd", "/c", "exit", "1")
+					if runtime.GOOS == "windows" {
+						return exec.Command("cmd", "/c", "exit", "1")
+					}
+					return exec.Command("false")
 				}
-				return exec.Command("cmd", "/c", "echo", "success")
+				return mockExecCmd("success", 0)
 			}
 
 			client, _ := newTestClient(t)
@@ -297,9 +300,12 @@ func TestClient_DeleteNode(t *testing.T) {
 				assert.Contains(t, args, tt.nodeName)
 
 				if tt.mockErr != nil {
-					return exec.Command("cmd", "/c", "exit", "1")
+					if runtime.GOOS == "windows" {
+						return exec.Command("cmd", "/c", "exit", "1")
+					}
+					return exec.Command("false")
 				}
-				return exec.Command("cmd", "/c", "echo", "node deleted")
+				return mockExecCmd("node deleted", 0)
 			}
 
 			client, _ := newTestClient(t)
@@ -329,7 +335,7 @@ func TestClient_ClusterInfo(t *testing.T) {
 		execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 			assert.Equal(t, "kubectl", name)
 			assert.Contains(t, args, "cluster-info")
-			return exec.Command("cmd", "/c", "echo", expectedOutput)
+			return mockExecCmd(expectedOutput, 0)
 		}
 
 		client, _ := newTestClient(t)
@@ -337,12 +343,15 @@ func TestClient_ClusterInfo(t *testing.T) {
 
 		got, err := client.ClusterInfo(ctx)
 		assert.NoError(t, err)
-		assert.Contains(t, got, "Kubernetes control plane")
+		assert.Contains(t, strings.TrimSpace(got), "Kubernetes control plane")
 	})
 
 	t.Run("cluster info fails", func(t *testing.T) {
 		execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-			return exec.Command("cmd", "/c", "exit", "1")
+			if runtime.GOOS == "windows" {
+				return exec.Command("cmd", "/c", "exit", "1")
+			}
+			return exec.Command("false")
 		}
 
 		client, _ := newTestClient(t)
@@ -361,13 +370,17 @@ func TestClient_GetNodes(t *testing.T) {
 	t.Run("successful get nodes", func(t *testing.T) {
 		expectedOutput := "NAME     STATUS   ROLES           AGE   VERSION\nnode-1   Ready    control-plane   5d    v1.28.0"
 
+		if runtime.GOOS == "windows" {
+			expectedOutput = strings.ReplaceAll(expectedOutput, "\n", "\r\n")
+		}
+
 		execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 			assert.Equal(t, "kubectl", name)
 			assert.Contains(t, args, "get")
 			assert.Contains(t, args, "nodes")
 			assert.Contains(t, args, "-o")
 			assert.Contains(t, args, "wide")
-			return exec.Command("cmd", "/c", "echo", expectedOutput)
+			return mockExecCmd(expectedOutput, 0)
 		}
 
 		client, _ := newTestClient(t)
@@ -375,12 +388,16 @@ func TestClient_GetNodes(t *testing.T) {
 
 		got, err := client.GetNodes(ctx)
 		assert.NoError(t, err)
+		got = strings.ReplaceAll(got, "\r\n", "\n")
 		assert.Contains(t, got, "node-1")
 	})
 
 	t.Run("get nodes fails", func(t *testing.T) {
 		execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-			return exec.Command("cmd", "/c", "exit", "1")
+			if runtime.GOOS == "windows" {
+				return exec.Command("cmd", "/c", "exit", "1")
+			}
+			return exec.Command("false")
 		}
 
 		client, _ := newTestClient(t)
@@ -392,25 +409,26 @@ func TestClient_GetNodes(t *testing.T) {
 	})
 }
 
-// Context cancellation tests
 func TestClient_ContextCancellation(t *testing.T) {
 	originalExec := execCommandContext
 	defer func() { execCommandContext = originalExec }()
 
 	t.Run("GetNodeNameByIP context cancelled", func(t *testing.T) {
 		execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-			// Simulate slow command that checks context
 			select {
 			case <-ctx.Done():
-				return exec.Command("cmd", "/c", "exit", "1")
+				if runtime.GOOS == "windows" {
+					return exec.Command("cmd", "/c", "exit", "1")
+				}
+				return exec.Command("false")
 			case <-time.After(100 * time.Millisecond):
-				return exec.Command("cmd", "/c", "echo", "output")
+				return mockExecCmd("output", 0)
 			}
 		}
 
 		client, _ := newTestClient(t)
 		ctx, cancel := context.WithCancel(context.Background())
-		cancel() // Cancel immediately
+		cancel()
 
 		_, err := client.GetNodeNameByIP(ctx, mustParseIP("192.168.1.1"))
 		assert.Error(t, err)
@@ -422,12 +440,15 @@ func TestClient_ContextCancellation(t *testing.T) {
 			callCount++
 			select {
 			case <-ctx.Done():
-				return exec.Command("cmd", "/c", "exit", "1")
+				if runtime.GOOS == "windows" {
+					return exec.Command("cmd", "/c", "exit", "1")
+				}
+				return exec.Command("false")
 			default:
 				if callCount == 1 {
-					return exec.Command("cmd", "/c", "echo", "cordoned")
+					return mockExecCmd("cordoned", 0)
 				}
-				return exec.Command("cmd", "/c", "echo", "drained")
+				return mockExecCmd("drained", 0)
 			}
 		}
 
@@ -440,28 +461,27 @@ func TestClient_ContextCancellation(t *testing.T) {
 	})
 }
 
-// Timeout tests
 func TestClient_Timeout(t *testing.T) {
 	originalExec := execCommandContext
 	defer func() { execCommandContext = originalExec }()
 
 	t.Run("DrainNode timeout during drain phase", func(t *testing.T) {
 		execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-			// First call (cordon) succeeds quickly
 			if contains(args, "cordon") {
-				return exec.Command("cmd", "/c", "echo", "cordoned")
+				return mockExecCmd("cordoned", 0)
 			}
-			// Second call (drain) takes too long
 			select {
 			case <-ctx.Done():
-				return exec.Command("cmd", "/c", "exit", "1")
+				if runtime.GOOS == "windows" {
+					return exec.Command("cmd", "/c", "exit", "1")
+				}
+				return exec.Command("false")
 			case <-time.After(100 * time.Millisecond):
-				return exec.Command("cmd", "/c", "echo", "drained")
+				return mockExecCmd("drained", 0)
 			}
 		}
 
 		client, _ := newTestClient(t)
-		// Very short timeout to trigger timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
 
@@ -470,14 +490,16 @@ func TestClient_Timeout(t *testing.T) {
 	})
 }
 
-// Error wrapping tests
 func TestClient_ErrorWrapping(t *testing.T) {
 	originalExec := execCommandContext
 	defer func() { execCommandContext = originalExec }()
 
 	t.Run("errors are wrapped correctly", func(t *testing.T) {
 		execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
-			return exec.Command("cmd", "/c", "exit", "1")
+			if runtime.GOOS == "windows" {
+				return exec.Command("cmd", "/c", "exit", "1")
+			}
+			return exec.Command("false")
 		}
 
 		client, _ := newTestClient(t)
@@ -485,12 +507,10 @@ func TestClient_ErrorWrapping(t *testing.T) {
 
 		_, err := client.GetNodeNameByIP(ctx, mustParseIP("192.168.1.1"))
 		assert.Error(t, err)
-		// The error should contain the kubectl command info
 		assert.Contains(t, err.Error(), "kubectl get nodes")
 	})
 }
 
-// Helper function
 func contains(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {
@@ -500,13 +520,11 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
-// Integration tests (require real kubectl)
 func TestIntegration_Client(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	// Check if kubectl is available
 	if _, err := exec.LookPath("kubectl"); err != nil {
 		t.Skip("kubectl not found in PATH, skipping integration tests")
 	}
@@ -517,7 +535,7 @@ func TestIntegration_Client(t *testing.T) {
 	t.Run("ClusterInfo", func(t *testing.T) {
 		info, err := client.ClusterInfo(ctx)
 		if err != nil {
-			t.Logf("ClusterInfo error (may be expected if no cluster): %v", err)
+			t.Logf("ClusterInfo error: %v", err)
 		} else {
 			t.Logf("ClusterInfo: %s", info)
 		}
@@ -526,18 +544,17 @@ func TestIntegration_Client(t *testing.T) {
 	t.Run("GetNodes", func(t *testing.T) {
 		nodes, err := client.GetNodes(ctx)
 		if err != nil {
-			t.Logf("GetNodes error (may be expected if no cluster): %v", err)
+			t.Logf("GetNodes error: %v", err)
 		} else {
 			t.Logf("Nodes: %s", nodes)
 		}
 	})
 }
 
-// Benchmark the parsing logic
 func BenchmarkGetNodeNameByIP_Parsing(b *testing.B) {
-	output := `node-1   Ready    control-plane   5d    v1.28.0   192.168.1.10   <none>   Talos (v1.5.0)   5.15.0   containerd://1.7.0
-node-2   Ready    <none>          5d    v1.28.0   192.168.1.11   <none>   Talos (v1.5.0)   5.15.0   containerd://1.7.0
-node-3   Ready    <none>          5d    v1.28.0   192.168.1.12   <none>   Talos (v1.5.0)   5.15.0   containerd://1.7.0`
+	output := "node-1   Ready    control-plane   5d    v1.28.0   192.168.1.10   <none>   Talos (v1.5.0)   5.15.0   containerd://1.7.0\n" +
+		"node-2   Ready    <none>          5d    v1.28.0   192.168.1.11   <none>   Talos (v1.5.0)   5.15.0   containerd://1.7.0\n" +
+		"node-3   Ready    <none>          5d    v1.28.0   192.168.1.12   <none>   Talos (v1.5.0)   5.15.0   containerd://1.7.0"
 	targetIP := "192.168.1.11"
 
 	b.ResetTimer()
@@ -550,4 +567,12 @@ node-3   Ready    <none>          5d    v1.28.0   192.168.1.12   <none>   Talos 
 			}
 		}
 	}
+}
+
+func captureOutput(cmd *exec.Cmd) (string, error) {
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	err := cmd.Run()
+	return buf.String(), err
 }
