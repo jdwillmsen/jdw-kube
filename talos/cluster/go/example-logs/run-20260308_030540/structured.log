@@ -1,0 +1,1 @@
+{"level":"info","ts":"2026-03-08T03:05:40.840-0500","caller":"logging/logger.go:205","msg":"session started","cluster":"cluster","config":"../terraform.tfvars","log_dir":"logs\\2026-03-08\\run-20260308_030540"}
