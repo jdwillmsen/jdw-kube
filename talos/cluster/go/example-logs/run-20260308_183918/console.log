@@ -1,3 +1,4 @@
+[2m18:39:18[0m [34mDEBUG[0m session started cluster=cluster config=../terraform.tfvars log_dir=logs\2026-03-08\run-20260308_183918
 [36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
 ╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
    ██║   ███████║██║     ██║   ██║███████╗
@@ -5,14 +6,16 @@
    ██║   ██║  ██║███████╗╚██████╔╝███████║
    ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
 [0m[2m ━━━ Kubernetes Bootstrap Tool v0.1.0 ━━━[0m
-[2m18:01:08[0m [32mINFO [0m starting reconciliation [2mcluster=[0mcore [2mdry_run=[0mfalse [2mplan_mode=[0mfalse
-[2m18:01:08[0m [32mINFO [0m refreshing proxmox node IPs
-[2m18:01:14[0m [32mINFO [0m loading desired state from terraform
-[2m18:01:14[0m [32mINFO [0m loaded desired state [2mnodes=[0m7
-[2m18:01:14[0m [32mINFO [0m loading deployed state
-[2m18:01:14[0m [32mINFO [0m discovering live state
-[2m18:01:20[0m [32mINFO [0m discovered live state [2mfound=[0m7
-[2m18:01:20[0m [32mINFO [0m building reconciliation plan
+[2m18:39:19[0m [34mDEBUG[0m prerequisite found tool=talosctl path=F:\Dev\bin\talosctl.exe version=Client:
+[2m18:39:19[0m [34mDEBUG[0m prerequisite found tool=kubectl path=C:\ProgramData\chocolatey\bin\kubectl.exe version=Client Version: v1.35.0
+[2m18:39:19[0m [32mINFO [0m starting reconciliation cluster=core dry_run=false plan_mode=false
+[2m18:39:19[0m [32mINFO [0m refreshing proxmox node IPs
+[2m18:39:24[0m [32mINFO [0m loading desired state from terraform
+[2m18:39:24[0m [32mINFO [0m loaded desired state nodes=7
+[2m18:39:24[0m [32mINFO [0m loading deployed state
+[2m18:39:24[0m [32mINFO [0m discovering live state
+[2m18:39:30[0m [32mINFO [0m discovered live state found=7
+[2m18:39:30[0m [32mINFO [0m building reconciliation plan
 [2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
 [2m┃[0m [36m[1mRECONCILIATION PLAN[0m[2m                                         [2m┃[0m
 [2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
@@ -20,5 +23,7 @@
 [2m┃[0m  [32m+[0m Add 3 control plane(s): [200 201 202]                    [2m┃[0m
 [2m┃[0m  [32m+[0m Add 4 worker(s): [300 301 302 303]                       [2m┃[0m
 [2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
-[2m18:01:20[0m [32mINFO [0m executing bootstrap
-[2m18:01:22[0m [32mINFO [0m applying config [2mvmid=[0m200 [2mrole=[0mcontrol-plane
+Proceed with changes? [y/N]: y
+[2m18:39:44[0m [32mINFO [0m confirmed by user response=y
+[2m18:39:44[0m [32mINFO [0m executing bootstrap
+[2m18:39:46[0m [32mINFO [0m applying config vmid=200 role=control-plane
