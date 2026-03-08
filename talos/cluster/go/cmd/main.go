@@ -138,7 +138,7 @@ func promptConfirm(prompt string) bool {
 	fmt.Fprint(session.Console, prompt)
 	var response string
 	fmt.Scanln(&response)
-	fmt.Fprintln(session.ConsoleFile)
+	fmt.Fprintln(session.ConsoleFile, response)
 	if response != "y" && response != "Y" {
 		session.Logger.Warn("cancelled by user", zap.String("response", response))
 		return false
