@@ -386,7 +386,7 @@ func TestRunSession_WriteHeader(t *testing.T) {
 		ClusterName:     "header-test",
 		TerraformTFVars: tfvarsPath,
 		LogDir:          tempDir,
-		LogLevel:        "info",
+		LogLevel:        "debug",
 		NoColor:         true,
 	}
 

@@ -189,7 +189,7 @@ func (e *kvEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*b
 					buf.AppendString("false")
 				}
 			case zapcore.Float32Type, zapcore.Float64Type:
-				buf.AppendString(fmt.Sprintf("%g", math.Float64bits(float64(uint64(f.Integer)))))
+				buf.AppendString(fmt.Sprintf("%d", math.Float64bits(float64(uint64(f.Integer)))))
 			case zapcore.ErrorType:
 				if f.Interface != nil {
 					buf.AppendString(f.Interface.(error).Error())
