@@ -11,6 +11,9 @@ import (
 	"go.uber.org/zap"
 )
 
+// execCommandContext allows tests to mock command execution
+var execCommandContext = exec.CommandContext
+
 // Client wraps kubectl operations for node lifecycle management
 type Client struct {
 	logger     *zap.Logger
@@ -43,7 +46,7 @@ func (c *Client) baseArgs() []string {
 // command builds an exec.Cmd with the base args prepended
 func (c *Client) command(ctx context.Context, args ...string) *exec.Cmd {
 	fullArgs := append(c.baseArgs(), args...)
-	return exec.CommandContext(ctx, "kubectl", fullArgs...)
+	return execCommandContext(ctx, "kubectl", fullArgs...)
 }
 
 // GetNodeNameByIP finds the Kubernetes node name for a given IP address

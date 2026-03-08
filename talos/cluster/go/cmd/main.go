@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -430,8 +431,12 @@ func countByRole(specs map[types.VMID]*types.NodeSpec, role types.Role) int {
 }
 
 func displayPlan(plan *types.ReconcilePlan) {
-	box := logging.NewBox(os.Stderr, cfg.NoColor)
-	fmt.Fprintln(os.Stderr)
+	displayPlanTo(plan, os.Stderr)
+}
+
+func displayPlanTo(plan *types.ReconcilePlan, w io.Writer) {
+	box := logging.NewBox(w, cfg.NoColor)
+	fmt.Fprintln(w)
 	box.Header("RECONCILIATION PLAN")
 	if plan.NeedsBootstrap {
 		box.Badge("BOOTSTRAP", "Cluster needs initial bootstrap")

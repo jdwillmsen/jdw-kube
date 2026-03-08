@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"io"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/jdw/talos-bootstrap/pkg/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestVMIDType(t *testing.T) {
@@ -18,10 +22,13 @@ func TestVMIDType(t *testing.T) {
 		{"standard VMID", types.VMID(201), "201"},
 		{"large VMID", types.VMID(999999), "999999"},
 		{"zero", types.VMID(0), "0"},
+		{"negative", types.VMID(-1), "-1"},
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := tt.vmid.String()
 			assert.Equal(t, tt.expected, result)
 		})
@@ -42,48 +49,69 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "sda", cfg.DefaultDisk)
 	assert.Equal(t, "info", cfg.LogLevel)
 
-	// Use filepath.Join for cross-platform path comparison
 	expectedSecretsDir := filepath.Join("clusters", "cluster", "secrets")
 	assert.Equal(t, expectedSecretsDir, cfg.SecretsDir)
 
-	// Check Proxmox nodes
 	assert.Len(t, cfg.ProxmoxNodeIPs, 4)
 	assert.Contains(t, cfg.ProxmoxNodeIPs, "pve1")
 }
 
 func TestReconcilePlanEmpty(t *testing.T) {
-	t.Run("empty plan should be empty", func(t *testing.T) {
-		plan := &types.ReconcilePlan{}
-		assert.True(t, plan.IsEmpty())
-	})
+	tests := []struct {
+		name     string
+		plan     *types.ReconcilePlan
+		expected bool
+	}{
+		{
+			name:     "empty plan should be empty",
+			plan:     &types.ReconcilePlan{},
+			expected: true,
+		},
+		{
+			name: "plan with additions should not be empty",
+			plan: &types.ReconcilePlan{
+				AddControlPlanes: []types.VMID{201},
+			},
+			expected: false,
+		},
+		{
+			name: "plan with removals should not be empty",
+			plan: &types.ReconcilePlan{
+				RemoveWorkers: []types.VMID{301},
+			},
+			expected: false,
+		},
+		{
+			name: "plan with updates should not be empty",
+			plan: &types.ReconcilePlan{
+				UpdateConfigs: []types.VMID{201},
+			},
+			expected: false,
+		},
+		{
+			name: "plan needing bootstrap should not be empty",
+			plan: &types.ReconcilePlan{
+				NeedsBootstrap: true,
+			},
+			expected: false,
+		},
+		{
+			name: "plan with noop should be empty",
+			plan: &types.ReconcilePlan{
+				NoOp: []types.VMID{202},
+			},
+			expected: true,
+		},
+	}
 
-	t.Run("plan with additions should not be empty", func(t *testing.T) {
-		plan := &types.ReconcilePlan{
-			AddControlPlanes: []types.VMID{201},
-		}
-		assert.False(t, plan.IsEmpty())
-	})
-
-	t.Run("plan with removals should not be empty", func(t *testing.T) {
-		plan := &types.ReconcilePlan{
-			RemoveWorkers: []types.VMID{301},
-		}
-		assert.False(t, plan.IsEmpty())
-	})
-
-	t.Run("plan with updates should not be empty", func(t *testing.T) {
-		plan := &types.ReconcilePlan{
-			UpdateConfigs: []types.VMID{201},
-		}
-		assert.False(t, plan.IsEmpty())
-	})
-
-	t.Run("plan needing bootstrap should not be empty", func(t *testing.T) {
-		plan := &types.ReconcilePlan{
-			NeedsBootstrap: true,
-		}
-		assert.False(t, plan.IsEmpty())
-	})
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := tt.plan.IsEmpty()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
 
 func TestCountByRole(t *testing.T) {
@@ -120,6 +148,12 @@ func TestCountByRole(t *testing.T) {
 			expected: 0,
 		},
 		{
+			name:     "nil specs",
+			specs:    nil,
+			role:     types.RoleControlPlane,
+			expected: 0,
+		},
+		{
 			name: "no matching role",
 			specs: map[types.VMID]*types.NodeSpec{
 				301: {VMID: 301, Role: types.RoleWorker},
@@ -127,25 +161,127 @@ func TestCountByRole(t *testing.T) {
 			role:     types.RoleControlPlane,
 			expected: 0,
 		},
+		{
+			name: "mixed roles",
+			specs: map[types.VMID]*types.NodeSpec{
+				201: {VMID: 201, Role: types.RoleControlPlane},
+				202: {VMID: 202, Role: types.RoleControlPlane},
+				203: {VMID: 203, Role: types.RoleControlPlane},
+				301: {VMID: 301, Role: types.RoleWorker},
+				302: {VMID: 302, Role: types.RoleWorker},
+			},
+			role:     types.RoleWorker,
+			expected: 2,
+		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := countByRole(tt.specs, tt.role)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
+// captureOutput redirects stderr and captures it
+func captureOutput(t *testing.T, fn func()) string {
+	t.Helper()
+
+	// Save original stderr
+	oldStderr := os.Stderr
+
+	// Create pipe
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+
+	// Redirect stderr
+	os.Stderr = w
+
+	// Capture in goroutine
+	outChan := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = io.Copy(&buf, r)
+		outChan <- buf.String()
+	}()
+
+	// Run function
+	fn()
+
+	// Close writer and restore stderr
+	w.Close()
+	os.Stderr = oldStderr
+
+	// Get output with timeout protection
+	return <-outChan
+}
+
 func TestDisplayPlan(t *testing.T) {
-	// This is mostly a smoke test since displayPlan prints to stdout
+	// Set NoColor for consistent output (no ANSI codes)
+	oldCfg := cfg
+	cfg = &types.Config{NoColor: true}
+	defer func() { cfg = oldCfg }()
+
 	tests := []struct {
-		name string
-		plan *types.ReconcilePlan
+		name        string
+		plan        *types.ReconcilePlan
+		wantContain []string
 	}{
 		{
-			name: "empty plan",
-			plan: &types.ReconcilePlan{},
+			name:        "empty plan",
+			plan:        &types.ReconcilePlan{},
+			wantContain: []string{"no changes needed", "OK"},
+		},
+		{
+			name: "bootstrap plan",
+			plan: &types.ReconcilePlan{
+				NeedsBootstrap: true,
+			},
+			wantContain: []string{"BOOTSTRAP", "Cluster needs initial bootstrap"},
+		},
+		{
+			name: "add control planes",
+			plan: &types.ReconcilePlan{
+				AddControlPlanes: []types.VMID{201, 202},
+			},
+			wantContain: []string{"Add 2 control plane(s)", "201", "202"},
+		},
+		{
+			name: "add workers",
+			plan: &types.ReconcilePlan{
+				AddWorkers: []types.VMID{301, 302, 303},
+			},
+			wantContain: []string{"Add 3 worker(s)", "301", "302", "303"},
+		},
+		{
+			name: "remove control planes",
+			plan: &types.ReconcilePlan{
+				RemoveControlPlanes: []types.VMID{203},
+			},
+			wantContain: []string{"Remove 1 control plane(s)", "203"},
+		},
+		{
+			name: "remove workers",
+			plan: &types.ReconcilePlan{
+				RemoveWorkers: []types.VMID{304, 305},
+			},
+			wantContain: []string{"Remove 2 worker(s)", "304", "305"},
+		},
+		{
+			name: "update configs",
+			plan: &types.ReconcilePlan{
+				UpdateConfigs: []types.VMID{201, 202},
+			},
+			wantContain: []string{"Update 2 node config(s)", "201", "202"},
+		},
+		{
+			name: "noop nodes",
+			plan: &types.ReconcilePlan{
+				NoOp: []types.VMID{201, 202, 203},
+			},
+			wantContain: []string{"3 node(s) unchanged"},
 		},
 		{
 			name: "full plan",
@@ -158,15 +294,78 @@ func TestDisplayPlan(t *testing.T) {
 				UpdateConfigs:       []types.VMID{201},
 				NoOp:                []types.VMID{202},
 			},
+			wantContain: []string{
+				"BOOTSTRAP",
+				"Add 2 control plane(s)",
+				"Add 1 worker(s)",
+				"Remove 1 control plane(s)",
+				"Remove 1 worker(s)",
+				"Update 1 node config(s)",
+				"1 node(s) unchanged",
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Should not panic
-			assert.NotPanics(t, func() {
+			// Not parallel - stdout/stderr capture is not thread-safe
+			output := captureOutput(t, func() {
 				displayPlan(tt.plan)
 			})
+
+			for _, want := range tt.wantContain {
+				assert.Contains(t, output, want, "expected output to contain %q", want)
+			}
 		})
 	}
+}
+
+// Benchmarks
+func BenchmarkCountByRole(b *testing.B) {
+	specs := make(map[types.VMID]*types.NodeSpec)
+	for i := 0; i < 1000; i++ {
+		role := types.RoleWorker
+		if i%3 == 0 {
+			role = types.RoleControlPlane
+		}
+		specs[types.VMID(i)] = &types.NodeSpec{
+			VMID: types.VMID(i),
+			Role: role,
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		countByRole(specs, types.RoleControlPlane)
+	}
+}
+
+func BenchmarkCountByRole_Small(b *testing.B) {
+	specs := map[types.VMID]*types.NodeSpec{
+		201: {VMID: 201, Role: types.RoleControlPlane},
+		202: {VMID: 202, Role: types.RoleControlPlane},
+		301: {VMID: 301, Role: types.RoleWorker},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		countByRole(specs, types.RoleControlPlane)
+	}
+}
+
+// Fuzz tests
+func FuzzVMIDString(f *testing.F) {
+	f.Add(uint32(0))
+	f.Add(uint32(1))
+	f.Add(uint32(201))
+	f.Add(uint32(999999))
+	f.Add(uint32(4294967295)) // max uint32
+
+	f.Fuzz(func(t *testing.T, vmid uint32) {
+		v := types.VMID(vmid)
+		result := v.String()
+
+		// Should never be empty
+		require.NotEmpty(t, result)
+	})
 }
