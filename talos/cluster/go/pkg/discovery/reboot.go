@@ -186,7 +186,7 @@ func (m *RebootMonitor) tickVerifying(ctx context.Context) (net.IP, bool, error)
 	if m.verifyCount >= 2 {
 		return m.candidateIP, true, nil
 	}
-	return nil, true, nil
+	return nil, false, nil
 }
 
 func (m *RebootMonitor) transitionTo(newState RebootState) {

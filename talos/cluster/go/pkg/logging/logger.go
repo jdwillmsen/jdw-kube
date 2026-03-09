@@ -119,7 +119,7 @@ func NewRunSession(cfg *types.Config) (*RunSession, error) {
 func buildTeeCore(level zapcore.Level, noColor bool, consoleFile, structuredFile io.Writer) zapcore.Core {
 	consoleCfg := newConsoleEncoderConfig(noColor)
 	consoleEncoder := &kvEncoder{
-		Encoder: zapcore.NewConsoleEncoder(consoleCfg),
+		inner:   zapcore.NewConsoleEncoder(consoleCfg),
 		noColor: noColor,
 	}
 
@@ -135,22 +135,25 @@ func buildTeeCore(level zapcore.Level, noColor bool, consoleFile, structuredFile
 
 	return zapcore.NewTee(
 		zapcore.NewCore(consoleEncoder, zapcore.Lock(os.Stderr), levelEnabler),
-		zapcore.NewCore(consoleEncoder.Clone().(zapcore.Encoder), zapcore.AddSync(consoleFile), levelEnabler),
+		zapcore.NewCore(consoleEncoder.Clone(), zapcore.AddSync(consoleFile), levelEnabler),
 		zapcore.NewCore(jsonEncoder, zapcore.AddSync(structuredFile), levelEnabler),
 	)
 }
 
-// kvEncoder wraps a console encoder and formats a structured fields as key=value
-// instead of JSON.
+// kvEncoder wraps a console encoder and renders structured fields as key=value
+// instead of JSON. The inner encoder is stored as a named field (not embedded)
+// so that ObjectEncoder.Add* calls from zap's ioCore.With() are intercepted
+// here and stored in our fields slice, rather than being baked into the inner
+// encoder as JSON.
 type kvEncoder struct {
-	zapcore.Encoder
+	inner   zapcore.Encoder
 	noColor bool
 	fields  []zapcore.Field
 }
 
 func (e *kvEncoder) Clone() zapcore.Encoder {
 	return &kvEncoder{
-		Encoder: e.Encoder.Clone(),
+		inner:   e.inner.Clone(),
 		noColor: e.noColor,
 		fields:  append([]zapcore.Field{}, e.fields...),
 	}
@@ -160,7 +163,7 @@ func (e *kvEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*b
 	all := append(e.fields, fields...)
 
 	// Encode the base line (time + level + message) with no fields
-	buf, err := e.Encoder.EncodeEntry(entry, nil)
+	buf, err := e.inner.EncodeEntry(entry, nil)
 	if err != nil {
 		return buf, err
 	}
@@ -185,14 +188,20 @@ func (e *kvEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*b
 				} else {
 					buf.AppendString("false")
 				}
-			case zapcore.Float32Type, zapcore.Float64Type:
-				buf.AppendString(fmt.Sprintf("%d", math.Float64bits(float64(uint64(f.Integer)))))
+			case zapcore.Float64Type:
+				buf.AppendString(fmt.Sprintf("%g", math.Float64frombits(uint64(f.Integer))))
+			case zapcore.Float32Type:
+				buf.AppendString(fmt.Sprintf("%g", math.Float32frombits(uint32(f.Integer))))
+			case zapcore.DurationType:
+				buf.AppendString(time.Duration(f.Integer).String())
 			case zapcore.ErrorType:
 				if f.Interface != nil {
 					buf.AppendString(f.Interface.(error).Error())
 				}
 			default:
-				buf.AppendString(fmt.Sprintf("%v", f.Interface))
+				if f.Interface != nil {
+					buf.AppendString(fmt.Sprintf("%v", f.Interface))
+				}
 			}
 		}
 		buf.AppendString("\n")
@@ -201,16 +210,59 @@ func (e *kvEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*b
 	return buf, nil
 }
 
-// With returns a new encoder with additional fields stored for later encoding.
-// Fields are NOT passed to the inner encoder - we render them ourselves in
-// EncodeEntry as key=value. Passing them through would cause the console
-// encoder to render them as JSON alongside our key=value output.
-func (e *kvEncoder) With(fields []zapcore.Field) zapcore.Encoder {
-	return &kvEncoder{
-		Encoder: e.Encoder.Clone(),
-		noColor: e.noColor,
-		fields:  append(append([]zapcore.Field{}, e.fields...), fields...),
-	}
+// ObjectEncoder Add* methods = intercept fields from ioCore.With() -> addFields()
+// and store them for key=value rendering in EncodeEntry, instead of letting them
+// reach the inner console encoder (which would render them as JSON).
+
+func (e *kvEncoder) AddArray(key string, v zapcore.ArrayMarshaler) error {
+	e.fields = append(e.fields, zap.Array(key, v))
+	return nil
+}
+func (e *kvEncoder) AddObject(key string, v zapcore.ObjectMarshaler) error {
+	e.fields = append(e.fields, zap.Object(key, v))
+	return nil
+}
+func (e *kvEncoder) AddBinary(key string, v []byte) { e.fields = append(e.fields, zap.Binary(key, v)) }
+func (e *kvEncoder) AddByteString(key string, v []byte) {
+	e.fields = append(e.fields, zap.ByteString(key, v))
+}
+func (e *kvEncoder) AddBool(key string, v bool) { e.fields = append(e.fields, zap.Bool(key, v)) }
+func (e *kvEncoder) AddComplex128(key string, v complex128) {
+	e.fields = append(e.fields, zap.Complex128(key, v))
+}
+func (e *kvEncoder) AddComplex64(key string, v complex64) {
+	e.fields = append(e.fields, zap.Complex64(key, v))
+}
+func (e *kvEncoder) AddDuration(key string, v time.Duration) {
+	e.fields = append(e.fields, zap.Duration(key, v))
+}
+func (e *kvEncoder) AddFloat64(key string, v float64) {
+	e.fields = append(e.fields, zap.Float64(key, v))
+}
+func (e *kvEncoder) AddFloat32(key string, v float32) {
+	e.fields = append(e.fields, zap.Float32(key, v))
+}
+func (e *kvEncoder) AddInt(key string, v int)        { e.fields = append(e.fields, zap.Int(key, v)) }
+func (e *kvEncoder) AddInt64(key string, v int64)    { e.fields = append(e.fields, zap.Int64(key, v)) }
+func (e *kvEncoder) AddInt32(key string, v int32)    { e.fields = append(e.fields, zap.Int32(key, v)) }
+func (e *kvEncoder) AddInt16(key string, v int16)    { e.fields = append(e.fields, zap.Int16(key, v)) }
+func (e *kvEncoder) AddInt8(key string, v int8)      { e.fields = append(e.fields, zap.Int8(key, v)) }
+func (e *kvEncoder) AddString(key string, v string)  { e.fields = append(e.fields, zap.String(key, v)) }
+func (e *kvEncoder) AddTime(key string, v time.Time) { e.fields = append(e.fields, zap.Time(key, v)) }
+func (e *kvEncoder) AddUint(key string, v uint)      { e.fields = append(e.fields, zap.Uint(key, v)) }
+func (e *kvEncoder) AddUint64(key string, v uint64)  { e.fields = append(e.fields, zap.Uint64(key, v)) }
+func (e *kvEncoder) AddUint32(key string, v uint32)  { e.fields = append(e.fields, zap.Uint32(key, v)) }
+func (e *kvEncoder) AddUint16(key string, v uint16)  { e.fields = append(e.fields, zap.Uint16(key, v)) }
+func (e *kvEncoder) AddUint8(key string, v uint8)    { e.fields = append(e.fields, zap.Uint8(key, v)) }
+func (e *kvEncoder) AddUintptr(key string, v uintptr) {
+	e.fields = append(e.fields, zap.Uintptr(key, v))
+}
+func (e *kvEncoder) AddReflected(key string, v interface{}) error {
+	e.fields = append(e.fields, zap.Any(key, v))
+	return nil
+}
+func (e *kvEncoder) OpenNamespace(key string) {
+	e.fields = append(e.fields, zap.Namespace(key))
 }
 
 // newConsoleEncoderConfig returns a simple console encoder config.

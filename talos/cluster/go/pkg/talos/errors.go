@@ -116,7 +116,9 @@ func ParseTalosError(err error) *TalosError {
 
 	// Already bootstrapped - not an error
 	if strings.Contains(errStr, "already bootstrapped") ||
-		strings.Contains(errStr, "etcd already initialized") {
+		strings.Contains(errStr, "etcd already initialized") ||
+		strings.Contains(errStr, "etcd data directory is not empty") ||
+		(strings.Contains(errStr, "alreadyexists") && strings.Contains(errStr, "etcd")) {
 		return &TalosError{
 			Code:      ErrAlreadyBootstrapped,
 			Message:   "cluster already bootstrapped",

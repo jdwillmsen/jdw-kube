@@ -81,6 +81,12 @@ func TestParseTalosError_TableDriven(t *testing.T) {
 			expectedCode: ErrAlreadyBootstrapped,
 			isSuccess:    true,
 		},
+		{
+			name:         "etcd data directory not empty",
+			input:        errors.New("rpc error: code = AlreadyExists desc = etcd data directory is not empty"),
+			expectedCode: ErrAlreadyBootstrapped,
+			isSuccess:    true,
+		},
 
 		// Certificate errors (switch to secure)
 		{

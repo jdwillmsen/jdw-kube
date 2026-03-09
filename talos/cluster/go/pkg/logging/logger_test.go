@@ -502,6 +502,44 @@ func TestRunSession_FullLifecycle(t *testing.T) {
 	}
 }
 
+// TestKvEncoder_WithFieldsNoJSON verifies that logger.With() fields render as
+// key=value in console output, NOT as JSON like {"vmid": 200}.
+func TestKvEncoder_WithFieldsNoJSON(t *testing.T) {
+	var consoleBuf bytes.Buffer
+
+	core := buildTeeCore(zap.InfoLevel, true, &bytes.Buffer{}, &bytes.Buffer{})
+	// Build a single-sink core writing to our buffer so we can inspect output
+	consoleCfg := newConsoleEncoderConfig(true)
+	enc := &kvEncoder{inner: zapcore.NewConsoleEncoder(consoleCfg), noColor: true}
+	singleCore := zapcore.NewCore(enc, zapcore.AddSync(&consoleBuf), zapcore.InfoLevel)
+	_ = core // discard tee core, we just need the encoder test
+
+	logger := zap.New(singleCore)
+
+	// This is exactly what RebootMonitor does: logger.With(zap.Int("vmid", 200))
+	childLogger := logger.With(zap.Int("vmid", 200))
+	childLogger.Info("node is ready", zap.String("ip", "192.1681.1.156"))
+	logger.Sync()
+
+	output := consoleBuf.String()
+
+	// Must contain key=value format
+	if !strings.Contains(output, "vmid=200") {
+		t.Errorf("Expected 'vmid=200' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "ip=192.1681.1.156") {
+		t.Errorf("Expected 'ip=192.1681.1.156' in output, got: %s", output)
+	}
+
+	// Must NOT contain JSON format
+	if strings.Contains(output, `{"vmid"`) || strings.Contains(output, `"vmid":`) {
+		t.Errorf("JSON leak detected in console output: %s", output)
+	}
+	if strings.Contains(output, `{"ip"`) || strings.Contains(output, `"ip":`) {
+		t.Errorf("JSON leak detected in console output: %s", output)
+	}
+}
+
 // Helper to check if running on Windows
 func isWindows() bool {
 	return runtime.GOOS == "windows"
