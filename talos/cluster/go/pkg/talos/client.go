@@ -177,7 +177,6 @@ func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath
 		default:
 			if attempt < maxAttempts && talosErr.IsRetryable() {
 				waitTime := time.Duration(attempt*5) * time.Second
-				fmt.Printf("Attempt %d/%d failed with retryable error: %v. Retrying in %s...\n", attempt, maxAttempts, err, waitTime)
 				if c.logger != nil {
 					c.logger.Warn("apply config retryable error",
 						zap.Int("attempt", attempt), zap.Int("max", maxAttempts),

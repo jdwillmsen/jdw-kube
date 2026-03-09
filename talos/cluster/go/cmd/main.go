@@ -58,12 +58,12 @@ func main() {
 
 	// Global flags
 	rootCmd.PersistentFlags().StringVarP(&cfg.ClusterName, "cluster", "c", "cluster", "Cluster name")
-	rootCmd.PersistentFlags().StringVar(&cfg.TerraformTFVars, "tfvars", "terraform.tfvars", "Path to terraform.tfvars")
+	rootCmd.PersistentFlags().StringVarP(&cfg.TerraformTFVars, "tfvars", "t", "terraform.tfvars", "Path to terraform.tfvars")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.AutoApprove, "auto-approve", "a", false, "Skip confirmations")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.DryRun, "dry-run", "d", false, "Simulate only")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.SkipPreflight, "skip-preflight", "s", false, "Skip connectivity checks")
 	rootCmd.PersistentFlags().StringVarP(&cfg.LogLevel, "log-level", "l", "info", "Log level (debug, info, warn, error)")
-	rootCmd.PersistentFlags().StringVar(&cfg.ProxmoxSSHKeyPath, "ssh-key", cfg.ProxmoxSSHKeyPath, "Path to SSH private key")
+	rootCmd.PersistentFlags().StringVarP(&cfg.ProxmoxSSHKeyPath, "ssh-key", "k", cfg.ProxmoxSSHKeyPath, "Path to SSH private key")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.ForceReconfigure, "force-reconfigure", "f", false, "Force reconfigure all nodes")
 	rootCmd.PersistentFlags().StringVar(&cfg.LogDir, "log-dir", cfg.LogDir, "Log directory")
 	rootCmd.PersistentFlags().BoolVar(&cfg.NoColor, "no-color", cfg.NoColor, "Disable colored output")
@@ -261,6 +261,10 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 		zap.Bool("plan_mode", cfg.PlanMode),
 	)
 
+	if session != nil && session.AuditLog != nil {
+		session.AuditLog.WriteEntry("RECONCILE-START", fmt.Sprintf("cluster=%s dry_run=%v plan_mode=%v", cfg.ClusterName, cfg.DryRun, cfg.PlanMode))
+	}
+
 	scanner := discovery.NewScanner(cfg.ProxmoxSSHUser, cfg.ProxmoxNodeIPs)
 	defer scanner.Close()
 	talosClient := talos.NewClient(cfg)
@@ -287,6 +291,7 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 
 	// Initialize Talos client
 	if err := talosClient.Initialize(ctx); err != nil {
+		logger.Error("failed to initialize talos client", zap.Error(err))
 		return fmt.Errorf("initialize talos client: %w", err)
 	}
 
@@ -294,9 +299,11 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 	logger.Info("loading desired state from terraform")
 	desired, err := stateMgr.LoadDesiredState(ctx)
 	if err != nil {
+		logger.Error("failed to load desired state", zap.Error(err))
 		return fmt.Errorf("load desired state: %w", err)
 	}
 	if len(desired) == 0 {
+		logger.Error("no nodes defined in desired state", zap.Error(err))
 		return fmt.Errorf("no nodes defined in desired state - check your terraform.tfvars")
 	}
 	logger.Info("loaded desired state", zap.Int("nodes", len(desired)))
@@ -307,6 +314,7 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
 			logger.Info("generating config for node", zap.Int("vmid", int(vmid)), zap.String("role", string(spec.Role)))
 			if _, err := talosClient.GenerateNodeConfig(ctx, spec, cfg.SecretsDir); err != nil {
+				logger.Error("failed to generate node config", zap.Error(err))
 				return fmt.Errorf("generate config for VMID %d: %w", vmid, err)
 			}
 		}
@@ -315,6 +323,7 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 	logger.Info("loading deployed state")
 	deployed, err := stateMgr.LoadDeployedState(ctx)
 	if err != nil {
+		logger.Error("failed to load deployed state", zap.Error(err))
 		return fmt.Errorf("load deployed state: %w", err)
 	}
 
@@ -329,6 +338,7 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 	if !cfg.SkipPreflight {
 		live, err = scanner.DiscoverVMs(ctx, vmids)
 		if err != nil {
+			logger.Error("failed to discover VMs", zap.Error(err))
 			return fmt.Errorf("discover VMs: %w", err)
 		}
 		logger.Info("discovered live state", zap.Int("found", len(live)))
@@ -347,6 +357,7 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 	logger.Info("building reconciliation plan")
 	plan, err := stateMgr.BuildReconcilePlan(ctx, desired, deployed, live)
 	if err != nil {
+		logger.Error("failed to build reconciliation plan", zap.Error(err))
 		return fmt.Errorf("build plan: %w", err)
 	}
 
@@ -371,10 +382,17 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 
 	// Phase 4: Execute
 	if err := executePlan(ctx, plan, desired, deployed, stateMgr, scanner, talosClient, k8sClient); err != nil {
+		logger.Error("plan execution failed", zap.Error(err))
+		if session != nil && session.AuditLog != nil {
+			session.AuditLog.WriteEntry("RECONCILE-END", fmt.Sprintf("cluster=%s status=failed error=%v", cfg.ClusterName, err))
+		}
 		return fmt.Errorf("execute plan: %w", err)
 	}
 
 	logger.Info("reconciliation complete")
+	if session != nil && session.AuditLog != nil {
+		session.AuditLog.WriteEntry("RECONCILE-END", fmt.Sprintf("cluster=%s status=success", cfg.ClusterName))
+	}
 	return nil
 }
 
@@ -388,11 +406,13 @@ func runStatus(ctx context.Context, cfg *types.Config) error {
 
 	desired, err := stateMgr.LoadDesiredState(ctx)
 	if err != nil {
+		logger.Error("failed to load desired state", zap.Error(err))
 		return err
 	}
 
 	deployed, err := stateMgr.LoadDeployedState(ctx)
 	if err != nil {
+		logger.Error("failed to load deployed state", zap.Error(err))
 		return err
 	}
 
@@ -486,27 +506,35 @@ func deployNode(
 ) (net.IP, error) {
 	liveNodes, err := scanner.DiscoverVMs(ctx, []types.VMID{vmid})
 	if err != nil {
+		logger.Error("failed to discover VM", zap.Int("vmid", int(vmid)), zap.Error(err))
 		return nil, fmt.Errorf("discover VM %d: %w", vmid, err)
 	}
 
 	node, ok := liveNodes[vmid]
 	if !ok || node.IP == nil {
+		logger.Error("VM IP not discovered", zap.Int("vmid", int(vmid)))
 		return nil, fmt.Errorf("VM %d IP not discovered", vmid)
 	}
 
 	configPath := stateMgr.NodeConfigPath(vmid, role)
 	logger.Info("applying config", zap.Int("vmid", int(vmid)), zap.String("role", string(role)))
+	if session != nil && session.AuditLog != nil {
+		session.AuditLog.WriteEntry("APPLY-CONFIG", fmt.Sprintf("vmid=%d role=%s ip=%s", vmid, role, node.IP))
+	}
 	if err := talosClient.ApplyConfigWithRetry(ctx, node.IP, configPath, role, 5); err != nil {
+		logger.Error("failed to apply config", zap.Int("vmid", int(vmid)), zap.String("role", string(role)), zap.Error(err))
 		return nil, fmt.Errorf("apply config to %s %d: %w", role, vmid, err)
 	}
 
 	monitor := discovery.NewRebootMonitor(vmid, node.IP, node.MAC, scanner, logger)
 	newIP, err := monitor.WaitForReady(ctx, 3*time.Minute)
 	if err != nil {
+		logger.Error("node reboot wait failed", zap.Int("vmid", int(vmid)), zap.String("role", string(role)), zap.Error(err))
 		return nil, fmt.Errorf("wait for %s %d reboot: %w", role, vmid, err)
 	}
 
 	if err := talosClient.WaitForReady(ctx, newIP, role); err != nil {
+		logger.Error("node readiness check failed", zap.Int("vmid", int(vmid)), zap.String("role", string(role)), zap.Error(err))
 		return nil, fmt.Errorf("wait for %s %d ready: %w", role, vmid, err)
 	}
 
@@ -531,6 +559,16 @@ func executePlan(
 	k8sClient *kubectl.Client,
 ) error {
 
+	// Populate session counters early so SUMMARY.txt has data even on error
+	if session != nil {
+		session.ControlPlanes = len(deployed.ControlPlanes)
+		session.Workers = len(deployed.Workers)
+		session.AddedNodes = len(plan.AddControlPlanes) + len(plan.AddWorkers)
+		session.RemovedNodes = len(plan.RemoveControlPlanes) + len(plan.RemoveWorkers)
+		session.UpdatedConfigs = len(plan.UpdateConfigs)
+		session.BootstrapNeeded = plan.NeedsBootstrap
+	}
+
 	// Track which VMID was bootstrapped so we skip it in the add-CPs phase
 	var bootstrappedVMID types.VMID
 
@@ -540,8 +578,15 @@ func executePlan(
 	// (a) Fresh cluster: NeedsBootstrap + AddControlPlanes non-empty - deploy first CP then bootstrap etcd.
 	// (b) Deferred bootstrap: NeedsBootstrap + no AddControlPlanes but deployed CPs already exist
 	//     (e.g., previous run applied configs but was interrupted before BootstrapEtcd) - Just run etcd bootstrap.
+	audit := func(tag, msg string) {
+		if session != nil && session.AuditLog != nil {
+			session.AuditLog.WriteEntry(tag, msg)
+		}
+	}
+
 	if plan.NeedsBootstrap {
 		logger.Info("executing bootstrap")
+		audit("BOOTSTRAP-START", fmt.Sprintf("control_planes=%d workers=%d", len(plan.AddControlPlanes), len(plan.AddWorkers)))
 
 		if len(plan.AddControlPlanes) > 0 {
 			firstVMID := plan.AddControlPlanes[0]
@@ -555,21 +600,25 @@ func executePlan(
 			} else {
 				newIP, err := deployNode(ctx, firstVMID, types.RoleControlPlane, deployed, stateMgr, scanner, talosClient)
 				if err != nil {
+					logger.Error("bootstrap first control plane failed", zap.Int("vmid", int(firstVMID)), zap.Error(err))
 					return fmt.Errorf("bootstrap first CP: %w", err)
 				}
 
 				logger.Info("bootstrapping etcd on first control plane", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)))
 				if err := talosClient.BootstrapEtcd(ctx, newIP); err != nil {
+					logger.Error("etcd bootstrap failed", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)), zap.Error(err))
 					return fmt.Errorf("bootstrap etcd: %w", err)
 				}
 
 				if err := talosClient.WaitForEtcdHealthy(ctx, newIP, 5*time.Minute); err != nil {
+					logger.Error("etcd health check timed out", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)), zap.Error(err))
 					return fmt.Errorf("wait for etcd healthy: %w", err)
 				}
 			}
 
 			deployed.BootstrapCompleted = true
 			if err := stateMgr.Save(ctx, deployed); err != nil {
+				logger.Error("failed to save state after bootstrap", zap.Error(err))
 				return fmt.Errorf("save state after bootstrap: %w", err)
 			}
 		}
@@ -582,10 +631,12 @@ func executePlan(
 			logger.Info("bootstrapping etcd on already-deployed control plane",
 				zap.String("ip", firstCP.IP.String()), zap.Int("vmid", int(firstCP.VMID)))
 			if err := talosClient.BootstrapEtcd(ctx, firstCP.IP); err != nil {
+				logger.Error("deferred etcd bootstrap failed", zap.String("ip", firstCP.IP.String()), zap.Int("vmid", int(firstCP.VMID)), zap.Error(err))
 				return fmt.Errorf("deferred bootstrap etcd: %w", err)
 			}
 
 			if err := talosClient.WaitForEtcdHealthy(ctx, firstCP.IP, 5*time.Minute); err != nil {
+				logger.Error("failed to save state after deferred bootstrap", zap.Error(err))
 				return fmt.Errorf("wait for etcd healthy: %w", err)
 			}
 
@@ -599,6 +650,7 @@ func executePlan(
 	// Phase 1: Remove workers (before additions to free resources)
 	if len(plan.RemoveWorkers) > 0 {
 		logger.Info("removing workers", zap.Int("count", len(plan.RemoveWorkers)))
+		audit("REMOVE-WORKERS", fmt.Sprintf("count=%d vmids=%v", len(plan.RemoveWorkers), plan.RemoveWorkers))
 
 		for _, vmid := range plan.RemoveWorkers {
 			if cfg.DryRun {
@@ -642,6 +694,7 @@ func executePlan(
 	// Phase 2: Remove control planes (with quorum check, before additions)
 	if len(plan.RemoveControlPlanes) > 0 {
 		logger.Info("removing control planes", zap.Int("count", len(plan.RemoveControlPlanes)))
+		audit("REMOVE-CPS", fmt.Sprintf("count=%d vmids=%v", len(plan.RemoveControlPlanes), plan.RemoveControlPlanes))
 
 		if len(deployed.ControlPlanes) > 0 && !cfg.DryRun {
 			firstHealthyCP := deployed.ControlPlanes[0].IP
@@ -649,6 +702,7 @@ func executePlan(
 
 			for i := range plan.RemoveControlPlanes {
 				if err := talosClient.ValidateRemovalQuorum(ctx, firstHealthyCP, remainingCPs); err != nil {
+					logger.Error("quorum safety check failed", zap.Int("removal", i+1), zap.Int("total", len(plan.RemoveControlPlanes)), zap.Error(err))
 					return fmt.Errorf("quorum safety check failed for removal %d/%d: %w", i+1, len(plan.RemoveControlPlanes), err)
 				}
 				remainingCPs--
@@ -723,6 +777,7 @@ func executePlan(
 	// Phase 3: Add Remaining control planes (sequential for etcd safety)
 	if len(plan.AddControlPlanes) > 0 {
 		logger.Info("adding control planes", zap.Int("count", len(plan.AddControlPlanes)))
+		audit("ADD-CPS", fmt.Sprintf("count=%d vmids=%v", len(plan.AddControlPlanes), plan.AddControlPlanes))
 
 		for _, vmid := range plan.AddControlPlanes {
 			if plan.NeedsBootstrap && vmid == bootstrappedVMID {
@@ -740,6 +795,7 @@ func executePlan(
 			}
 
 			if _, err := deployNode(ctx, vmid, types.RoleControlPlane, deployed, stateMgr, scanner, talosClient); err != nil {
+				logger.Error("failed to add control plane", zap.Int("vmid", int(vmid)), zap.Error(err))
 				return fmt.Errorf("add CP %d: %w", vmid, err)
 			}
 		}
@@ -798,6 +854,7 @@ func executePlan(
 	// Phase 6: Add workers (parallel, max 3 concurrent)
 	if len(plan.AddWorkers) > 0 {
 		logger.Info("adding workers", zap.Int("count", len(plan.AddWorkers)))
+		audit("ADD-WORKERS", fmt.Sprintf("count=%d vmids=%v", len(plan.AddWorkers), plan.AddWorkers))
 
 		g, gctx := errgroup.WithContext(ctx)
 		sem := make(chan struct{}, 3)
@@ -830,6 +887,7 @@ func executePlan(
 		}
 
 		if err := g.Wait(); err != nil {
+			logger.Error("worker deployment failed", zap.Error(err))
 			return err
 		}
 	}
@@ -898,6 +956,7 @@ func executePlan(
 	if !cfg.DryRun {
 		deployed.Timestamp = time.Now()
 		if err := stateMgr.Save(ctx, deployed); err != nil {
+			logger.Error("failed to save final state", zap.Error(err))
 			return fmt.Errorf("save state: %w", err)
 		}
 	}
@@ -907,14 +966,10 @@ func executePlan(
 		verifyCluster(ctx, talosClient, k8sClient, deployed)
 	}
 
-	// Populate session counters for SUMMARY.txt
+	// Update session counters with final deployed state
 	if session != nil {
 		session.ControlPlanes = len(deployed.ControlPlanes)
 		session.Workers = len(deployed.Workers)
-		session.AddedNodes = len(plan.AddControlPlanes) + len(plan.AddWorkers)
-		session.RemovedNodes = len(plan.RemoveControlPlanes) + len(plan.RemoveWorkers)
-		session.UpdatedConfigs = len(plan.UpdateConfigs)
-		session.BootstrapNeeded = plan.NeedsBootstrap
 	}
 
 	return nil
