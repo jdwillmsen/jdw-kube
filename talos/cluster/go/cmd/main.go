@@ -77,6 +77,10 @@ func main() {
 	)
 
 	runErr = rootCmd.Execute()
+	if session != nil {
+		session.Close(runErr)
+		session = nil
+	}
 	if runErr != nil {
 		os.Exit(1)
 	}
@@ -562,9 +566,11 @@ func deployNode(
 		return nil, fmt.Errorf("wait for %s %d reboot: %w", role, vmid, err)
 	}
 
-	if err := talosClient.WaitForReady(ctx, newIP, role); err != nil {
-		logger.Error("node readiness check failed", zap.Int("vmid", int(vmid)), zap.String("role", string(role)), zap.Error(err))
-		return nil, fmt.Errorf("wait for %s %d ready: %w", role, vmid, err)
+	// Wait for Talos API only - etcd/kubelet readiness is checked separately
+	// after BootstrapEtcd for the first CP, and after etcd is healthy for subsequent nodes.
+	if err := talosClient.WaitForAPI(ctx, newIP); err != nil {
+		logger.Error("Talos API not reachable", zap.Int("vmid", int(vmid)), zap.String("role", string(role)), zap.Error(err))
+		return nil, fmt.Errorf("wait for %s %d API: %w", role, vmid, err)
 	}
 
 	configHash, hashErr := talos.HashFile(configPath)
@@ -573,7 +579,7 @@ func deployNode(
 	}
 	stateMgr.UpdateNodeState(deployed, vmid, newIP.String(), configHash, role)
 
-	logger.Info("node deployed and joined", zap.Int("vmid", int(vmid)), zap.String("role", string(role)), zap.String("ip", newIP.String()), zap.String("status", string(types.StatusJoined)))
+	logger.Info("node deployed, Talos API responding", zap.Int("vmid", int(vmid)), zap.String("role", string(role)), zap.String("ip", newIP.String()))
 	return newIP, nil
 }
 
@@ -643,6 +649,12 @@ func executePlan(
 				if err := talosClient.WaitForEtcdHealthy(ctx, newIP, 5*time.Minute); err != nil {
 					logger.Error("etcd health check timed out", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)), zap.Error(err))
 					return fmt.Errorf("wait for etcd healthy: %w", err)
+				}
+
+				logger.Info("waiting for first control plane full readiness", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)))
+				if err := talosClient.WaitForReady(ctx, newIP, types.RoleControlPlane); err != nil {
+					logger.Error("first CP readiness check failed", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)), zap.Error(err))
+					return fmt.Errorf("wait for first CP ready: %w", err)
 				}
 			}
 

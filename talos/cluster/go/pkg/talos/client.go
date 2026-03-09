@@ -282,6 +282,45 @@ func (c *Client) WaitForEtcdHealthy(ctx context.Context, ip net.IP, maxWait time
 	}
 }
 
+// WaitForAPI polls until the Talos API responds to a Version() call.
+// This is the minimum check needed after config apply + reboot - it confirms the
+// node is up and the API is reachable, without requiring etcd or kubelet.
+func (c *Client) WaitForAPI(ctx context.Context, ip net.IP) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	insecure := true
+	switchToSecure := false
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for api to become healthy on %s", ip)
+		case <-ticker.C:
+			tc, err := c.getClient(ctx, ip, insecure)
+			if err != nil {
+				continue
+			}
+
+			_, err = tc.Version(ctx)
+			tc.Close()
+
+			if err == nil {
+				return nil
+			}
+
+			// Switch to secure mode once after first failed attempt
+			if insecure && !switchToSecure {
+				insecure = false
+				switchToSecure = true
+			}
+		}
+	}
+}
+
 func (c *Client) WaitForReady(ctx context.Context, ip net.IP, role types.Role) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
