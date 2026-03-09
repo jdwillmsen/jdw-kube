@@ -1,0 +1,17 @@
+{"level":"debug","ts":"2026-03-08T23:29:21.401-0500","msg":"session started","cluster":"cluster","config":"../terraform.tfvars","log_dir":"logs\\2026-03-08\\run-20260308_232921"}
+{"level":"debug","ts":"2026-03-08T23:29:21.557-0500","msg":"prerequisite found","tool":"talosctl","path":"F:\\Dev\\bin\\talosctl.exe","version":"Client:"}
+{"level":"debug","ts":"2026-03-08T23:29:21.723-0500","msg":"prerequisite found","tool":"kubectl","path":"C:\\ProgramData\\chocolatey\\bin\\kubectl.exe","version":"Client Version: v1.35.0"}
+{"level":"info","ts":"2026-03-08T23:29:21.724-0500","msg":"starting reconciliation","cluster":"core","dry_run":false,"plan_mode":false}
+{"level":"info","ts":"2026-03-08T23:29:21.725-0500","msg":"refreshing proxmox node IPs"}
+{"level":"info","ts":"2026-03-08T23:29:27.202-0500","msg":"loading desired state from terraform"}
+{"level":"info","ts":"2026-03-08T23:29:27.205-0500","msg":"loaded desired state","nodes":7}
+{"level":"info","ts":"2026-03-08T23:29:27.206-0500","msg":"loading deployed state"}
+{"level":"info","ts":"2026-03-08T23:29:27.208-0500","msg":"discovering live state"}
+{"level":"info","ts":"2026-03-08T23:29:32.033-0500","msg":"discovered live state","found":7}
+{"level":"info","ts":"2026-03-08T23:29:32.033-0500","msg":"building reconciliation plan"}
+{"level":"info","ts":"2026-03-08T23:30:45.691-0500","msg":"confirmed by user","response":"y"}
+{"level":"info","ts":"2026-03-08T23:30:45.691-0500","msg":"executing bootstrap"}
+{"level":"debug","ts":"2026-03-08T23:30:45.692-0500","msg":"VM not in live map, re-discovering","vmid":200}
+{"level":"error","ts":"2026-03-08T23:30:47.954-0500","msg":"VM IP not discovered","vmid":200}
+{"level":"error","ts":"2026-03-08T23:30:47.955-0500","msg":"bootstrap first control plane failed","vmid":200,"error":"VM 200 IP not discovered"}
+{"level":"error","ts":"2026-03-08T23:30:47.962-0500","msg":"plan execution failed","error":"bootstrap first CP: VM 200 IP not discovered"}

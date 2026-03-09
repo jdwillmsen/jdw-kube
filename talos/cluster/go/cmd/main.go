@@ -46,8 +46,9 @@ func main() {
 	}()
 
 	rootCmd := &cobra.Command{
-		Use:   "talos-bootstrap",
-		Short: "Smart reconciliation for Talos clusters",
+		Use:          "talos-bootstrap",
+		Short:        "Smart reconciliation for Talos clusters",
+		SilenceUsage: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if err := initConfig(cmd); err != nil {
 				return err
@@ -231,13 +232,19 @@ func resetCmd() *cobra.Command {
 		Use:   "reset",
 		Short: "Reset cluster state",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Load terraform extras so cluster name is resolved from tfvars
+			stateMgr := state.NewManager(cfg, logger)
+			if err := stateMgr.LoadTerraformExtras(context.Background()); err != nil {
+				logger.Debug("could not load terraform extras", zap.Error(err))
+			}
+
+			clusterDir := filepath.Join("clusters", cfg.ClusterName)
 			if !cfg.AutoApprove {
-				if !promptConfirm("Are you sure you want to reset? [y/N]: ") {
+				if !promptConfirm(fmt.Sprintf("Are you sure you want to reset cluster %q (%s)? [y/N]: ", cfg.ClusterName, clusterDir)) {
 					return nil
 				}
 			}
 
-			clusterDir := filepath.Join("clusters", cfg.ClusterName)
 			if err := os.RemoveAll(clusterDir); err != nil {
 				logger.Error("Remove cluster failed", zap.Error(err))
 				return fmt.Errorf("remove cluster dir: %w", err)
@@ -382,7 +389,7 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 	}
 
 	// Phase 4: Execute
-	if err := executePlan(ctx, plan, desired, deployed, stateMgr, scanner, talosClient, k8sClient); err != nil {
+	if err := executePlan(ctx, plan, desired, deployed, live, stateMgr, scanner, talosClient, k8sClient); err != nil {
 		logger.Error("plan execution failed", zap.Error(err))
 		if session != nil && session.AuditLog != nil {
 			session.AuditLog.WriteEntry("RECONCILE-END", fmt.Sprintf("cluster=%s status=failed error=%v", cfg.ClusterName, err))
@@ -494,27 +501,32 @@ func displayPlanTo(plan *types.ReconcilePlan, w io.Writer) {
 	box.Footer()
 }
 
-// deployNode handles the common discover -> apply -> reboot -> wait -> hash flow
-// for adding a node (control plane or worker). Returns the post-reboot IP.
+// deployNode handles the apply -> reboot -> wait -> hash flow for adding a node
+// (control palne or worker). Uses pre-discovered live data. Returns the post-reboot IP.
 func deployNode(
 	ctx context.Context,
 	vmid types.VMID,
 	role types.Role,
+	live map[types.VMID]*types.LiveNode,
 	deployed *types.ClusterState,
 	stateMgr *state.Manager,
 	scanner *discovery.Scanner,
 	talosClient *talos.Client,
 ) (net.IP, error) {
-	liveNodes, err := scanner.DiscoverVMs(ctx, []types.VMID{vmid})
-	if err != nil {
-		logger.Error("failed to discover VM", zap.Int("vmid", int(vmid)), zap.Error(err))
-		return nil, fmt.Errorf("discover VM %d: %w", vmid, err)
-	}
-
-	node, ok := liveNodes[vmid]
+	node, ok := live[vmid]
 	if !ok || node.IP == nil {
-		logger.Error("VM IP not discovered", zap.Int("vmid", int(vmid)))
-		return nil, fmt.Errorf("VM %d IP not discovered", vmid)
+		// Fallback: re-discover this single VM in case live map is stale
+		logger.Debug("VM not in live map, re-discovering", zap.Int("vmid", int(vmid)))
+		liveNodes, err := scanner.DiscoverVMs(ctx, []types.VMID{vmid})
+		if err != nil {
+			logger.Error("failed to discover VM", zap.Int("vmid", int(vmid)))
+			return nil, fmt.Errorf("discover VM %d: %w", vmid, err)
+		}
+		node, ok = liveNodes[vmid]
+		if !ok || node.IP == nil {
+			logger.Error("VM IP not discovered", zap.Int("vmid", int(vmid)))
+			return nil, fmt.Errorf("VM %d IP not discovered", vmid)
+		}
 	}
 
 	configPath := stateMgr.NodeConfigPath(vmid, role)
@@ -554,6 +566,7 @@ func executePlan(
 	plan *types.ReconcilePlan,
 	desired map[types.VMID]*types.NodeSpec,
 	deployed *types.ClusterState,
+	live map[types.VMID]*types.LiveNode,
 	stateMgr *state.Manager,
 	scanner *discovery.Scanner,
 	talosClient *talos.Client,
@@ -599,7 +612,7 @@ func executePlan(
 					zap.Int("vmid", int(firstVMID)),
 					zap.String("name", spec.Name))
 			} else {
-				newIP, err := deployNode(ctx, firstVMID, types.RoleControlPlane, deployed, stateMgr, scanner, talosClient)
+				newIP, err := deployNode(ctx, firstVMID, types.RoleControlPlane, live, deployed, stateMgr, scanner, talosClient)
 				if err != nil {
 					logger.Error("bootstrap first control plane failed", zap.Int("vmid", int(firstVMID)), zap.Error(err))
 					return fmt.Errorf("bootstrap first CP: %w", err)
@@ -795,7 +808,7 @@ func executePlan(
 				continue
 			}
 
-			if _, err := deployNode(ctx, vmid, types.RoleControlPlane, deployed, stateMgr, scanner, talosClient); err != nil {
+			if _, err := deployNode(ctx, vmid, types.RoleControlPlane, live, deployed, stateMgr, scanner, talosClient); err != nil {
 				logger.Error("failed to add control plane", zap.Int("vmid", int(vmid)), zap.Error(err))
 				return fmt.Errorf("add CP %d: %w", vmid, err)
 			}
@@ -880,7 +893,7 @@ func executePlan(
 					return nil
 				}
 
-				if _, err := deployNode(gctx, vmid, types.RoleWorker, deployed, stateMgr, scanner, talosClient); err != nil {
+				if _, err := deployNode(gctx, vmid, types.RoleWorker, live, deployed, stateMgr, scanner, talosClient); err != nil {
 					return fmt.Errorf("add worker %d: %w", vmid, err)
 				}
 				return nil

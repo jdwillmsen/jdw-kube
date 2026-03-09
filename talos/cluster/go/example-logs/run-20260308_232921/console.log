@@ -1,4 +1,4 @@
-[2m22:53:53[0m [34mDEBUG[0m session started cluster=cluster config=../terraform.tfvars log_dir=logs\2026-03-08\run-20260308_225353
+[2m23:29:21[0m [34mDEBUG[0m session started cluster=cluster config=../terraform.tfvars log_dir=logs\2026-03-08\run-20260308_232921
 [36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
 ╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
    ██║   ███████║██║     ██║   ██║███████╗
@@ -6,16 +6,16 @@
    ██║   ██║  ██║███████╗╚██████╔╝███████║
    ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
 [0m[2m ━━━ Kubernetes Bootstrap Tool v0.1.0 ━━━[0m
-[2m22:53:54[0m [34mDEBUG[0m prerequisite found tool=talosctl path=F:\Dev\bin\talosctl.exe version=Client:
-[2m22:53:54[0m [34mDEBUG[0m prerequisite found tool=kubectl path=C:\ProgramData\chocolatey\bin\kubectl.exe version=Client Version: v1.35.0
-[2m22:53:54[0m [32mINFO [0m starting reconciliation cluster=core dry_run=false plan_mode=false
-[2m22:53:54[0m [32mINFO [0m refreshing proxmox node IPs
-[2m22:53:59[0m [32mINFO [0m loading desired state from terraform
-[2m22:53:59[0m [32mINFO [0m loaded desired state nodes=7
-[2m22:53:59[0m [32mINFO [0m loading deployed state
-[2m22:53:59[0m [32mINFO [0m discovering live state
-[2m22:54:07[0m [32mINFO [0m discovered live state found=7
-[2m22:54:07[0m [32mINFO [0m building reconciliation plan
+[2m23:29:21[0m [34mDEBUG[0m prerequisite found tool=talosctl path=F:\Dev\bin\talosctl.exe version=Client:
+[2m23:29:21[0m [34mDEBUG[0m prerequisite found tool=kubectl path=C:\ProgramData\chocolatey\bin\kubectl.exe version=Client Version: v1.35.0
+[2m23:29:21[0m [32mINFO [0m starting reconciliation cluster=core dry_run=false plan_mode=false
+[2m23:29:21[0m [32mINFO [0m refreshing proxmox node IPs
+[2m23:29:27[0m [32mINFO [0m loading desired state from terraform
+[2m23:29:27[0m [32mINFO [0m loaded desired state nodes=7
+[2m23:29:27[0m [32mINFO [0m loading deployed state
+[2m23:29:27[0m [32mINFO [0m discovering live state
+[2m23:29:32[0m [32mINFO [0m discovered live state found=7
+[2m23:29:32[0m [32mINFO [0m building reconciliation plan
 [2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
 [2m┃[0m [36m[1mRECONCILIATION PLAN[0m[2m                                         [2m┃[0m
 [2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
@@ -24,8 +24,9 @@
 [2m┃[0m  [32m+[0m Add 4 worker(s): [300 301 302 303]                       [2m┃[0m
 [2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
 Proceed with changes? [y/N]: y
-[2m22:54:10[0m [32mINFO [0m confirmed by user response=y
-[2m22:54:10[0m [32mINFO [0m executing bootstrap
-[2m22:54:14[0m [31mERROR[0m VM IP not discovered vmid=200
-[2m22:54:14[0m [31mERROR[0m bootstrap first control plane failed vmid=200 error=VM 200 IP not discovered
-[2m22:54:14[0m [31mERROR[0m plan execution failed error=bootstrap first CP: VM 200 IP not discovered
+[2m23:30:45[0m [32mINFO [0m confirmed by user response=y
+[2m23:30:45[0m [32mINFO [0m executing bootstrap
+[2m23:30:45[0m [34mDEBUG[0m VM not in live map, re-discovering vmid=200
+[2m23:30:47[0m [31mERROR[0m VM IP not discovered vmid=200
+[2m23:30:47[0m [31mERROR[0m bootstrap first control plane failed vmid=200 error=VM 200 IP not discovered
+[2m23:30:47[0m [31mERROR[0m plan execution failed error=bootstrap first CP: VM 200 IP not discovered
