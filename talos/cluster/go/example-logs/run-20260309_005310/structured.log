@@ -1,0 +1,28 @@
+{"level":"debug","ts":"2026-03-09T00:53:10.913-0500","msg":"session started","cluster":"cluster","config":"../terraform.tfvars","log_dir":"logs\\2026-03-09\\run-20260309_005310"}
+{"level":"debug","ts":"2026-03-09T00:53:11.202-0500","msg":"prerequisite found","tool":"talosctl","path":"F:\\Dev\\bin\\talosctl.exe","version":"Client:"}
+{"level":"debug","ts":"2026-03-09T00:53:11.619-0500","msg":"prerequisite found","tool":"kubectl","path":"C:\\ProgramData\\chocolatey\\bin\\kubectl.exe","version":"Client Version: v1.35.0"}
+{"level":"info","ts":"2026-03-09T00:53:11.620-0500","msg":"starting reconciliation","cluster":"core","dry_run":false,"plan_mode":false}
+{"level":"info","ts":"2026-03-09T00:53:11.623-0500","msg":"refreshing proxmox node IPs"}
+{"level":"info","ts":"2026-03-09T00:53:16.639-0500","msg":"loading desired state from terraform"}
+{"level":"info","ts":"2026-03-09T00:53:16.640-0500","msg":"loaded desired state","nodes":7}
+{"level":"info","ts":"2026-03-09T00:53:16.644-0500","msg":"loading deployed state"}
+{"level":"info","ts":"2026-03-09T00:53:16.646-0500","msg":"discovering live state"}
+{"level":"info","ts":"2026-03-09T00:53:26.487-0500","msg":"discovered live state","found":7}
+{"level":"debug","ts":"2026-03-09T00:53:26.487-0500","msg":"discovered VM","vmid":301,"ip":"192.168.1.151","status":"discovered"}
+{"level":"debug","ts":"2026-03-09T00:53:26.487-0500","msg":"discovered VM","vmid":201,"ip":"192.168.1.67","status":"discovered"}
+{"level":"debug","ts":"2026-03-09T00:53:26.487-0500","msg":"discovered VM","vmid":200,"ip":"192.168.1.95","status":"discovered"}
+{"level":"debug","ts":"2026-03-09T00:53:26.487-0500","msg":"discovered VM","vmid":300,"ip":"192.168.1.157","status":"discovered"}
+{"level":"debug","ts":"2026-03-09T00:53:26.492-0500","msg":"discovered VM","vmid":202,"ip":"192.168.1.224","status":"discovered"}
+{"level":"debug","ts":"2026-03-09T00:53:26.492-0500","msg":"discovered VM","vmid":303,"ip":"192.168.1.72","status":"discovered"}
+{"level":"debug","ts":"2026-03-09T00:53:26.492-0500","msg":"discovered VM","vmid":302,"ip":"192.168.1.249","status":"discovered"}
+{"level":"info","ts":"2026-03-09T00:53:26.492-0500","msg":"building reconciliation plan"}
+{"level":"info","ts":"2026-03-09T00:53:26.494-0500","msg":"executing bootstrap"}
+{"level":"info","ts":"2026-03-09T00:53:26.494-0500","msg":"applying config","vmid":200,"role":"control-plane"}
+{"level":"warn","ts":"2026-03-09T00:53:26.501-0500","msg":"node has existing TLS config, switching to secure mode","ip":"192.168.1.95","attempt":1}
+{"level":"warn","ts":"2026-03-09T00:53:26.513-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-09T00:53:28.516-0500","msg":"node is ready","vmid":200,"final_ip":"192.168.1.95","ip_changed":false}
+{"level":"info","ts":"2026-03-09T00:53:38.521-0500","msg":"node deployed, Talos API responding","vmid":200,"role":"control-plane","ip":"192.168.1.95"}
+{"level":"info","ts":"2026-03-09T00:53:38.521-0500","msg":"bootstrapping etcd on first control plane","ip":"192.168.1.95","vmid":200}
+{"level":"info","ts":"2026-03-09T00:53:43.555-0500","msg":"waiting for first control plane full readiness","ip":"192.168.1.95","vmid":200}
+{"level":"error","ts":"2026-03-09T00:58:43.612-0500","msg":"first CP readiness check failed","ip":"192.168.1.95","vmid":200,"error":"timeout waiting for node 192.168.1.95 to be ready"}
+{"level":"error","ts":"2026-03-09T00:58:43.627-0500","msg":"plan execution failed","error":"wait for first CP ready: timeout waiting for node 192.168.1.95 to be ready"}

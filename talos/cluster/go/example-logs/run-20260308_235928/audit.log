@@ -1,4 +1,0 @@
-[2026-03-08 23:59:29] [RECONCILE-START] cluster=core dry_run=false plan_mode=false
-[2026-03-08 23:59:42] [BOOTSTRAP-START] control_planes=3 workers=4
-[2026-03-08 23:59:42] [APPLY-CONFIG] vmid=200 role=control-plane ip=192.168.1.178
-[2026-03-08 23:59:42] [RECONCILE-END] cluster=core status=failed error=bootstrap first CP: apply config to control-plane 200: certificate mismatch on 192.168.1.178: node has config from a different CA and is not ready - reset the node or reinstall Talos: failed to apply configuration: rpc error: code = Unavailable desc = connection error: desc = "transport: authentication handshake failed: tls: failed to verify certificate: x509: certificate signed by unknown authority"
