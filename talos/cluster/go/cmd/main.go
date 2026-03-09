@@ -344,12 +344,25 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 
 	var live map[types.VMID]*types.LiveNode
 	if !cfg.SkipPreflight {
+		// Repopulate ARP tables before discovery so MAC->IP lookups succeed
+		if err := scanner.RepopulateARP(ctx); err != nil {
+			logger.Warn("ARP repopulation failed", zap.Error(err))
+		}
 		live, err = scanner.DiscoverVMs(ctx, vmids)
 		if err != nil {
 			logger.Error("failed to discover VMs", zap.Error(err))
 			return fmt.Errorf("discover VMs: %w", err)
 		}
 		logger.Info("discovered live state", zap.Int("found", len(live)))
+
+		// Log discovery details for debugging
+		for vmid, node := range live {
+			if node.IP != nil {
+				logger.Debug("discovered VM", zap.Int("vmid", int(vmid)), zap.String("ip", node.IP.String()), zap.String("status", string(node.Status)))
+			} else {
+				logger.Debug("discovered VM (no IP)", zap.Int("vmid", int(vmid)), zap.String("mac", node.MAC), zap.String("status", string(node.Status)))
+			}
+		}
 
 		// Mark nodes that are already joined Talos cluster members
 		if deployed.BootstrapCompleted && len(deployed.ControlPlanes) > 0 {
@@ -515,8 +528,11 @@ func deployNode(
 ) (net.IP, error) {
 	node, ok := live[vmid]
 	if !ok || node.IP == nil {
-		// Fallback: re-discover this single VM in case live map is stale
+		// Fallback: repopulate ARP and re-discover this single VM
 		logger.Debug("VM not in live map, re-discovering", zap.Int("vmid", int(vmid)))
+		if err := scanner.RepopulateARP(ctx); err != nil {
+			logger.Warn("ARP repopulation failed", zap.Error(err))
+		}
 		liveNodes, err := scanner.DiscoverVMs(ctx, []types.VMID{vmid})
 		if err != nil {
 			logger.Error("failed to discover VM", zap.Int("vmid", int(vmid)))

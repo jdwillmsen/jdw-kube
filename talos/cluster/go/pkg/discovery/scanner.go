@@ -153,9 +153,9 @@ func (s *Scanner) DiscoverVMs(ctx context.Context, vmids []types.VMID) (map[type
 	return results, nil
 }
 
-// repopulateARP runs parallel ping sweeps on all Proxmox nodes
-// This replaces your arp_repopulate_aggressive()
-func (s *Scanner) repopulateARP(ctx context.Context) error {
+// RepopulateARP runs parallel ping sweeps on all Proxmox nodes to refresh
+// the ARP cache, ensuring subsequent MAC->IP lookups succeed.
+func (s *Scanner) RepopulateARP(ctx context.Context) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(s.nodeIPs))
 
