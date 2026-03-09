@@ -153,8 +153,34 @@ func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath
 			}
 
 		case ErrCertificateRequired:
-			insecure = false
-			continue
+			if insecure {
+				// Node has existing TLS config - switch to secure mode using our talosconfig certs
+				insecure = false
+				if c.logger != nil {
+					c.logger.Warn("node has existing TLS config, switching to secure mode",
+						zap.String("ip", ip.String()), zap.Int("attempt", attempt))
+				}
+				continue
+			}
+			// Secure mode also failed - node has certs from a different CA (previous run).
+			// Check if the node is actually configured and healthy before giving up.
+			if c.logger != nil {
+				c.logger.Warn("TLS cert mismatch, checking if node is already configured and ready",
+					zap.String("ip", ip.String()), zap.Int("attempt", attempt))
+			}
+			ready, checkErr := c.checkReadyByIP(ctx, ip, role)
+			if checkErr == nil && ready {
+				if c.logger != nil {
+					c.logger.Info("node is already configured and ready, treating as success",
+						zap.String("ip", ip.String()), zap.Int("attempt", attempt))
+				}
+				return nil
+			}
+			if c.logger != nil {
+				c.logger.Error("TLS cert mismatch and node not ready - node has stale config from a previous run. Reset the node with `talosctl reset` or reinstall Talos",
+					zap.String("ip", ip.String()), zap.Int("attempt", attempt))
+			}
+			return fmt.Errorf("certificate mismatch on %s: node has config from a different CA and is not ready - reset the node or reinstall Talos: %w", ip, err)
 
 		case ErrConnectionRefused, ErrConnectionTimeout, ErrMaintenanceMode, ErrNodeNotReady:
 			if attempt < maxAttempts {

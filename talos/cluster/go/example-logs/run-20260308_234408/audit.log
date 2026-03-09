@@ -1,4 +1,0 @@
-[2026-03-08 23:44:09] [RECONCILE-START] cluster=core dry_run=false plan_mode=false
-[2026-03-08 23:44:25] [BOOTSTRAP-START] control_planes=3 workers=4
-[2026-03-08 23:44:25] [APPLY-CONFIG] vmid=200 role=control-plane ip=192.168.1.178
-[2026-03-08 23:44:25] [RECONCILE-END] cluster=core status=failed error=bootstrap first CP: apply config to control-plane 200: failed after 5 attempts: failed to apply configuration: rpc error: code = Unavailable desc = connection error: desc = "transport: authentication handshake failed: tls: failed to verify certificate: x509: certificate signed by unknown authority"
