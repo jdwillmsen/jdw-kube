@@ -11,14 +11,11 @@ import (
 	"time"
 
 	"github.com/jdw/talos-bootstrap/pkg/logging"
+	"github.com/jdw/talos-bootstrap/pkg/types"
 	"github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	"github.com/siderolabs/talos/pkg/machinery/client/config"
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-
-	"github.com/jdw/talos-bootstrap/pkg/types"
 )
 
 type Client struct {
@@ -73,16 +70,19 @@ func (c *Client) getClient(ctx context.Context, endpoint net.IP, insecure bool) 
 	}
 
 	opts := []client.OptionFunc{
-		client.WithConfig(c.talosConfig),
 		client.WithEndpoints(endpoint.String()),
 	}
 
 	if insecure {
-		opts = append(opts, client.WithGRPCDialOptions(
-			grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
-				InsecureSkipVerify: true,
-			})),
-		))
+		// For maintenance mode: use WithTLSConfig to skip server cert verification.
+		// We must NOT load the talosconfig (WithConfig) here because the Talos client
+		// library builds its own TLS credentials from the config context and appends
+		// grpc.WithTransportCredentaisl AFTER our dial options, overriding InsecureSkipVerify
+		opts = append(opts, client.WithTLSConfig(&tls.Config{
+			InsecureSkipVerify: true,
+		}))
+	} else {
+		opts = append(opts, client.WithConfig(c.talosConfig))
 	}
 
 	return client.New(ctx, opts...)
