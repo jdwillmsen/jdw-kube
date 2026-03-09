@@ -1,13 +1,13 @@
 ━━━ TALOS BOOTSTRAP RUN SUMMARY ━━━
-  Status:       failed
+  Status:       success
   Cluster:      core
-  Start:        2026-03-09 02:10:23
-  Duration:     26s
-  Run Dir:      logs\2026-03-09\run-20260309_021023
-  Error:        execute plan: bootstrap etcd: failed to bootstrap etcd: rpc error: code = AlreadyExists desc = etcd data directory is not empty
+  Start:        2026-03-09 02:47:00
+  Duration:     4m3s
+  Run Dir:      logs\2026-03-09\run-20260309_024700
+  Error:        none
   ─── Cluster Nodes ───
-  Control Planes: 0
-  Workers:        0
+  Control Planes: 3
+  Workers:        4
   ─── Operations ───
   Added:          7
   Removed:        0

@@ -1,4 +1,0 @@
-[2026-03-09 01:16:50] [RECONCILE-START] cluster=core dry_run=false plan_mode=false
-[2026-03-09 01:17:05] [BOOTSTRAP-START] control_planes=3 workers=4
-[2026-03-09 01:17:05] [APPLY-CONFIG] vmid=200 role=control-plane ip=192.168.1.136
-[2026-03-09 01:22:29] [RECONCILE-END] cluster=core status=failed error=wait for first CP ready: timeout waiting for node 192.168.1.156 to be ready
