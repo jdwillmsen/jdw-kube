@@ -1,0 +1,4 @@
+[2026-03-09 02:10:24] [RECONCILE-START] cluster=core dry_run=false plan_mode=false
+[2026-03-09 02:10:37] [BOOTSTRAP-START] control_planes=3 workers=4
+[2026-03-09 02:10:37] [APPLY-CONFIG] vmid=200 role=control-plane ip=192.168.1.156
+[2026-03-09 02:10:49] [RECONCILE-END] cluster=core status=failed error=bootstrap etcd: failed to bootstrap etcd: rpc error: code = AlreadyExists desc = etcd data directory is not empty
