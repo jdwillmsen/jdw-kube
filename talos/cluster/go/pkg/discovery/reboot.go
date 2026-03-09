@@ -45,6 +45,8 @@ type RebootMonitor struct {
 	lastStateChange time.Time
 	lastARPRepop    time.Time
 	talosPort       int
+	verifyCount     int // consecutive successful port checks in Verifying state
+	verifyFailures  int // consecutive failures in Verifying state
 }
 
 // NewRebootMonitor creates a monitor for tracking a node through reboot
@@ -163,18 +165,28 @@ func (m *RebootMonitor) tickRebooting(ctx context.Context) (net.IP, bool, error)
 }
 
 // tickVerifying confirms the candidate IP has a responding Talos API.
-// If the port drops, falls back to Rebooting.
+// Requires 2 consecutive successful checks before declaring ready.
+// Falls back to Rebooting only after 3 consecutive failures (tolerates port flicker during boot).
 func (m *RebootMonitor) tickVerifying(ctx context.Context) (net.IP, bool, error) {
 	if !TestPort(m.candidateIP.String(), m.talosPort, 3*time.Second) {
-		// Lost it, back to rebooting
-		m.logger.Warn("candidate IP lost during verification, returning to rebooting",
-			zap.String("candidate_ip", m.candidateIP.String()))
-		m.transitionTo(StateRebooting)
+		m.verifyCount = 0
+		m.verifyFailures++
+
+		if m.verifyFailures >= 3 {
+			m.logger.Warn("candidate IP lost during verification, returning to rebooting",
+				zap.String("candidate_ip", m.candidateIP.String()))
+			m.transitionTo(StateRebooting)
+		}
 		return nil, false, nil
 	}
 
-	// Port is up - node is ready
-	return m.candidateIP, true, nil
+	m.verifyFailures = 0
+	m.verifyCount++
+
+	if m.verifyCount >= 2 {
+		return m.candidateIP, true, nil
+	}
+	return nil, true, nil
 }
 
 func (m *RebootMonitor) transitionTo(newState RebootState) {
@@ -183,6 +195,8 @@ func (m *RebootMonitor) transitionTo(newState RebootState) {
 		zap.String("to", newState.String()))
 	m.state = newState
 	m.lastStateChange = time.Now()
+	m.verifyCount = 0
+	m.verifyFailures = 0
 }
 
 // State returns the current reboot monitor state (for testing)

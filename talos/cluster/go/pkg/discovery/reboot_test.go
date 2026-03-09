@@ -192,7 +192,7 @@ func TestTickRebooting_NoIPFound(t *testing.T) {
 	assert.Equal(t, StateRebooting, monitor.state)
 }
 
-// Test tickVerifying - port closed should go back to rebooting
+// Test tickVerifying - port closed 3 times should go back to rebooting
 func TestTickVerifying_PortClosed(t *testing.T) {
 	logger := zap.NewNop()
 
@@ -204,16 +204,26 @@ func TestTickVerifying_PortClosed(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
+	// First two failrues stay in Verifying
+	for i := 0; i < 2; i++ {
+		ip, ready, err := monitor.tickVerifying(ctx)
+		assert.Nil(t, ip)
+		assert.False(t, ready)
+		assert.NoError(t, err)
+		assert.Equal(t, StateVerifying, monitor.state)
+	}
+
+	// Third failure transition to Rebooting
 	ip, ready, err := monitor.tickVerifying(ctx)
 
-	// Port not open, should go back to rebooting
 	assert.Nil(t, ip)
 	assert.False(t, ready)
 	assert.NoError(t, err)
 	assert.Equal(t, StateRebooting, monitor.state)
 }
 
-// Test tickVerifying - port open should return ready
+// Test tickVerifying - port open twice should return ready
 func TestTickVerifying_PortOpen(t *testing.T) {
 	logger := zap.NewNop()
 
@@ -232,9 +242,15 @@ func TestTickVerifying_PortOpen(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	ip, ready, err := monitor.tickVerifying(ctx)
 
-	// Port is open, should return the candidate IP as ready
+	// First check: not ready yet (need 2 consecutive)
+	ip, ready, err := monitor.tickVerifying(ctx)
+	assert.Nil(t, ip)
+	assert.False(t, ready)
+	assert.NoError(t, err)
+
+	// Second check: now ready
+	ip, ready, err = monitor.tickVerifying(ctx)
 	assert.Equal(t, monitor.candidateIP, ip)
 	assert.True(t, ready)
 	assert.NoError(t, err)

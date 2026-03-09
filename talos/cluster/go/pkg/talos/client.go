@@ -390,35 +390,13 @@ func (c *Client) checkReady(ctx context.Context, tc *client.Client, role types.R
 	}
 
 	if role == types.RoleControlPlane {
+		// Check etcd is responsive - kubelet is NOT checked here because it depends on
+		// the API server being reachable via the control plane endpoint (HAProxy), which
+		// may not be configured yet during bootstrap.
 		_, err := tc.EtcdMemberList(ctx, &machine.EtcdMemberListRequest{})
 		if err != nil {
 			if c.logger != nil {
 				c.logger.Debug("etcd member list not ready", zap.Error(err))
-			}
-			return false, nil
-		}
-
-		services, err := tc.ServiceList(ctx)
-		if err != nil {
-			if c.logger != nil {
-				c.logger.Debug("service list not ready", zap.Error(err))
-			}
-			return false, nil
-		}
-
-		kubeletRunning := false
-		for _, svc := range services.Messages {
-			for _, s := range svc.Services {
-				if s.Id == "kubelet" && s.State == "running" {
-					kubeletRunning = true
-					break
-				}
-			}
-		}
-
-		if !kubeletRunning {
-			if c.logger != nil {
-				c.logger.Debug("kubelet not running")
 			}
 			return false, nil
 		}

@@ -650,12 +650,7 @@ func executePlan(
 					logger.Error("etcd health check timed out", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)), zap.Error(err))
 					return fmt.Errorf("wait for etcd healthy: %w", err)
 				}
-
-				logger.Info("waiting for first control plane full readiness", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)))
-				if err := talosClient.WaitForReady(ctx, newIP, types.RoleControlPlane); err != nil {
-					logger.Error("first CP readiness check failed", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)), zap.Error(err))
-					return fmt.Errorf("wait for first CP ready: %w", err)
-				}
+				logger.Info("first control plane ready (API + etcd)", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)))
 			}
 
 			deployed.BootstrapCompleted = true
