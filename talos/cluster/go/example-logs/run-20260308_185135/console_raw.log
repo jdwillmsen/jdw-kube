@@ -1,0 +1,54 @@
+jdwil@JakeGPC MINGW64 /f/Dev/projects/personal/jdw-kube/talos/cluster/go (main)
+$ go run cmd/main.go bootstrap --tfvars ../terraform.tfvars -l debug
+18:51:35 DEBUG session started cluster=cluster config=../terraform.tfvars log_dir=logs\2026-03-08\run-20260308_185135
+████████╗ █████╗ ██╗      ██████╗ ███████╗
+╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
+   ██║   ███████║██║     ██║   ██║███████╗
+   ██║   ██╔══██║██║     ██║   ██║╚════██║
+   ██║   ██║  ██║███████╗╚██████╔╝███████║
+   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
+ ━━━ Kubernetes Bootstrap Tool v0.1.0 ━━━
+18:51:36 DEBUG prerequisite found tool=talosctl path=F:\Dev\bin\talosctl.exe version=Client:
+18:51:36 DEBUG prerequisite found tool=kubectl path=C:\ProgramData\chocolatey\bin\kubectl.exe version=Client Version: v1.35.0
+18:51:36 INFO  starting reconciliation cluster=core dry_run=false plan_mode=false
+18:51:36 INFO  refreshing proxmox node IPs
+18:51:42 INFO  loading desired state from terraform
+18:51:42 INFO  loaded desired state nodes=7
+18:51:42 INFO  loading deployed state
+18:51:42 INFO  discovering live state
+18:51:46 INFO  discovered live state found=7
+18:51:46 INFO  building reconciliation plan
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ RECONCILIATION PLAN                                         ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃  [BOOTSTRAP] Cluster needs initial bootstrap                ┃
+┃  + Add 3 control plane(s): [200 201 202]                    ┃
+┃  + Add 4 worker(s): [300 301 302 303]                       ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+Proceed with changes? [y/N]: y
+18:52:04 INFO  confirmed by user response=y
+18:52:04 INFO  executing bootstrap
+18:52:06 INFO  applying config vmid=200 role=control-plane
+Error: execute plan: bootstrap first CP: apply config to control-plane 200: failed after 5 attempts: failed to apply configuration: rpc error: code = Unavailable desc = connection error: desc = "transport: authentication handshake failed: tls: failed to verify certificate: x509: certificate signed by unknown authority"
+Usage:
+  talos-bootstrap bootstrap [flags]
+
+Flags:
+  -h, --help   help for bootstrap
+
+Global Flags:
+  -a, --auto-approve        Skip confirmations
+  -c, --cluster string      Cluster name (default "cluster")
+  -d, --dry-run             Simulate only
+  -f, --force-reconfigure   Force reconfigure all nodes
+      --log-dir string      Log directory (default "logs")
+  -l, --log-level string    Log level (debug, info, warn, error) (default "info")
+      --no-color            Disable colored output
+  -s, --skip-preflight      Skip connectivity checks
+      --ssh-key string      Path to SSH private key (default "C:\\Users\\jdwil\\.ssh\\id_rsa")
+      --tfvars string       Path to terraform.tfvars (default "terraform.tfvars")
+
+exit status 1
+
+jdwil@JakeGPC MINGW64 /f/Dev/projects/personal/jdw-kube/talos/cluster/go (main)
+$
