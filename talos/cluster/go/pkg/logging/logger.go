@@ -202,10 +202,15 @@ func (e *kvEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*b
 }
 
 // With returns a new encoder with additional fields stored for later encoding.
+// Fields are NOT passed to the inner encoder - we render them ourselves in
+// EncodeEntry as key=value. Passing them through would cause the console
+// encoder to render them as JSON alongside our key=value output.
 func (e *kvEncoder) With(fields []zapcore.Field) zapcore.Encoder {
-	clone := e.Clone().(*kvEncoder)
-	clone.fields = append(clone.fields, fields...)
-	return clone
+	return &kvEncoder{
+		Encoder: e.Encoder.Clone(),
+		noColor: e.noColor,
+		fields:  append(append([]zapcore.Field{}, e.fields...), fields...),
+	}
 }
 
 // newConsoleEncoderConfig returns a simple console encoder config.

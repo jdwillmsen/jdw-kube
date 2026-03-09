@@ -328,8 +328,10 @@ func (c *Client) WaitForReady(ctx context.Context, ip net.IP, role types.Role) e
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	insecure := true
-	switchToSecure := false
+	// Start in secure mode - this is caleld after the node is configured and API-responsive.
+	// The insecure fallback is only needed if the secure conenction fails (e.g. during early boot).
+	insecure := false
+	triedInsecure := false
 	var tc *client.Client
 	var err error
 
@@ -344,6 +346,11 @@ func (c *Client) WaitForReady(ctx context.Context, ip net.IP, role types.Role) e
 			if tc == nil {
 				tc, err = c.getClient(ctx, ip, insecure)
 				if err != nil {
+					// If secure fails, try insecure once (node may still be in early boot)
+					if !insecure && !triedInsecure {
+						insecure = true
+						triedInsecure = true
+					}
 					continue
 				}
 			}
@@ -353,10 +360,10 @@ func (c *Client) WaitForReady(ctx context.Context, ip net.IP, role types.Role) e
 				tc.Close()
 				tc = nil
 
-				// Switch to secure mode once after first failed attempt
-				if insecure && !switchToSecure {
+				// If secure fails, try insecure once
+				if insecure && !triedInsecure {
 					insecure = false
-					switchToSecure = true
+					triedInsecure = true
 				}
 				continue
 			}
@@ -376,18 +383,26 @@ func (c *Client) checkReady(ctx context.Context, tc *client.Client, role types.R
 		if role == types.RoleWorker && isMaintenanceModeError(err) {
 			return true, nil
 		}
+		if c.logger != nil {
+			c.logger.Debug("version check failed in readiness poll", zap.Error(err))
+		}
 		return false, err
 	}
 
 	if role == types.RoleControlPlane {
-		// Use EtcdMemberList from the client (machine API)
 		_, err := tc.EtcdMemberList(ctx, &machine.EtcdMemberListRequest{})
 		if err != nil {
+			if c.logger != nil {
+				c.logger.Debug("etcd member list not ready", zap.Error(err))
+			}
 			return false, nil
 		}
 
 		services, err := tc.ServiceList(ctx)
 		if err != nil {
+			if c.logger != nil {
+				c.logger.Debug("service list not ready", zap.Error(err))
+			}
 			return false, nil
 		}
 
@@ -402,6 +417,9 @@ func (c *Client) checkReady(ctx context.Context, tc *client.Client, role types.R
 		}
 
 		if !kubeletRunning {
+			if c.logger != nil {
+				c.logger.Debug("kubelet not running", zap.Error(err))
+			}
 			return false, nil
 		}
 	}
