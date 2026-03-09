@@ -1,0 +1,121 @@
+[2m01:16:50[0m [34mDEBUG[0m session started cluster=cluster config=../terraform.tfvars log_dir=logs\2026-03-09\run-20260309_011650
+[36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
+╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
+   ██║   ███████║██║     ██║   ██║███████╗
+   ██║   ██╔══██║██║     ██║   ██║╚════██║
+   ██║   ██║  ██║███████╗╚██████╔╝███████║
+   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
+[0m[2m ━━━ Kubernetes Bootstrap Tool v0.1.0 ━━━[0m
+[2m01:16:50[0m [34mDEBUG[0m prerequisite found tool=talosctl path=F:\Dev\bin\talosctl.exe version=Client:
+[2m01:16:50[0m [34mDEBUG[0m prerequisite found tool=kubectl path=C:\ProgramData\chocolatey\bin\kubectl.exe version=Client Version: v1.35.0
+[2m01:16:50[0m [32mINFO [0m starting reconciliation cluster=core dry_run=false plan_mode=false
+[2m01:16:50[0m [32mINFO [0m refreshing proxmox node IPs
+[2m01:16:55[0m [32mINFO [0m loading desired state from terraform
+[2m01:16:55[0m [32mINFO [0m loaded desired state nodes=7
+[2m01:16:55[0m [32mINFO [0m loading deployed state
+[2m01:16:55[0m [32mINFO [0m discovering live state
+[2m01:17:05[0m [32mINFO [0m discovered live state found=7
+[2m01:17:05[0m [34mDEBUG[0m discovered VM vmid=201 ip=192.168.1.150 status=discovered
+[2m01:17:05[0m [34mDEBUG[0m discovered VM vmid=302 ip=192.168.1.132 status=discovered
+[2m01:17:05[0m [34mDEBUG[0m discovered VM vmid=200 ip=192.168.1.136 status=discovered
+[2m01:17:05[0m [34mDEBUG[0m discovered VM vmid=300 ip=192.168.1.214 status=discovered
+[2m01:17:05[0m [34mDEBUG[0m discovered VM vmid=303 ip=192.168.1.245 status=discovered
+[2m01:17:05[0m [34mDEBUG[0m discovered VM vmid=301 ip=192.168.1.248 status=discovered
+[2m01:17:05[0m [34mDEBUG[0m discovered VM vmid=202 ip=192.168.1.175 status=discovered
+[2m01:17:05[0m [32mINFO [0m building reconciliation plan
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mRECONCILIATION PLAN[0m[2m                                         [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  [33m[BOOTSTRAP][0m Cluster needs initial bootstrap                [2m┃[0m
+[2m┃[0m  [32m+[0m Add 3 control plane(s): [200 201 202]                    [2m┃[0m
+[2m┃[0m  [32m+[0m Add 4 worker(s): [300 301 302 303]                       [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m01:17:05[0m [32mINFO [0m executing bootstrap
+[2m01:17:05[0m [32mINFO [0m applying config vmid=200 role=control-plane
+[2m01:17:05[0m [33mWARN [0m talos apply-config warning reason=extra kernel arguments are not supported when booting using SDBoot
+[2m01:17:09[0m [32mINFO [0m node unreachable, entering reboot state {"vmid": 200} ip=192.168.1.136
+[2m01:17:09[0m [34mDEBUG[0m state transition {"vmid": 200} from=monitoring to=rebooting
+[2m01:17:12[0m [32mINFO [0m found candidate IP {"vmid": 200} candidate_ip=192.168.1.156 ip_changed=true
+[2m01:17:12[0m [34mDEBUG[0m state transition {"vmid": 200} from=rebooting to=verifying
+[2m01:17:15[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting {"vmid": 200} candidate_ip=192.168.1.156
+[2m01:17:15[0m [34mDEBUG[0m state transition {"vmid": 200} from=verifying to=rebooting
+[2m01:17:15[0m [32mINFO [0m found candidate IP {"vmid": 200} candidate_ip=192.168.1.156 ip_changed=true
+[2m01:17:15[0m [34mDEBUG[0m state transition {"vmid": 200} from=rebooting to=verifying
+[2m01:17:19[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting {"vmid": 200} candidate_ip=192.168.1.156
+[2m01:17:19[0m [34mDEBUG[0m state transition {"vmid": 200} from=verifying to=rebooting
+[2m01:17:19[0m [34mDEBUG[0m repopulating ARP tables {"vmid": 200}
+[2m01:17:22[0m [32mINFO [0m found candidate IP {"vmid": 200} candidate_ip=192.168.1.156 ip_changed=true
+[2m01:17:22[0m [34mDEBUG[0m state transition {"vmid": 200} from=rebooting to=verifying
+[2m01:17:25[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting {"vmid": 200} candidate_ip=192.168.1.156
+[2m01:17:25[0m [34mDEBUG[0m state transition {"vmid": 200} from=verifying to=rebooting
+[2m01:17:25[0m [32mINFO [0m found candidate IP {"vmid": 200} candidate_ip=192.168.1.156 ip_changed=true
+[2m01:17:25[0m [34mDEBUG[0m state transition {"vmid": 200} from=rebooting to=verifying
+[2m01:17:30[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting {"vmid": 200} candidate_ip=192.168.1.156
+[2m01:17:30[0m [34mDEBUG[0m state transition {"vmid": 200} from=verifying to=rebooting
+[2m01:17:30[0m [34mDEBUG[0m repopulating ARP tables {"vmid": 200}
+[2m01:17:37[0m [32mINFO [0m found candidate IP {"vmid": 200} candidate_ip=192.168.1.136 ip_changed=false
+[2m01:17:37[0m [34mDEBUG[0m state transition {"vmid": 200} from=rebooting to=verifying
+[2m01:17:42[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting {"vmid": 200} candidate_ip=192.168.1.136
+[2m01:17:42[0m [34mDEBUG[0m state transition {"vmid": 200} from=verifying to=rebooting
+[2m01:17:42[0m [34mDEBUG[0m repopulating ARP tables {"vmid": 200}
+[2m01:17:45[0m [32mINFO [0m found candidate IP {"vmid": 200} candidate_ip=192.168.1.156 ip_changed=true
+[2m01:17:45[0m [34mDEBUG[0m state transition {"vmid": 200} from=rebooting to=verifying
+[2m01:17:45[0m [32mINFO [0m node is ready {"vmid": 200} final_ip=192.168.1.156 ip_changed=true
+[2m01:17:55[0m [32mINFO [0m node deployed, Talos API responding vmid=200 role=control-plane ip=192.168.1.156
+[2m01:17:55[0m [32mINFO [0m bootstrapping etcd on first control plane ip=192.168.1.156 vmid=200
+[2m01:18:00[0m [32mINFO [0m waiting for first control plane full readiness ip=192.168.1.156 vmid=200
+[2m01:18:05[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:18:10[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:18:15[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:18:20[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:18:25[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:18:30[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:18:35[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:18:40[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:18:45[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:18:50[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:18:55[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:19:00[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:19:05[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:19:10[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:19:15[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:19:20[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:19:25[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:19:30[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:19:35[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:19:40[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:19:45[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:19:50[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:19:55[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:20:00[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:20:05[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:20:10[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:20:15[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:20:20[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:20:25[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:20:30[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:20:35[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:20:40[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:20:45[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:20:50[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:20:55[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:21:00[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:21:05[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:21:10[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:21:15[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:21:20[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:21:25[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:21:30[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:21:35[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:21:40[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:21:45[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:21:50[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:21:55[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:22:00[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:22:05[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:22:10[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:22:15[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:22:20[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:22:25[0m [34mDEBUG[0m kubelet not running =<nil>
+[2m01:22:29[0m [31mERROR[0m first CP readiness check failed ip=192.168.1.156 vmid=200 error=timeout waiting for node 192.168.1.156 to be ready
+[2m01:22:29[0m [31mERROR[0m plan execution failed error=wait for first CP ready: timeout waiting for node 192.168.1.156 to be ready

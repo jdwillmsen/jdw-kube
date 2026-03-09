@@ -418,7 +418,7 @@ func (c *Client) checkReady(ctx context.Context, tc *client.Client, role types.R
 
 		if !kubeletRunning {
 			if c.logger != nil {
-				c.logger.Debug("kubelet not running", zap.Error(err))
+				c.logger.Debug("kubelet not running")
 			}
 			return false, nil
 		}

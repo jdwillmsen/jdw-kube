@@ -1,0 +1,16 @@
+━━━ TALOS BOOTSTRAP RUN SUMMARY ━━━
+  Status:       failed
+  Cluster:      core
+  Start:        2026-03-09 01:16:50
+  Duration:     5m40s
+  Run Dir:      logs\2026-03-09\run-20260309_011650
+  Error:        execute plan: wait for first CP ready: timeout waiting for node 192.168.1.156 to be ready
+  ─── Cluster Nodes ───
+  Control Planes: 0
+  Workers:        0
+  ─── Operations ───
+  Added:          7
+  Removed:        0
+  Updated:        0
+  Bootstrap:      true
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
