@@ -1,0 +1,4 @@
+{"level":"debug","ts":"2026-03-08T22:48:12.686-0500","msg":"session started","cluster":"cluster","config":"../terraform.tfvars","log_dir":"logs\\2026-03-08\\run-20260308_224812"}
+{"level":"debug","ts":"2026-03-08T22:48:12.916-0500","msg":"prerequisite found","tool":"talosctl","path":"F:\\Dev\\bin\\talosctl.exe","version":"Client:"}
+{"level":"debug","ts":"2026-03-08T22:48:13.154-0500","msg":"prerequisite found","tool":"kubectl","path":"C:\\ProgramData\\chocolatey\\bin\\kubectl.exe","version":"Client Version: v1.35.0"}
+{"level":"info","ts":"2026-03-08T22:48:16.217-0500","msg":"confirmed by user","response":"y"}

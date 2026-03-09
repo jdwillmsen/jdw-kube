@@ -1,6 +1,6 @@
 jdwil@JakeGPC MINGW64 /f/Dev/projects/personal/jdw-kube/talos/cluster/go (main)
 $ go run cmd/main.go bootstrap --tfvars ../terraform.tfvars -l debug
-18:51:35 DEBUG session started cluster=cluster config=../terraform.tfvars log_dir=logs\2026-03-08\run-20260308_185135
+22:53:53 DEBUG session started cluster=cluster config=../terraform.tfvars log_dir=logs\2026-03-08\run-20260308_225353
 ████████╗ █████╗ ██╗      ██████╗ ███████╗
 ╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
    ██║   ███████║██║     ██║   ██║███████╗
@@ -8,16 +8,16 @@ $ go run cmd/main.go bootstrap --tfvars ../terraform.tfvars -l debug
    ██║   ██║  ██║███████╗╚██████╔╝███████║
    ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
  ━━━ Kubernetes Bootstrap Tool v0.1.0 ━━━
-18:51:36 DEBUG prerequisite found tool=talosctl path=F:\Dev\bin\talosctl.exe version=Client:
-18:51:36 DEBUG prerequisite found tool=kubectl path=C:\ProgramData\chocolatey\bin\kubectl.exe version=Client Version: v1.35.0
-18:51:36 INFO  starting reconciliation cluster=core dry_run=false plan_mode=false
-18:51:36 INFO  refreshing proxmox node IPs
-18:51:42 INFO  loading desired state from terraform
-18:51:42 INFO  loaded desired state nodes=7
-18:51:42 INFO  loading deployed state
-18:51:42 INFO  discovering live state
-18:51:46 INFO  discovered live state found=7
-18:51:46 INFO  building reconciliation plan
+22:53:54 DEBUG prerequisite found tool=talosctl path=F:\Dev\bin\talosctl.exe version=Client:
+22:53:54 DEBUG prerequisite found tool=kubectl path=C:\ProgramData\chocolatey\bin\kubectl.exe version=Client Version: v1.35.0
+22:53:54 INFO  starting reconciliation cluster=core dry_run=false plan_mode=false
+22:53:54 INFO  refreshing proxmox node IPs
+22:53:59 INFO  loading desired state from terraform
+22:53:59 INFO  loaded desired state nodes=7
+22:53:59 INFO  loading deployed state
+22:53:59 INFO  discovering live state
+22:54:07 INFO  discovered live state found=7
+22:54:07 INFO  building reconciliation plan
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ RECONCILIATION PLAN                                         ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
@@ -26,10 +26,12 @@ $ go run cmd/main.go bootstrap --tfvars ../terraform.tfvars -l debug
 ┃  + Add 4 worker(s): [300 301 302 303]                       ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 Proceed with changes? [y/N]: y
-18:52:04 INFO  confirmed by user response=y
-18:52:04 INFO  executing bootstrap
-18:52:06 INFO  applying config vmid=200 role=control-plane
-Error: execute plan: bootstrap first CP: apply config to control-plane 200: failed after 5 attempts: failed to apply configuration: rpc error: code = Unavailable desc = connection error: desc = "transport: authentication handshake failed: tls: failed to verify certificate: x509: certificate signed by unknown authority"
+22:54:10 INFO  confirmed by user response=y
+22:54:10 INFO  executing bootstrap
+22:54:14 ERROR VM IP not discovered vmid=200
+22:54:14 ERROR bootstrap first control plane failed vmid=200 error=VM 200 IP not discovered
+22:54:14 ERROR plan execution failed error=bootstrap first CP: VM 200 IP not discovered
+Error: execute plan: bootstrap first CP: VM 200 IP not discovered
 Usage:
   talos-bootstrap bootstrap [flags]
 
@@ -45,8 +47,8 @@ Global Flags:
   -l, --log-level string    Log level (debug, info, warn, error) (default "info")
       --no-color            Disable colored output
   -s, --skip-preflight      Skip connectivity checks
-      --ssh-key string      Path to SSH private key (default "C:\\Users\\jdwil\\.ssh\\id_rsa")
-      --tfvars string       Path to terraform.tfvars (default "terraform.tfvars")
+  -k, --ssh-key string      Path to SSH private key (default "C:\\Users\\jdwil\\.ssh\\id_rsa")
+  -t, --tfvars string       Path to terraform.tfvars (default "terraform.tfvars")
 
 exit status 1
 

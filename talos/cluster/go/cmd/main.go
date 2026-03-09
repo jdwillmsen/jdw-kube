@@ -239,9 +239,10 @@ func resetCmd() *cobra.Command {
 
 			clusterDir := filepath.Join("clusters", cfg.ClusterName)
 			if err := os.RemoveAll(clusterDir); err != nil {
+				logger.Error("Remove cluster failed", zap.Error(err))
 				return fmt.Errorf("remove cluster dir: %w", err)
 			}
-			fmt.Fprintf(session.Console, "Reset cluster %s\n", cfg.ClusterName)
+			logger.Info("Remove cluster dir", zap.String("clusterDir", clusterDir))
 			return nil
 		},
 	}
