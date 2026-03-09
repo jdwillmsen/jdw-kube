@@ -1,0 +1,48 @@
+{"level":"debug","ts":"2026-03-09T00:23:36.606-0500","msg":"session started","cluster":"cluster","config":"../terraform.tfvars","log_dir":"logs\\2026-03-09\\run-20260309_002336"}
+{"level":"debug","ts":"2026-03-09T00:23:37.413-0500","msg":"prerequisite found","tool":"talosctl","path":"F:\\Dev\\bin\\talosctl.exe","version":"Client:"}
+{"level":"debug","ts":"2026-03-09T00:23:38.704-0500","msg":"prerequisite found","tool":"kubectl","path":"C:\\ProgramData\\chocolatey\\bin\\kubectl.exe","version":"Client Version: v1.35.0"}
+{"level":"info","ts":"2026-03-09T00:23:38.706-0500","msg":"starting reconciliation","cluster":"core","dry_run":false,"plan_mode":false}
+{"level":"info","ts":"2026-03-09T00:23:38.710-0500","msg":"refreshing proxmox node IPs"}
+{"level":"info","ts":"2026-03-09T00:23:43.641-0500","msg":"loading desired state from terraform"}
+{"level":"info","ts":"2026-03-09T00:23:43.642-0500","msg":"loaded desired state","nodes":7}
+{"level":"info","ts":"2026-03-09T00:23:43.642-0500","msg":"loading deployed state"}
+{"level":"info","ts":"2026-03-09T00:23:43.644-0500","msg":"discovering live state"}
+{"level":"info","ts":"2026-03-09T00:23:52.696-0500","msg":"discovered live state","found":7}
+{"level":"debug","ts":"2026-03-09T00:23:52.697-0500","msg":"discovered VM","vmid":300,"ip":"192.168.1.157","status":"discovered"}
+{"level":"debug","ts":"2026-03-09T00:23:52.697-0500","msg":"discovered VM","vmid":302,"ip":"192.168.1.249","status":"discovered"}
+{"level":"debug","ts":"2026-03-09T00:23:52.697-0500","msg":"discovered VM","vmid":301,"ip":"192.168.1.151","status":"discovered"}
+{"level":"debug","ts":"2026-03-09T00:23:52.697-0500","msg":"discovered VM","vmid":200,"ip":"192.168.1.97","status":"discovered"}
+{"level":"debug","ts":"2026-03-09T00:23:52.697-0500","msg":"discovered VM","vmid":201,"ip":"192.168.1.67","status":"discovered"}
+{"level":"debug","ts":"2026-03-09T00:23:52.697-0500","msg":"discovered VM","vmid":303,"ip":"192.168.1.72","status":"discovered"}
+{"level":"debug","ts":"2026-03-09T00:23:52.698-0500","msg":"discovered VM","vmid":202,"ip":"192.168.1.224","status":"discovered"}
+{"level":"info","ts":"2026-03-09T00:23:52.698-0500","msg":"building reconciliation plan"}
+{"level":"info","ts":"2026-03-09T00:23:52.698-0500","msg":"executing bootstrap"}
+{"level":"info","ts":"2026-03-09T00:23:52.698-0500","msg":"applying config","vmid":200,"role":"control-plane"}
+{"level":"warn","ts":"2026-03-09T00:23:52.714-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-09T00:23:56.715-0500","msg":"node unreachable, entering reboot state","vmid":200,"ip":"192.168.1.97"}
+{"level":"debug","ts":"2026-03-09T00:23:56.715-0500","msg":"state transition","vmid":200,"from":"monitoring","to":"rebooting"}
+{"level":"info","ts":"2026-03-09T00:23:59.770-0500","msg":"found candidate IP","vmid":200,"candidate_ip":"192.168.1.95","ip_changed":true}
+{"level":"debug","ts":"2026-03-09T00:23:59.770-0500","msg":"state transition","vmid":200,"from":"rebooting","to":"verifying"}
+{"level":"warn","ts":"2026-03-09T00:24:02.762-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":200,"candidate_ip":"192.168.1.95"}
+{"level":"debug","ts":"2026-03-09T00:24:02.762-0500","msg":"state transition","vmid":200,"from":"verifying","to":"rebooting"}
+{"level":"info","ts":"2026-03-09T00:24:02.769-0500","msg":"found candidate IP","vmid":200,"candidate_ip":"192.168.1.95","ip_changed":true}
+{"level":"debug","ts":"2026-03-09T00:24:02.770-0500","msg":"state transition","vmid":200,"from":"rebooting","to":"verifying"}
+{"level":"warn","ts":"2026-03-09T00:24:06.756-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":200,"candidate_ip":"192.168.1.95"}
+{"level":"debug","ts":"2026-03-09T00:24:06.756-0500","msg":"state transition","vmid":200,"from":"verifying","to":"rebooting"}
+{"level":"debug","ts":"2026-03-09T00:24:06.756-0500","msg":"repopulating ARP tables","vmid":200}
+{"level":"info","ts":"2026-03-09T00:24:09.822-0500","msg":"found candidate IP","vmid":200,"candidate_ip":"192.168.1.95","ip_changed":true}
+{"level":"debug","ts":"2026-03-09T00:24:09.822-0500","msg":"state transition","vmid":200,"from":"rebooting","to":"verifying"}
+{"level":"warn","ts":"2026-03-09T00:24:11.869-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":200,"candidate_ip":"192.168.1.95"}
+{"level":"debug","ts":"2026-03-09T00:24:11.869-0500","msg":"state transition","vmid":200,"from":"verifying","to":"rebooting"}
+{"level":"info","ts":"2026-03-09T00:24:11.875-0500","msg":"found candidate IP","vmid":200,"candidate_ip":"192.168.1.95","ip_changed":true}
+{"level":"debug","ts":"2026-03-09T00:24:11.875-0500","msg":"state transition","vmid":200,"from":"rebooting","to":"verifying"}
+{"level":"warn","ts":"2026-03-09T00:24:15.714-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":200,"candidate_ip":"192.168.1.95"}
+{"level":"debug","ts":"2026-03-09T00:24:15.714-0500","msg":"state transition","vmid":200,"from":"verifying","to":"rebooting"}
+{"level":"debug","ts":"2026-03-09T00:24:15.714-0500","msg":"repopulating ARP tables","vmid":200}
+{"level":"debug","ts":"2026-03-09T00:24:24.799-0500","msg":"repopulating ARP tables","vmid":200}
+{"level":"info","ts":"2026-03-09T00:24:27.868-0500","msg":"found candidate IP","vmid":200,"candidate_ip":"192.168.1.95","ip_changed":true}
+{"level":"debug","ts":"2026-03-09T00:24:27.869-0500","msg":"state transition","vmid":200,"from":"rebooting","to":"verifying"}
+{"level":"info","ts":"2026-03-09T00:24:27.870-0500","msg":"node is ready","vmid":200,"final_ip":"192.168.1.95","ip_changed":true}
+{"level":"error","ts":"2026-03-09T00:29:27.890-0500","msg":"node readiness check failed","vmid":200,"role":"control-plane","error":"timeout waiting for node 192.168.1.95 to be ready"}
+{"level":"error","ts":"2026-03-09T00:29:27.891-0500","msg":"bootstrap first control plane failed","vmid":200,"error":"wait for control-plane 200 ready: timeout waiting for node 192.168.1.95 to be ready"}
+{"level":"error","ts":"2026-03-09T00:29:27.891-0500","msg":"plan execution failed","error":"bootstrap first CP: wait for control-plane 200 ready: timeout waiting for node 192.168.1.95 to be ready"}
