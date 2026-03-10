@@ -102,17 +102,77 @@ func (b *Box) c(code string) string {
 }
 
 // writeLine writes content with heavy vertical borders and padding.
+// If the visible context exceeds the box inner width, the text wraps onto
+// continuation lines (ANSI stripped) so the right border stays aligned.
 func (b *Box) writeLine(content string) {
 	visible := stripANSI(content)
-	padding := boxWidth - 2 - utf8.RuneCountInString(visible)
-	if padding < 0 {
-		padding = 0
+	maxInner := boxWidth - 2
+	visLen := utf8.RuneCountInString(visible)
+
+	if visLen <= maxInner {
+		padding := maxInner - visLen
+		fmt.Fprintf(b.w, " %s%s%s%s%s%s%s%s\n",
+			b.c(cDim), hV, b.c(cReset),
+			content,
+			strings.Repeat(" ", padding),
+			b.c(cDim), hV, b.c(cReset))
+		return
 	}
-	fmt.Fprintf(b.w, "%s%s%s%s%s%s%s%s\n",
+
+	// First line: redner with original ANSI content, trimmed to maxInner visible chars
+	first := truncateVisibile(content, maxInner)
+	fmt.Fprintf(b.w, " %s%s%s%s%s%s%s\n",
 		b.c(cDim), hV, b.c(cReset),
-		content,
-		strings.Repeat(" ", padding),
+		first,
 		b.c(cDim), hV, b.c(cReset))
+
+	// Wrap remaining visible text onto continuation lines (indent 4 spaces)
+	runes := []rune(visible)
+	const wrapIndent = 4
+	wrapWidth := maxInner - wrapIndent
+	pos := maxInner
+	for pos < len(runes) {
+		end := pos + wrapWidth
+		if end > len(runes) {
+			end = len(runes)
+		}
+		chunk := string(runes[pos:end])
+		line := strings.Repeat(" ", wrapIndent) + chunk
+		padding := maxInner - utf8.RuneCountInString(line)
+		fmt.Fprintf(b.w, "%s%s%s%s%s%s%s%s\n",
+			b.c(cDim), hV, b.c(cReset),
+			line,
+			strings.Repeat(" ", padding),
+			b.c(cDim), hV, b.c(cReset))
+		pos = end
+	}
+}
+
+// truncateVisible returns a prefix of s whose visible (non-ANSI) length is
+// exactly n runes. Any open ANSI escape at the cut point is completed, and a
+// trailing reset is appended so colors don't bleed.
+func truncateVisibile(s string, n int) string {
+	var out strings.Builder
+	visible := 0
+	inEscape := false
+	for _, r := range s {
+		if visible >= n && !inEscape {
+			break
+		}
+		out.WriteRune(r)
+		if r == '\033' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEscape = false
+			}
+			continue
+		}
+		visible++
+	}
+	return out.String()
 }
 
 // Header writes the heavy top border and title.
@@ -162,6 +222,8 @@ func (b *Box) Item(marker, text string) {
 		color = cRed
 	case "~":
 		color = cYellow
+	case "$":
+		color = cDim
 	case mCheck:
 		color = cGreen
 	case mCross:
