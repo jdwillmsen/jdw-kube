@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestPrintBanner(t *testing.T) {
@@ -315,26 +316,64 @@ func TestConstantsDefined(t *testing.T) {
 	}
 }
 
-func TestBox_writeLine_Truncation(t *testing.T) {
+func TestBox_writeLine_Wrap(t *testing.T) {
 	var buf bytes.Buffer
 	box := NewBox(&buf, true)
 
-	// Test with content that would exceed box width
+	// Content that exceed box width should wrap
 	longContent := strings.Repeat("X", boxWidth+50)
 	box.writeLine(longContent)
 
 	output := buf.String()
-	lines := strings.Split(output, "\n")
-	if len(lines) == 0 {
-		t.Fatal("Expected output lines")
+	lines := strings.Split(strings.TrimSuffix(output, "\n"), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("Expected multiple lines for wrapped content, got %d", len(lines))
 	}
 
-	// Check visible length (accounting for ANSI codes)
-	visibleLen := len(stripANSI(lines[0]))
-	// The line should be padded to exactly boxWidth, or truncated
-	// The actual implementation may vary, so we just check it's not excessively long
-	if visibleLen > boxWidth+5 {
-		t.Logf("Line length: %d (visible), content may be truncated or padded", visibleLen)
-		// Don't fail - the truncation behavior might differ
+	// Every line should be exactly boxWidth visible runes
+	for i, line := range lines {
+		visible := stripANSI(line)
+		runeCount := utf8.RuneCountInString(visible)
+		if runeCount != boxWidth {
+			t.Errorf("Line %d: expected width %d runes, got %d: %q", i, boxWidth, runeCount, visible)
+		}
+		// Every line should have box borders
+		if !strings.HasPrefix(visible, hV) || !strings.HasSuffix(visible, hV) {
+			t.Errorf("line %d: expected box borders: %q", i, visible)
+		}
+	}
+
+	// Continuation lines should be indented
+	if len(lines) > 1 {
+		secondVisible := stripANSI(lines[1])
+		// After the left border, should start with spaces (indent)
+		inner := secondVisible[len(hV) : len(secondVisible)-len(hV)]
+		if !strings.HasPrefix(inner, "    ") {
+			t.Errorf("Expected 4-space indent on continuation line, got: %q", inner)
+		}
+	}
+
+	// Should NOT  contain ellipsis (we wrap, not truncate)
+	if strings.Contains(output, "...") {
+		t.Error("Should not truncate with ellipsis - expected wrapping")
+	}
+}
+
+func TestBox_writeLine_NoTruncation(t *testing.T) {
+	var buf bytes.Buffer
+	box := NewBox(&buf, true)
+
+	// Content that fits within box width
+	box.writeLine(" Short content")
+
+	output := buf.String()
+	visible := stripANSI(strings.Split(output, "\n")[0])
+	runeCount := utf8.RuneCountInString(visible)
+
+	if runeCount != boxWidth {
+		t.Errorf("Expected width %d runes, got %d: %q", boxWidth, runeCount, visible)
+	}
+	if strings.Contains(output, "...") {
+		t.Errorf("Should not truncate content that fits")
 	}
 }
