@@ -126,7 +126,7 @@ func (b *Box) writeLine(content string) {
 	// First line: render with original ANSI content, trimmed to wrapAt visible chars
 	first := truncateVisible(content, wrapAt)
 	padding := maxInner - wrapAt
-	fmt.Fprintf(b.w, "%s%s%s%s%s%s%s\n",
+	fmt.Fprintf(b.w, "%s%s%s%s%s%s%s%s\n",
 		b.c(cDim), hV, b.c(cReset),
 		first,
 		strings.Repeat(" ", padding),
