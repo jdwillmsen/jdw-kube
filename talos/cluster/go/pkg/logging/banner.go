@@ -120,22 +120,27 @@ func (b *Box) writeLine(content string) {
 		return
 	}
 
-	// First line: redner with original ANSI content, trimmed to maxInner visible chars
-	first := truncateVisibile(content, maxInner)
+	// Break 1 char early so wrapped lines have a space before the right border
+	wrapAt := maxInner - 1
+
+	// First line: render with original ANSI content, trimmed to wrapAt visible chars
+	first := truncateVisible(content, wrapAt)
+	padding := maxInner - wrapAt
 	fmt.Fprintf(b.w, "%s%s%s%s%s%s%s\n",
 		b.c(cDim), hV, b.c(cReset),
 		first,
+		strings.Repeat(" ", padding),
 		b.c(cDim), hV, b.c(cReset))
 
 	// Determine the ANSI color active at the break point so continuation
 	// lines can carry forward the same color.
-	activeColor := ansiStateAt(content, maxInner)
+	activeColor := ansiStateAt(content, wrapAt)
 
 	// Wrap remaining visible text onto continuation lines (indent 4 spaces)
 	runes := []rune(visible)
 	const wrapIndent = 4
-	wrapWidth := maxInner - wrapIndent
-	pos := maxInner
+	wrapWidth := wrapAt - wrapIndent
+	pos := wrapAt
 	for pos < len(runes) {
 		end := pos + wrapWidth
 		if end > len(runes) {
@@ -156,10 +161,11 @@ func (b *Box) writeLine(content string) {
 // truncateVisible returns a prefix of s whose visible (non-ANSI) length is
 // exactly n runes. Any open ANSI escape at the cut point is completed, and a
 // trailing reset is appended so colors don't bleed.
-func truncateVisibile(s string, n int) string {
+func truncateVisible(s string, n int) string {
 	var out strings.Builder
 	visible := 0
 	inEscape := false
+	hadEscape := false
 	for _, r := range s {
 		if visible >= n && !inEscape {
 			break
@@ -167,6 +173,7 @@ func truncateVisibile(s string, n int) string {
 		out.WriteRune(r)
 		if r == '\033' {
 			inEscape = true
+			hadEscape = true
 			continue
 		}
 		if inEscape {
@@ -177,7 +184,9 @@ func truncateVisibile(s string, n int) string {
 		}
 		visible++
 	}
-	out.WriteString(cReset)
+	if hadEscape {
+		out.WriteString(cReset)
+	}
 	return out.String()
 }
 
