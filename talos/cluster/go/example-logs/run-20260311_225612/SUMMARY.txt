@@ -1,9 +1,9 @@
 ━━━ TALOS BOOTSTRAP RUN SUMMARY ━━━
   Status:       success
   Cluster:      core
-  Start:        2026-03-10 02:12:11
-  Duration:     1s
-  Run Dir:      logs\2026-03-10\run-20260310_021211
+  Start:        2026-03-11 22:56:12
+  Duration:     16s
+  Run Dir:      logs\2026-03-11\run-20260311_225612
   Error:        none
   ─── Cluster Nodes ───
   Control Planes: 0
