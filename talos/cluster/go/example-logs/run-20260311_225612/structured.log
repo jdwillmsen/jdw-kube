@@ -1,9 +1,0 @@
-{"level":"info","ts":"2026-03-11T22:56:12.974-0500","msg":"starting reconciliation","cluster":"core","dry_run":false,"plan_mode":false}
-{"level":"info","ts":"2026-03-11T22:56:12.981-0500","msg":"refreshing proxmox node IPs"}
-{"level":"info","ts":"2026-03-11T22:56:18.373-0500","msg":"loading desired state from terraform"}
-{"level":"info","ts":"2026-03-11T22:56:18.374-0500","msg":"loaded desired state","nodes":7}
-{"level":"info","ts":"2026-03-11T22:56:18.380-0500","msg":"loading deployed state"}
-{"level":"info","ts":"2026-03-11T22:56:18.380-0500","msg":"discovering live state"}
-{"level":"info","ts":"2026-03-11T22:56:28.360-0500","msg":"discovered live state","found":7}
-{"level":"info","ts":"2026-03-11T22:56:28.490-0500","msg":"building reconciliation plan"}
-{"level":"info","ts":"2026-03-11T22:56:28.529-0500","msg":"no changes required"}

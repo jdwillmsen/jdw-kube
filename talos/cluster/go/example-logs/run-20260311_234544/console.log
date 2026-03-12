@@ -6,7 +6,7 @@
    ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
 [0m[2m ━━━ Kubernetes Bootstrap Tool v0.1.0 ━━━[0m
 [2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
- [2m┃[0m [36m[1mCLUSTER STATUS: core[0m[2m                                        [2m┃[0m
+ [2m┃[0m [36m[1mCLUSTER STATUS: core[0m                                        [2m┃[0m
 [2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
  [2m┃[0m [1mDesired State (Terraform)[0m                                   [2m┃[0m
  [2m┃[0m  Control Planes: [36m3[0m                                          [2m┃[0m
@@ -23,6 +23,6 @@
  [2m┃[0m  • VMID 303: 192.168.1.247                                  [2m┃[0m
  [2m┃[0m  • VMID 300: 192.168.1.138                                  [2m┃[0m
  [2m┃[0m  Bootstrap Completed: [36mtrue[0m                                  [2m┃[0m
- [2m┃[0m  Terraform Hash: [36m55c6c6fc61d53d6276d5ecc1c0663147f5d7656ccbb[2m┃[0m
-[2m┃[0m    06375e82d71dab25f1f1a (unchanged)                        [2m┃[0m
+ [2m┃[0m  Terraform Hash: [36m55c6c6fc61d53d6276d5ecc1c0663147f5d7656ccbb[0m[2m┃[0m
+[2m┃[0m    [36m06375e82d71dab25f1f1a (unchanged)[0m                        [2m┃[0m
 [2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m

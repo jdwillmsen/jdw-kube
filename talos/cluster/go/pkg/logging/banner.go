@@ -103,7 +103,8 @@ func (b *Box) c(code string) string {
 
 // writeLine writes content with heavy vertical borders and padding.
 // If the visible context exceeds the box inner width, the text wraps onto
-// continuation lines (ANSI stripped) so the right border stays aligned.
+// continuation lines so the right border stays aligned. ANSI colors active
+// at the break point are carried into continuation lines.
 func (b *Box) writeLine(content string) {
 	visible := stripANSI(content)
 	maxInner := boxWidth - 2
@@ -126,6 +127,10 @@ func (b *Box) writeLine(content string) {
 		first,
 		b.c(cDim), hV, b.c(cReset))
 
+	// Determine the ANSI color active at the break point so continuation
+	// lines can carry forward the same color.
+	activeColor := ansiStateAt(content, maxInner)
+
 	// Wrap remaining visible text onto continuation lines (indent 4 spaces)
 	runes := []rune(visible)
 	const wrapIndent = 4
@@ -137,8 +142,8 @@ func (b *Box) writeLine(content string) {
 			end = len(runes)
 		}
 		chunk := string(runes[pos:end])
-		line := strings.Repeat(" ", wrapIndent) + chunk
-		padding := maxInner - utf8.RuneCountInString(line)
+		line := strings.Repeat(" ", wrapIndent) + b.c(activeColor) + chunk + b.c(cReset)
+		padding := maxInner - utf8.RuneCountInString(strings.Repeat(" ", wrapIndent)+chunk)
 		fmt.Fprintf(b.w, "%s%s%s%s%s%s%s%s\n",
 			b.c(cDim), hV, b.c(cReset),
 			line,
@@ -172,7 +177,43 @@ func truncateVisibile(s string, n int) string {
 		}
 		visible++
 	}
+	out.WriteString(cReset)
 	return out.String()
+}
+
+// ansiStateAt returns the last ANSI escape code active at the given visible
+// character position n. If no color is active (or it was reset), returns "".
+func ansiStateAt(s string, n int) string {
+	var lastCode string
+	var cur strings.Builder
+	visible := 0
+	inEscape := false
+	for _, r := range s {
+		if visible >= n && !inEscape {
+			break
+		}
+		if r == '\033' {
+			inEscape = true
+			cur.Reset()
+			cur.WriteRune(r)
+			continue
+		}
+		if inEscape {
+			cur.WriteRune(r)
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEscape = false
+				code := cur.String()
+				if code == cReset {
+					lastCode = ""
+				} else {
+					lastCode = code
+				}
+			}
+			continue
+		}
+		visible++
+	}
+	return lastCode
 }
 
 // Header writes the heavy top border and title.
@@ -181,7 +222,7 @@ func (b *Box) Header(title string) {
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
 		b.c(cDim), hTL, top, hTR, b.c(cReset))
 
-	b.writeLine(fmt.Sprintf(" %s%s%s%s%s", b.c(cCyan), b.c(cBold), title, b.c(cReset), b.c(cDim)))
+	b.writeLine(fmt.Sprintf(" %s%s%s%s", b.c(cCyan), b.c(cBold), title, b.c(cReset)))
 
 	sep := strings.Repeat(hH, boxWidth-2)
 	fmt.Fprintf(b.w, "%s%s%s%s%s\n",
