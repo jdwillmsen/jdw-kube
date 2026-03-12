@@ -112,7 +112,7 @@ func (b *Box) writeLine(content string) {
 
 	if visLen <= maxInner {
 		padding := maxInner - visLen
-		fmt.Fprintf(b.w, " %s%s%s%s%s%s%s%s\n",
+		fmt.Fprintf(b.w, "%s%s%s%s%s%s%s%s\n",
 			b.c(cDim), hV, b.c(cReset),
 			content,
 			strings.Repeat(" ", padding),
@@ -122,7 +122,7 @@ func (b *Box) writeLine(content string) {
 
 	// First line: redner with original ANSI content, trimmed to maxInner visible chars
 	first := truncateVisibile(content, maxInner)
-	fmt.Fprintf(b.w, " %s%s%s%s%s%s%s\n",
+	fmt.Fprintf(b.w, "%s%s%s%s%s%s%s\n",
 		b.c(cDim), hV, b.c(cReset),
 		first,
 		b.c(cDim), hV, b.c(cReset))
