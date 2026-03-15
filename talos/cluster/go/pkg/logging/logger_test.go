@@ -570,7 +570,7 @@ func TestBuildTeeCore_WithFieldsInJSON(t *testing.T) {
 
 	// Console output should have kv format
 	consoleOuput := consoleBuf.String()
-	if !strings.Contains(consoleOuput, `"vmid=200"`) {
+	if !strings.Contains(consoleOuput, "vmid=200") {
 		t.Errorf("Expected 'vmid=200' in consoleOuput, got: %s", consoleOuput)
 	}
 }

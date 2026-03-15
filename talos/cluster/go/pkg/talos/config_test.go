@@ -37,6 +37,7 @@ func TestNodeConfigGenerate_ControlPlane(t *testing.T) {
 	}
 
 	cfg := types.TestConfig()
+	cfg.SecretsDir = filepath.Join(t.TempDir(), "secrets")
 	nc := NewNodeConfig(cfg)
 
 	spec := &types.NodeSpec{
@@ -73,7 +74,7 @@ func TestNodeConfigGenerate_ControlPlane(t *testing.T) {
 	// Hostname is set via HostnameConfig with auto: stable, not inline
 	assert.Contains(t, contentStr, "auto: stable")
 	assert.Contains(t, contentStr, "clusterName: cluster")
-	assert.Contains(t, contentStr, "endpoint: https://cluster.jdwlabs.com:6443")
+	assert.Contains(t, contentStr, "endpoint: https://cluster.example.com:6443")
 	assert.Contains(t, contentStr, "disk: /dev/sda")
 	assert.Contains(t, contentStr, "interface: eth0")
 	assert.Contains(t, contentStr, "vm.nr_hugepages: \"1024\"")
@@ -87,6 +88,7 @@ func TestNodeConfigGenerate_Worker(t *testing.T) {
 	}
 
 	cfg := types.TestConfig()
+	cfg.SecretsDir = filepath.Join(t.TempDir(), "secrets")
 	nc := NewNodeConfig(cfg)
 
 	spec := &types.NodeSpec{
@@ -143,6 +145,7 @@ func TestNodeConfigGenerate_UnknownRole(t *testing.T) {
 
 func TestNodeConfigGenerate_CreatesDirectory(t *testing.T) {
 	cfg := types.TestConfig()
+	cfg.SecretsDir = filepath.Join(t.TempDir(), "secrets")
 	nc := NewNodeConfig(cfg)
 
 	spec := &types.NodeSpec{
@@ -431,6 +434,7 @@ func BenchmarkNodeConfigGenerate(b *testing.B) {
 	}
 
 	cfg := types.TestConfig()
+	cfg.SecretsDir = filepath.Join(b.TempDir(), "secrets")
 	nc := NewNodeConfig(cfg)
 	spec := &types.NodeSpec{
 		VMID: 201,
