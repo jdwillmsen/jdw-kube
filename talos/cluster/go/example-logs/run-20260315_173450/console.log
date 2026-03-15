@@ -1,0 +1,8 @@
+[36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
+╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
+   ██║   ███████║██║     ██║   ██║███████╗
+   ██║   ██╔══██║██║     ██║   ██║╚════██║
+   ██║   ██║  ██║███████╗╚██████╔╝███████║
+   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
+[0m[2m ━━━ Kubernetes Bootstrap Tool dev ━━━[0m
+[2m17:34:50[0m [31mERROR[0m configuration incomplete error=required configuration missing: control-plane-endpoint (CONTROL_PLANE_ENDPOINT), haproxy-ip (HA_PROXY_IP), kubernetes-version (KUBERNETES_VERSION), talos-version (TALOS_VERSION), installer-image (INSTALLER_IMAGE), proxmox-node-ips (configure via tfvars or flags)

@@ -1,0 +1,16 @@
+━━━ TALOS BOOTSTRAP RUN SUMMARY ━━━
+  Status:       failed
+  Cluster:      core
+  Start:        2026-03-15 17:34:50
+  Duration:     1s
+  Run Dir:      logs\2026-03-15\run-20260315_173450
+  Error:        configuration incomplete: required configuration missing: control-plane-endpoint (CONTROL_PLANE_ENDPOINT), haproxy-ip (HA_PROXY_IP), kubernetes-version (KUBERNETES_VERSION), talos-version (TALOS_VERSION), installer-image (INSTALLER_IMAGE), proxmox-node-ips (configure via tfvars or flags)
+  ─── Cluster Nodes ───
+  Control Planes: 0
+  Workers:        0
+  ─── Operations ───
+  Added:          0
+  Removed:        0
+  Updated:        0
+  Bootstrap:      false
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
