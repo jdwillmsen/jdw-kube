@@ -540,6 +540,41 @@ func TestKvEncoder_WithFieldsNoJSON(t *testing.T) {
 	}
 }
 
+// TestBuildTeeCore_WithFieldsInJSON verifies that logger.With() fields propagate
+// to the JSON structured.log output, not just the kv console output.
+func TestBuildTeeCore_WithFieldsInJSON(t *testing.T) {
+	var consoleBuf, jsonBuf bytes.Buffer
+
+	core := buildTeeCore(zap.InfoLevel, true, &consoleBuf, &jsonBuf)
+	logger := zap.New(core)
+
+	childLogger := logger.With(zap.Int("vmid", 200))
+	childLogger.Info("node is ready", zap.String("ip", "192.168.1.50"))
+	logger.Sync()
+
+	jsonOutput := jsonBuf.String()
+
+	// With() field must appear in structured.log JSON output
+	if !strings.Contains(jsonOutput, `"vmid"`) {
+		t.Errorf("Expected 'vmid' field in JSON output, got: %s", jsonOutput)
+	}
+	if !strings.Contains(jsonOutput, "200") {
+		t.Errorf("Expected vmid value 200 in JSON output, got: %s", jsonOutput)
+	}
+	if !strings.Contains(jsonOutput, `"ip"`) {
+		t.Errorf("Expected 'ip' field in JSON output, got: %s", jsonOutput)
+	}
+	if !strings.Contains(jsonOutput, "192.168.1.50") {
+		t.Errorf("Expected '192.168.1.50' field in JSON output, got: %s", jsonOutput)
+	}
+
+	// Console output should have kv format
+	consoleOuput := consoleBuf.String()
+	if !strings.Contains(consoleOuput, `"vmid=200"`) {
+		t.Errorf("Expected 'vmid=200' in consoleOuput, got: %s", consoleOuput)
+	}
+}
+
 // Helper to check if running on Windows
 func isWindows() bool {
 	return runtime.GOOS == "windows"

@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -160,6 +161,7 @@ type Config struct {
 	ProxmoxTokenSecret string            `json:"proxmox_token_secret,omitempty"`
 
 	// Runtime flags
+	InsecureSSH      bool   `json:"insecure_ssh"` // Skip SSH host key verification
 	AutoApprove      bool   `json:"auto_approve"`
 	DryRun           bool   `json:"dry_run"`
 	PlanMode         bool   `json:"plan_mode"`
@@ -173,36 +175,70 @@ type Config struct {
 	TerraformHash string `json:"-"` // Computed, not serialized
 }
 
-// DefaultConfig returns a config with sensible defaults
+// DefaultConfig returns a config with sensible defaults.
+// Infrastructure-specific values (IPs, endpoints, credentials) are left
+// empty and must be provided via flags, environment variables, or tfvars.
 func DefaultConfig() *Config {
 	cfg := &Config{
 		ClusterName:             "cluster",
 		TerraformTFVars:         "terraform.tfvars",
-		ControlPlaneEndpoint:    "cluster.jdwlabs.com",
-		HAProxyIP:               net.ParseIP("192.168.1.199"),
-		HAProxyLoginUser:        "jake",
-		HAProxyStatsUser:        "admin",
-		HAProxyStatsPassword:    "admin",
-		KubernetesVersion:       "v1.35.1",
-		TalosVersion:            "v1.12.3",
-		InstallerImage:          "factory.talos.dev/nocloud-installer/b553b4a25d76e938fd7a9aaa7f887c06ea4ef75275e64f4630e6f8f739cf07df:v1.12.3",
 		DefaultNetworkInterface: "eth0",
 		DefaultDisk:             "sda",
 		ProxmoxSSHUser:          "root",
-		ProxmoxSSHHost:          "192.168.1.199",
 		ProxmoxSSHKeyPath:       defaultSSHKeyPath(),
-		ProxmoxNodeIPs: map[string]net.IP{
-			"pve1": net.ParseIP("192.168.1.200"),
-			"pve2": net.ParseIP("192.168.1.201"),
-			"pve3": net.ParseIP("192.168.1.202"),
-			"pve4": net.ParseIP("192.168.1.203"),
-		},
-		LogLevel: "info",
-		LogDir:   "logs",
-		NoColor:  isNoColorEnv(),
+		ProxmoxNodeIPs:          map[string]net.IP{},
+		LogLevel:                "info",
+		LogDir:                  "logs",
+		NoColor:                 isNoColorEnv(),
 	}
-	// Set SecretsDir based on ClusterName
 	cfg.SecretsDir = filepath.Join("clusters", cfg.ClusterName, "secrets")
+	return cfg
+}
+
+// Validate checks that required configuration fields are set.
+// Called after all config sources (flag, env vars, tfvars) have been merged.
+func (c *Config) Validate() error {
+	var missing []string
+	if c.ControlPlaneEndpoint == "" {
+		missing = append(missing, "control-plane-endpoint (CONTROL_PLANE_ENDPOINT)")
+	}
+	if c.HAProxyIP == nil {
+		missing = append(missing, "haproxy-ip (HA_PROXY_IP)")
+	}
+	if c.KubernetesVersion == "" {
+		missing = append(missing, "kubernetes-version (KUBERNETES_VERSION)")
+	}
+	if c.TalosVersion == "" {
+		missing = append(missing, "talos-version (TALOS_VERSION)")
+	}
+	if c.InstallerImage == "" {
+		missing = append(missing, "installer-image (INSTALLER_IMAGE)")
+	}
+	if len(c.ProxmoxNodeIPs) == 0 {
+		missing = append(missing, "proxmox-node-ips (configure via tfvars or flags)")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("required configuration missing: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+// TestConfig returns a Config pre-populated with test/example values.
+// Use in tests instead of DefaultConfig to avoid validation faliures.
+func TestConfig() *Config {
+	cfg := DefaultConfig()
+	cfg.ControlPlaneEndpoint = "cluster.example.com"
+	cfg.HAProxyIP = net.ParseIP("192.168.1.199")
+	cfg.HAProxyLoginUser = "root"
+	cfg.HAProxyStatsUser = "admin"
+	cfg.HAProxyStatsPassword = "admin"
+	cfg.KubernetesVersion = "v1.35.1"
+	cfg.TalosVersion = "v1.12.3"
+	cfg.InstallerImage = "factory.talos.dev/nocloud-installer/test:v1.12.3"
+	cfg.ProxmoxNodeIPs = map[string]net.IP{
+		"pve1": net.ParseIP("192.168.1.200"),
+		"pve2": net.ParseIP("192.168.1.201"),
+	}
 	return cfg
 }
 

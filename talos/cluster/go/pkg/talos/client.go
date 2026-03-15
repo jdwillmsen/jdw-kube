@@ -328,8 +328,8 @@ func (c *Client) WaitForReady(ctx context.Context, ip net.IP, role types.Role) e
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	// Start in secure mode - this is caleld after the node is configured and API-responsive.
-	// The insecure fallback is only needed if the secure conenction fails (e.g. during early boot).
+	// Start in secure mode - this is called after the node is configured and API-responsive.
+	// The insecure fallback is only needed if the secure connection fails (e.g. during early boot).
 	insecure := false
 	triedInsecure := false
 	var tc *client.Client
@@ -517,9 +517,9 @@ func (c *Client) RemoveEtcdMember(ctx context.Context, endpoint net.IP, memberID
 }
 
 // GetEtcdMemberIDByIP finds the etcd member ID for a given node IP.
-// Matches against hostname and peer URLs for robust identification.
+// Connects to endpoint (a healthy peer) and searches for nodeIP in the member list.
 func (c *Client) GetEtcdMemberIDByIP(ctx context.Context, endpoint net.IP, nodeIP net.IP) (uint64, error) {
-	tc, err := c.getClient(ctx, nodeIP, false)
+	tc, err := c.getClient(ctx, endpoint, false)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create talos client: %w", err)
 	}

@@ -3,13 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -26,7 +24,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const version = "v0.1.0"
+var version = "dev"
 
 var (
 	cfg     *types.Config
@@ -69,6 +67,13 @@ func main() {
 	rootCmd.PersistentFlags().BoolVarP(&cfg.ForceReconfigure, "force-reconfigure", "f", false, "Force reconfigure all nodes")
 	rootCmd.PersistentFlags().StringVar(&cfg.LogDir, "log-dir", cfg.LogDir, "Log directory")
 	rootCmd.PersistentFlags().BoolVar(&cfg.NoColor, "no-color", cfg.NoColor, "Disable colored output")
+	rootCmd.PersistentFlags().StringVar(&cfg.ControlPlaneEndpoint, "control-plane-endpoint", "", "Control plane endpoint (e.g., cluster.example.com)")
+	rootCmd.PersistentFlags().StringVar(&cfg.KubernetesVersion, "kubernetes-version", "", "Kubernetes version (e.g., v1.35.1)")
+	rootCmd.PersistentFlags().StringVar(&cfg.TalosVersion, "talos-version", "", "Talos version (e.g., v1.12.13)")
+	rootCmd.PersistentFlags().StringVar(&cfg.InstallerImage, "installer-image", "", "Talos installer image")
+	rootCmd.PersistentFlags().StringVar(&cfg.HAProxyLoginUser, "haproxy-user", "", "HAProxy SSH login user")
+	rootCmd.PersistentFlags().StringVar(&cfg.HAProxyStatsPassword, "haproxy-stats-password", "", "HAProxy stats password")
+	rootCmd.PersistentFlags().BoolVar(&cfg.InsecureSSH, "insecure-ssh", false, "Skip SSH host key verification (INSECURE)")
 
 	rootCmd.AddCommand(
 		bootstrapCmd(),
@@ -133,6 +138,15 @@ func initConfig(cmd *cobra.Command) error {
 	}
 	if v := os.Getenv("SSH_KEY_PATH"); v != "" {
 		cfg.ProxmoxSSHKeyPath = v
+	}
+	if v := os.Getenv("INSTALLER_IMAGE"); v != "" {
+		cfg.InstallerImage = v
+	}
+	if v := os.Getenv("HAPROXY_LOGIN_USER"); v != "" {
+		cfg.HAProxyLoginUser = v
+	}
+	if v := os.Getenv("HAPROXY_STATS_PASSWORD"); v != "" {
+		cfg.HAProxyStatsPassword = v
 	}
 
 	return nil
@@ -268,6 +282,11 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 		logger.Debug("could not load terraform extras", zap.Error(err))
 	}
 
+	if err := cfg.Validate(); err != nil {
+		logger.Error("configuration incomplete", zap.Error(err))
+		return fmt.Errorf("configuration incomplete: %w", err)
+	}
+
 	logger.Info("starting reconciliation",
 		zap.String("cluster", cfg.ClusterName),
 		zap.Bool("dry_run", cfg.DryRun),
@@ -278,7 +297,10 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 		session.AuditLog.WriteEntry("RECONCILE-START", fmt.Sprintf("cluster=%s dry_run=%v plan_mode=%v", cfg.ClusterName, cfg.DryRun, cfg.PlanMode))
 	}
 
-	scanner := discovery.NewScanner(cfg.ProxmoxSSHUser, cfg.ProxmoxNodeIPs)
+	if cfg.InsecureSSH {
+		logger.Warn("SSH host key verification is disabled (--insecure-ssh)")
+	}
+	scanner := discovery.NewScanner(cfg.ProxmoxSSHUser, cfg.ProxmoxNodeIPs, cfg.InsecureSSH)
 	defer scanner.Close()
 	talosClient := talos.NewClient(cfg)
 	talosClient.SetLogger(logger)
@@ -375,6 +397,23 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 				scanner.MarkJoinedNodes(members, live)
 			}
 		}
+
+		// Preflight: verify Talos API (port 50000) is reachable on discovered VMS
+		logger.Info("running Talos API preflight checks")
+		for vmid, node := range live {
+			if node.IP == nil {
+				continue
+			}
+			addr := fmt.Sprintf("%s:50000", node.IP)
+			conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+			if err != nil {
+				logger.Warn("Talos API not reachable on VM (may not be booted yet)",
+					zap.Int("vmid", int(vmid)), zap.String("ip", node.IP.String()), zap.Error(err))
+			} else {
+				conn.Close()
+				logger.Debug("Talos API reachable", zap.Int("vmid", int(vmid)), zap.String("ip", node.IP.String()))
+			}
+		}
 	} else {
 		live = make(map[types.VMID]*types.LiveNode)
 	}
@@ -422,105 +461,8 @@ func runReconcile(ctx context.Context, cfg *types.Config) error {
 	return nil
 }
 
-func runStatus(ctx context.Context, cfg *types.Config) error {
-	stateMgr := state.NewManager(cfg, logger)
-
-	// Load additional fields from terraform.tfvars
-	if err := stateMgr.LoadTerraformExtras(ctx); err != nil {
-		logger.Debug("could not load terraform extras", zap.Error(err))
-	}
-
-	desired, err := stateMgr.LoadDesiredState(ctx)
-	if err != nil {
-		logger.Error("failed to load desired state", zap.Error(err))
-		return err
-	}
-
-	deployed, err := stateMgr.LoadDeployedState(ctx)
-	if err != nil {
-		logger.Error("failed to load deployed state", zap.Error(err))
-		return err
-	}
-
-	box := logging.NewBox(session.Console, cfg.NoColor)
-	box.Header(fmt.Sprintf("CLUSTER STATUS: %s", cfg.ClusterName))
-
-	box.Label("Desired State (Terraform)")
-	box.Row("Control Planes", fmt.Sprintf("%d", countByRole(desired, types.RoleControlPlane)))
-	box.Row("Workers", fmt.Sprintf("%d", countByRole(desired, types.RoleWorker)))
-
-	box.Section("Deployed State")
-	box.Row("Control Planes", fmt.Sprintf("%d", len(deployed.ControlPlanes)))
-	for _, cp := range deployed.ControlPlanes {
-		box.Item("•", fmt.Sprintf("VMID %d: %s", cp.VMID, cp.IP))
-	}
-	box.Row("Workers", fmt.Sprintf("%d", len(deployed.Workers)))
-	for _, w := range deployed.Workers {
-		box.Item("•", fmt.Sprintf("VMID %d: %s", w.VMID, w.IP))
-	}
-	box.Row("Bootstrap Completed", fmt.Sprintf("%v", deployed.BootstrapCompleted))
-
-	if deployed.TerraformHash != "" {
-		currentHash, err := stateMgr.ComputeTerraformHash()
-		if err == nil {
-			if currentHash == deployed.TerraformHash {
-				box.Row("Terraform Hash", fmt.Sprintf("%s (unchanged)", deployed.TerraformHash))
-			} else {
-				box.Row("Terraform Hash", fmt.Sprintf("%s (CHANGED from %s)", currentHash, deployed.TerraformHash))
-			}
-		}
-	}
-
-	box.Footer()
-	return nil
-}
-
-func countByRole(specs map[types.VMID]*types.NodeSpec, role types.Role) int {
-	count := 0
-	for _, spec := range specs {
-		if spec.Role == role {
-			count++
-		}
-	}
-	return count
-}
-
-func displayPlan(plan *types.ReconcilePlan) {
-	displayPlanTo(plan, session.Console)
-}
-
-func displayPlanTo(plan *types.ReconcilePlan, w io.Writer) {
-	box := logging.NewBox(w, cfg.NoColor)
-	box.Header("RECONCILIATION PLAN")
-	if plan.NeedsBootstrap {
-		box.Badge("BOOTSTRAP", "Cluster needs initial bootstrap")
-	}
-	if len(plan.AddControlPlanes) > 0 {
-		box.Item("+", fmt.Sprintf("Add %d control plane(s): %v", len(plan.AddControlPlanes), plan.AddControlPlanes))
-	}
-	if len(plan.AddWorkers) > 0 {
-		box.Item("+", fmt.Sprintf("Add %d worker(s): %v", len(plan.AddWorkers), plan.AddWorkers))
-	}
-	if len(plan.RemoveControlPlanes) > 0 {
-		box.Item("-", fmt.Sprintf("Remove %d control plane(s): %v", len(plan.RemoveControlPlanes), plan.RemoveControlPlanes))
-	}
-	if len(plan.RemoveWorkers) > 0 {
-		box.Item("-", fmt.Sprintf("Remove %d worker(s): %v", len(plan.RemoveWorkers), plan.RemoveWorkers))
-	}
-	if len(plan.UpdateConfigs) > 0 {
-		box.Item("~", fmt.Sprintf("Update %d node config(s): %v", len(plan.UpdateConfigs), plan.UpdateConfigs))
-	}
-	if len(plan.NoOp) > 0 {
-		box.Item("=", fmt.Sprintf("%d node(s) unchanged", len(plan.NoOp)))
-	}
-	if plan.IsEmpty() {
-		box.Badge("OK", "Cluster matches desired state — no changes needed")
-	}
-	box.Footer()
-}
-
 // deployNode handles the apply -> reboot -> wait -> hash flow for adding a node
-// (control palne or worker). Uses pre-discovered live data. Returns the post-reboot IP.
+// (control plane or worker). Uses pre-discovered live data. Returns the post-reboot IP.
 func deployNode(
 	ctx context.Context,
 	vmid types.VMID,
@@ -848,7 +790,7 @@ func executePlan(
 			if err != nil {
 				logger.Warn("failed to generate HAProxy config", zap.Error(err))
 			} else {
-				haproxyClient := haproxy.NewClient(cfg.HAProxyLoginUser, cfg.HAProxyIP.String(), logger)
+				haproxyClient := haproxy.NewClient(cfg.HAProxyLoginUser, cfg.HAProxyIP.String(), logger, cfg.InsecureSSH)
 				if cfg.ProxmoxSSHKeyPath != "" {
 					if err := haproxyClient.SetPrivateKey(cfg.ProxmoxSSHKeyPath); err != nil {
 						logger.Warn("failed to set SSH private key for HAProxy client", zap.String("key_path", cfg.ProxmoxSSHKeyPath), zap.Error(err))
@@ -1011,174 +953,4 @@ func executePlan(
 	}
 
 	return nil
-}
-
-// hostsFilePath returns the platform-appropriate hosts file path.
-func hostsFilePath() string {
-	if runtime.GOOS == "windows" {
-		return filepath.Join(os.Getenv("SystemRoot"), "System32", "drivers", "etc", "hosts")
-	}
-	return "/etc/hosts"
-}
-
-// ensureEndpointResolvable checks DNS for the control plane endpoint and
-// adds a hosts file entry if resolution fails or points ot the wrong IP.
-// Supports both Linux (sudo tee) and Windows (direct write / runas).
-func ensureEndpointResolvable(cfg *types.Config) {
-	// Skip if endpoint is already an IP
-	if net.ParseIP(cfg.ControlPlaneEndpoint) != nil {
-		return
-	}
-
-	// Check if endpoint resolves correctly
-	addrs, err := net.LookupHost(cfg.ControlPlaneEndpoint)
-	if err == nil && len(addrs) > 0 {
-		for _, addr := range addrs {
-			if addr == cfg.HAProxyIP.String() {
-				return // Resolves correctly
-			}
-		}
-	}
-
-	entry := fmt.Sprintf("%s %s", cfg.HAProxyIP, cfg.ControlPlaneEndpoint)
-	hostsFile := hostsFilePath()
-
-	data, err := os.ReadFile(hostsFile)
-	if err != nil {
-		logger.Warn("cannot read hosts file", zap.String("path", hostsFile), zap.Error(err))
-		logger.Warn("add the following entry manually", zap.String("entry", entry))
-		return
-	}
-
-	content := string(data)
-
-	// Already correct
-	if strings.Contains(content, entry) {
-		return
-	}
-
-	// Entry exists with wrong IP - update it
-	if strings.Contains(content, cfg.ControlPlaneEndpoint) {
-		lines := strings.Split(content, "\n")
-		for i, line := range lines {
-			if strings.Contains(line, cfg.ControlPlaneEndpoint) && !strings.HasPrefix(strings.TrimSpace(line), "#") {
-				lines[i] = entry
-			}
-		}
-		if err := writeHostsFile(hostsFile, []byte(strings.Join(lines, "\n"))); err != nil {
-			logger.Warn("failed to update hosts file (add manually)", zap.String("path", hostsFile), zap.String("entry", entry), zap.Error(err))
-		} else {
-			logger.Info("updated hosts entry", zap.String("entry", entry))
-		}
-		return
-	}
-
-	// Append new entry
-	appendData := []byte("\n" + entry + "\n")
-	if err := appendHostsFile(hostsFile, appendData); err != nil {
-		logger.Warn("failed to append to hosts file (add manually)", zap.String("path", hostsFile), zap.String("entry", entry), zap.Error(err))
-	} else {
-		logger.Info("added hosts entry", zap.String("entry", entry))
-	}
-}
-
-// writeHostsFile writes the full hosts file content, escalating privileges if needed.
-func writeHostsFile(hostsFile string, data []byte) error {
-	// Try direct write first
-	if err := os.WriteFile(hostsFile, data, 0644); err == nil {
-		return nil
-	}
-	if runtime.GOOS == "windows" {
-		return fmt.Errorf("permission denied: run as Administrator to modify %s", hostsFile)
-	}
-	cmd := exec.Command("sudo", "tee", hostsFile)
-	cmd.Stdin = strings.NewReader(string(data))
-	cmd.Stdout = nil
-	return cmd.Run()
-}
-
-// appendHostsFile appends to the hosts file, escalating privileges if needed.
-func appendHostsFile(hostsFile string, data []byte) error {
-	f, err := os.OpenFile(hostsFile, os.O_APPEND|os.O_WRONLY, 0644)
-	if err == nil {
-		_, writeErr := f.Write(data)
-		f.Close()
-		return writeErr
-	}
-	if runtime.GOOS == "windows" {
-		return fmt.Errorf("permission denied: run as Administrator to modify %s", hostsFile)
-	}
-	cmd := exec.Command("sudo", "tee", "-a", hostsFile)
-	cmd.Stdin = strings.NewReader(string(data))
-	cmd.Stdout = nil
-	return cmd.Run()
-}
-
-// configureTalosctlEndpoints sets talosctl endpoints and nodes
-func configureTalosctlEndpoints(cfg *types.Config, deployed *types.ClusterState) {
-	// Set endpoint to HAProxy IP
-	cmd := exec.Command("talosctl", "config", "endpoint", cfg.HAProxyIP.String())
-	cmd.Env = append(os.Environ(), "TALOSCONFIG="+filepath.Join(cfg.SecretsDir, "talosconfig"))
-	if output, err := cmd.CombinedOutput(); err != nil {
-		logger.Warn("failed to set talosctl endpoint", zap.Error(err), zap.String("output", string(output)))
-	}
-
-	// Set node to first control plane
-	if len(deployed.ControlPlanes) > 0 {
-		cmd = exec.Command("talosctl", "config", "node", deployed.ControlPlanes[0].IP.String())
-		cmd.Env = append(os.Environ(), "TALOSCONFIG="+filepath.Join(cfg.SecretsDir, "talosconfig"))
-		if output, err := cmd.CombinedOutput(); err != nil {
-			logger.Warn("failed to set talosctl node", zap.Error(err), zap.String("output", string(output)))
-		}
-	}
-}
-
-// verifyCluster performs post-reconciliation health checks
-func verifyCluster(ctx context.Context, talosClient *talos.Client, k8sClient *kubectl.Client, deployed *types.ClusterState) {
-	logger.Info("verifying cluster health")
-
-	// Check Kubernetes API
-	info, err := k8sClient.ClusterInfo(ctx)
-	if err != nil {
-		logger.Warn("cluster-info check failed", zap.Error(err))
-	} else {
-		logger.Info("kubernetes API accessible", zap.String("info", strings.TrimSpace(info)))
-	}
-
-	// List nodes
-	nodes, err := k8sClient.GetNodes(ctx)
-	if err != nil {
-		logger.Warn("failed to get nodes", zap.Error(err))
-	} else {
-		logger.Info("cluster nodes:\n" + nodes)
-	}
-
-	// Check etcd health
-	if len(deployed.ControlPlanes) > 0 {
-		members, err := talosClient.GetEtcdMembers(ctx, deployed.ControlPlanes[0].IP)
-		if err != nil {
-			logger.Warn("failed to get etcd members", zap.Error(err))
-		} else {
-			logger.Info("etcd members healthy", zap.Int("count", len(members)))
-		}
-	}
-
-	// Print success summary using box
-	box := logging.NewBox(session.Console, cfg.NoColor)
-	box.Header("BOOTSTRAP SUCCESSFUL")
-	box.Row("Cluster", deployed.ClusterName)
-	box.Row("Endpoint", cfg.ControlPlaneEndpoint)
-	box.Row("Control Planes", fmt.Sprintf("%d", len(deployed.ControlPlanes)))
-	for _, cp := range deployed.ControlPlanes {
-		box.Item("•", fmt.Sprintf("VMID %d: %s", cp.VMID, cp.IP))
-	}
-	box.Row("Workers", fmt.Sprintf("%d", len(deployed.Workers)))
-	for _, w := range deployed.Workers {
-		box.Item("•", fmt.Sprintf("VMID %d: %s", w.VMID, w.IP))
-	}
-	box.Section("Quick Start")
-	box.Item("$", "kubectl get nodes")
-	box.Item("$", "talosctl dashboard")
-	box.Item("$", "talosctl etcd members")
-	box.Footer()
 }

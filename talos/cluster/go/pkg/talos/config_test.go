@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewNodeConfig(t *testing.T) {
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	nc := NewNodeConfig(cfg)
 
 	assert.NotNil(t, nc)
@@ -22,7 +22,7 @@ func TestNewNodeConfig(t *testing.T) {
 }
 
 func TestNodeConfig_SetAuditLogger(t *testing.T) {
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	nc := NewNodeConfig(cfg)
 
 	assert.Nil(t, nc.audit)
@@ -36,7 +36,7 @@ func TestNodeConfigGenerate_ControlPlane(t *testing.T) {
 		t.Skip("Skipping talosctl-dependent test")
 	}
 
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	nc := NewNodeConfig(cfg)
 
 	spec := &types.NodeSpec{
@@ -86,7 +86,7 @@ func TestNodeConfigGenerate_Worker(t *testing.T) {
 		t.Skip("Skipping talosctl-dependent test")
 	}
 
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	nc := NewNodeConfig(cfg)
 
 	spec := &types.NodeSpec{
@@ -125,7 +125,7 @@ func TestNodeConfigGenerate_Worker(t *testing.T) {
 }
 
 func TestNodeConfigGenerate_UnknownRole(t *testing.T) {
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	nc := NewNodeConfig(cfg)
 
 	spec := &types.NodeSpec{
@@ -142,7 +142,7 @@ func TestNodeConfigGenerate_UnknownRole(t *testing.T) {
 }
 
 func TestNodeConfigGenerate_CreatesDirectory(t *testing.T) {
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	nc := NewNodeConfig(cfg)
 
 	spec := &types.NodeSpec{
@@ -315,7 +315,7 @@ func TestGenerateBaseConfigs_Integration(t *testing.T) {
 		t.Skip("Skipping talosctl integration test")
 	}
 
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	tmpDir := t.TempDir()
 	cfg.SecretsDir = filepath.Join(tmpDir, "secrets")
 
@@ -358,7 +358,7 @@ func TestGenerateBaseConfigs_Idempotent(t *testing.T) {
 		t.Skip("Skipping talosctl integration test")
 	}
 
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	tmpDir := t.TempDir()
 	cfg.SecretsDir = filepath.Join(tmpDir, "secrets")
 
@@ -392,7 +392,7 @@ func TestGenerateBaseConfigs_ReadOnlyDir(t *testing.T) {
 		t.Skip("Skipping permission test when running as root")
 	}
 
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	tmpDir := t.TempDir()
 	readonlyDir := filepath.Join(tmpDir, "readonly")
 
@@ -430,7 +430,7 @@ func BenchmarkNodeConfigGenerate(b *testing.B) {
 		b.Skip("Skipping talosctl-dependent benchmark")
 	}
 
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	nc := NewNodeConfig(cfg)
 	spec := &types.NodeSpec{
 		VMID: 201,

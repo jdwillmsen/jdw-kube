@@ -26,14 +26,26 @@ type Scanner struct {
 	connPool map[string]*ssh.Client
 }
 
-// NewScanner creates a new discovery scanner
-func NewScanner(sshUser string, nodeIPs map[string]net.IP) *Scanner {
+// NewScanner creates a new discovery scanner.
+// If insecureSSH is false, the scanner will rject connections (no known_hosts
+// implementation yet). Pass true and use --insecure-ssh to acknowledge the risk.
+func NewScanner(sshUser string, nodeIPs map[string]net.IP, insecureSSH bool) *Scanner {
+	var hostKeyCallback ssh.HostKeyCallback
+	if insecureSSH {
+		hostKeyCallback = ssh.InsecureIgnoreHostKey()
+	} else {
+		// Reject all connections when insecure mode is not explicitly enabled.
+		// A future TOFU implementation would replace this.
+		hostKeyCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			return fmt.Errorf("SSH host key verification failed for %s: use --insecure-ssh to skip verification", hostname)
+		}
+	}
 	return &Scanner{
 		sshUser: sshUser,
 		sshConfig: &ssh.ClientConfig{
 			User:            sshUser,
-			Auth:            []ssh.AuthMethod{},          // Will add key auth
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: proper verification
+			Auth:            []ssh.AuthMethod{},
+			HostKeyCallback: hostKeyCallback,
 			Timeout:         10 * time.Second,
 		},
 		nodeIPs:  nodeIPs,
@@ -362,7 +374,7 @@ func (s *Scanner) getVMMAC(_ context.Context, vmid types.VMID, node string) (str
 //
 // seedIP is any Proxmox node in the cluster (already known). The returned map
 // maps node name -> management IP (from the `ip` field in pvesh output).
-func DiscoverProxmoxNodes(sshUser, keyPath string, seedIP net.IP) (map[string]net.IP, error) {
+func DiscoverProxmoxNodes(sshUser, keyPath string, seedIP net.IP, insecureSSH bool) (map[string]net.IP, error) {
 	key, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("read key: %w", err)
@@ -372,10 +384,19 @@ func DiscoverProxmoxNodes(sshUser, keyPath string, seedIP net.IP) (map[string]ne
 		return nil, fmt.Errorf("parse key: %w", err)
 	}
 
+	var hostKeyCallback ssh.HostKeyCallback
+	if insecureSSH {
+		hostKeyCallback = ssh.InsecureIgnoreHostKey()
+	} else {
+		hostKeyCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			return fmt.Errorf("SSH host key verification failed for %s: use --insecure-ssh to skip verification", hostname)
+		}
+	}
+
 	cfg := &ssh.ClientConfig{
 		User:            sshUser,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         10 * time.Second,
 	}
 
@@ -403,7 +424,7 @@ func DiscoverProxmoxNodes(sshUser, keyPath string, seedIP net.IP) (map[string]ne
 // Each entry looks like: {"node":"pve1","ip":"192.168.100",...}
 func parseProxmoxNodes(jsonOut string) (map[string]net.IP, error) {
 	// Minimal JSON unmarshal without importing encoding/json - use regex for simplicity
-	// since pvesh output is well-structured adn we only need node+ip fields.
+	// since pvesh output is well-structured and we only need node+ip fields.
 	nodeRe := regexp.MustCompile(`"node"\s*:\s*"([^"]+)"`)
 	ipRe := regexp.MustCompile(`"ip"\s*:\s*"([^"]+)"`)
 

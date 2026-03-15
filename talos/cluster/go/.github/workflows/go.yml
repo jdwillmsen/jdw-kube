@@ -1,0 +1,49 @@
+name: Go
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'talos/cluster/go/**'
+      - '.github/workflows/go.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'talos/cluster/go/**'
+      - '.github/workflows/go.yml'
+
+defaults:
+  run:
+    working-directory: talos/cluster/go
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-files: talos/cluster/go/go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: CG0_ENABLED=1 go test -race -v ./...
+
+      - name: Build
+        run: go build -o /dev/null ./cmd/
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: talos/cluster/go/go.mod
+
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: talos/cluster/go

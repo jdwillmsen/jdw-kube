@@ -31,8 +31,18 @@ type Client struct {
 	runner    sshRunner // injectable for testing
 }
 
-// NewClient creates a new HAProxy SSH client
-func NewClient(sshUser, sshHost string, logger *zap.Logger) *Client {
+// NewClient creates a new HAProxy SSH client.
+// If insecureSSH is false, connections will be rejected (no known_hosts yet).
+func NewClient(sshUser, sshHost string, logger *zap.Logger, insecureSSH bool) *Client {
+	var hostKeyCallback ssh.HostKeyCallback
+	if insecureSSH {
+		hostKeyCallback = ssh.InsecureIgnoreHostKey()
+	} else {
+		hostKeyCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			return fmt.Errorf("SSH host key verification failed for %s: use --insecure-ssh to skip verification", hostname)
+		}
+	}
+
 	c := &Client{
 		sshUser: sshUser,
 		sshHost: sshHost,
@@ -40,7 +50,7 @@ func NewClient(sshUser, sshHost string, logger *zap.Logger) *Client {
 		logger:  logger,
 		sshConfig: &ssh.ClientConfig{
 			User:            sshUser,
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			HostKeyCallback: hostKeyCallback,
 			Timeout:         10 * time.Second,
 		},
 	}

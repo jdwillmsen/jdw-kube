@@ -66,7 +66,7 @@ func (m *MockTalosClient) Close() error {
 
 // TestNewClient verifies client initialization
 func TestNewClient(t *testing.T) {
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	client := NewClient(cfg)
 
 	assert.NotNil(t, client)
@@ -77,7 +77,7 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestClient_SetLogger(t *testing.T) {
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	client := NewClient(cfg)
 
 	logger := zap.NewNop()
@@ -87,7 +87,7 @@ func TestClient_SetLogger(t *testing.T) {
 }
 
 func TestClient_SetAuditLogger(t *testing.T) {
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	client := NewClient(cfg)
 
 	client.SetAuditLogger(nil)
@@ -130,7 +130,7 @@ func TestClientInitialize_NotExist(t *testing.T) {
 
 // TestApplyConfigWithRetry_MaxAttempts tests retry parameter handling
 func TestApplyConfigWithRetry_MaxAttempts(t *testing.T) {
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	client := NewClient(cfg)
 
 	ctx := context.Background()
@@ -146,30 +146,58 @@ func TestApplyConfigWithRetry_MaxAttempts(t *testing.T) {
 	_ = client.ApplyConfigWithRetry(ctx2, ip, "/nonexistent/config.yaml", types.RoleControlPlane, -1)
 }
 
-// TestApplyConfigWithRetry_Scenarios tests various retry scenarios
+// TestApplyConfigWithRetry_Scenarios tests various retry scenarios.
+// Note: Without an injectable TalosAPIClient interface, these tests exercise
+// error paths through real (failing) connection attempts.
 func TestApplyConfigWithRetry_Scenarios(t *testing.T) {
-	t.Run("immediate success", func(t *testing.T) {
-		// Should return nil on first successful apply
+	t.Run("nonexistent config file returns immediately", func(t *testing.T) {
+		cfg := types.TestConfig()
+		c := NewClient(cfg)
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		ip := net.ParseIP("192.168.1.201")
+
+		err := c.ApplyConfigWithRetry(ctx, ip, "/nonexistent/config.yaml", types.RoleControlPlane, 1)
+		require.Error(t, err)
+		// With maxAttempts=1 and a bad config path, it should fail on the first attempt
+		assert.Contains(t, err.Error(), "failed after 1 attempts")
 	})
 
-	t.Run("success after retries", func(t *testing.T) {
-		// Should retry on connection refused and eventually succeed
+	t.Run("max attempts exceeded with unreachable node", func(t *testing.T) {
+		cfg := types.TestConfig()
+		c := NewClient(cfg)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		ip := net.ParseIP("192.168.1.201")
+
+		// Client not initialized -> getClient failes -> classified as unknown error
+		err := c.ApplyConfigWithRetry(ctx, ip, "/nonexistent/config.yaml", types.RoleControlPlane, 2)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed after 2 attempts")
 	})
 
-	t.Run("certificate required switches to secure", func(t *testing.T) {
-		// Should switch from insecure to secure mode on certificate errors
+	t.Run("context cancellation stops retries", func(t *testing.T) {
+		cfg := types.TestConfig()
+		c := NewClient(cfg)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
+		ip := net.ParseIP("192.168.1.201")
+
+		err := c.ApplyConfigWithRetry(ctx, ip, "/nonexistent/config.yaml", types.RoleControlPlane, 5)
+		require.Error(t, err)
 	})
 
-	t.Run("already configured checks readiness", func(t *testing.T) {
-		// Should check node readiness when already configured
-	})
+	t.Run("default max attempts when zero", func(t *testing.T) {
+		cfg := types.TestConfig()
+		c := NewClient(cfg)
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+		ip := net.ParseIP("192.168.1.201")
 
-	t.Run("max attempts exceeded", func(t *testing.T) {
-		// Should return error after max attempts
-	})
-
-	t.Run("non-retryable error", func(t *testing.T) {
-		// Should immediately return on permission denied
+		err := c.ApplyConfigWithRetry(ctx, ip, "/nonexistent/config.yaml", types.RoleControlPlane, 0)
+		require.Error(t, err)
+		// 0 gets normalized to 5
+		assert.Contains(t, err.Error(), "failed after 5 attempts")
 	})
 }
 
@@ -318,26 +346,42 @@ func TestGetEtcdMemberIDByIP(t *testing.T) {
 	})
 }
 
-// TestCheckReady_Scenarios documents expected behavior
+// TestCheckReady_Scenarios tests readiness check behavior.
+// Tests the checkReady method indirectly through checkReadyByIP since
+// checkReady requires a connected *client.Client.
 func TestCheckReady_Scenarios(t *testing.T) {
-	t.Run("control plane ready", func(t *testing.T) {
-		// Requires: Version() succeeds, EtcdMemberList succeeds, kubelet running
+	t.Run("uninitialized client returns error", func(t *testing.T) {
+		cfg := types.TestConfig()
+		c := NewClient(cfg)
+		ip := net.ParseIP("192.168.1.201")
+
+		// Client not initialized -> getClient fails in both secure and insecure
+		ready, err := c.checkReadyByIP(context.Background(), ip, types.RoleControlPlane)
+		assert.Error(t, err)
+		assert.False(t, ready)
 	})
 
-	t.Run("control plane etcd not ready", func(t *testing.T) {
-		// Should return false when etcd members not available
+	t.Run("worker readiness check with uninitialized client", func(t *testing.T) {
+		cfg := types.TestConfig()
+		c := NewClient(cfg)
+		ip := net.ParseIP("192.168.1.201")
+
+		ready, err := c.checkReadyByIP(context.Background(), ip, types.RoleWorker)
+		assert.Error(t, err)
+		assert.False(t, ready)
 	})
 
-	t.Run("control plane kubelet not running", func(t *testing.T) {
-		// Should return false when kubelet not in running state
-	})
+	t.Run("timeout propagation", func(t *testing.T) {
+		cfg := types.TestConfig()
+		c := NewClient(cfg)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+		defer cancel()
+		time.Sleep(5 * time.Millisecond) // Ensure context is expired
+		ip := net.ParseIP("192.168.1.201")
 
-	t.Run("worker in maintenance mode", func(t *testing.T) {
-		// Should return true for workers in maintenance mode
-	})
-
-	t.Run("worker not in maintenance mode", func(t *testing.T) {
-		// Should check version for normal workers
+		ready, errr := c.checkReadyByIP(ctx, ip, types.RoleControlPlane)
+		assert.Error(t, errr)
+		assert.False(t, ready)
 	})
 }
 
@@ -385,7 +429,7 @@ func TestIsMaintenanceModeError(t *testing.T) {
 
 // TestWaitForReady_Timeout tests timeout behavior
 func TestWaitForReady_Timeout(t *testing.T) {
-	cfg := types.DefaultConfig()
+	cfg := types.TestConfig()
 	client := NewClient(cfg)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -398,37 +442,51 @@ func TestWaitForReady_Timeout(t *testing.T) {
 	assert.Contains(t, err.Error(), "timeout")
 }
 
-// TestBootstrapEtcd_Scenarios documents expected behavior
+// TestBootstrapEtcd_Scenarios tests bootstrap behavior.
+// Without a running Talos API, these test error handling paths.
 func TestBootstrapEtcd_Scenarios(t *testing.T) {
-	t.Run("successful bootstrap", func(t *testing.T) {
-		// Should return nil on success
+	t.Run("uninitialized client returns error", func(t *testing.T) {
+		cfg := types.TestConfig()
+		c := NewClient(cfg)
+		ip := net.ParseIP("192.168.1.201")
+
+		err := c.BootstrapEtcd(context.Background(), ip)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "client not initialized")
 	})
 
-	t.Run("already bootstrapped", func(t *testing.T) {
-		// Should return nil (not error) when already bootstrapped
-	})
+	t.Run("cancelled context returns error", func(t *testing.T) {
+		cfg := types.TestConfig()
+		c := NewClient(cfg)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		ip := net.ParseIP("192.168.1.201")
 
-	t.Run("connection refused", func(t *testing.T) {
-		// Should return error on connection refused
-	})
-
-	t.Run("permission denied", func(t *testing.T) {
-		// Should return error on permission denied
+		err := c.BootstrapEtcd(ctx, ip)
+		require.Error(t, err)
 	})
 }
 
-// TestResetNode_Scenarios documents expected behavior
+// TestResetNode_Scenarios tests reset behavior.
 func TestResetNode_Scenarios(t *testing.T) {
-	t.Run("graceful reset", func(t *testing.T) {
-		// Should call reset with graceful=true
+	t.Run("uninitialized client returns error", func(t *testing.T) {
+		cfg := types.TestConfig()
+		c := NewClient(cfg)
+		ip := net.ParseIP("192.168.1.201")
+
+		err := c.ResetNode(context.Background(), ip, true)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "client not initialized")
 	})
 
-	t.Run("force reset", func(t *testing.T) {
-		// Should call reset with graceful=false
-	})
+	t.Run("force reset with uninitialized client returns error", func(t *testing.T) {
+		cfg := types.TestConfig()
+		c := NewClient(cfg)
+		ip := net.ParseIP("192.168.1.201")
 
-	t.Run("reset preserves node for reconfiguration", func(t *testing.T) {
-		// Verify reset is called with reboot=false
+		err := c.ResetNode(context.Background(), ip, false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "client not initialized")
 	})
 }
 

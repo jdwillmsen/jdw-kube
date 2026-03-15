@@ -39,11 +39,10 @@ func TestDefaultConfig(t *testing.T) {
 
 	assert.Equal(t, "cluster", cfg.ClusterName)
 	assert.Equal(t, "terraform.tfvars", cfg.TerraformTFVars)
-	assert.Equal(t, "cluster.jdwlabs.com", cfg.ControlPlaneEndpoint)
-	assert.Equal(t, "192.168.1.199", cfg.HAProxyIP.String())
-	assert.Equal(t, "admin", cfg.HAProxyStatsUser)
-	assert.Equal(t, "v1.35.1", cfg.KubernetesVersion)
-	assert.Equal(t, "v1.12.3", cfg.TalosVersion)
+	assert.Empty(t, cfg.ControlPlaneEndpoint, "ControlPlaneEndpoint should be empty by default")
+	assert.Nil(t, cfg.HAProxyIP, "HAPProxyIP should be nil by default")
+	assert.Empty(t, cfg.KubernetesVersion, "KubernetesVersion should be empty by default")
+	assert.Empty(t, cfg.TalosVersion, "TalosVersion should be empty by default")
 	assert.Equal(t, "eth0", cfg.DefaultNetworkInterface)
 	assert.Equal(t, "sda", cfg.DefaultDisk)
 	assert.Equal(t, "info", cfg.LogLevel)
@@ -51,8 +50,23 @@ func TestDefaultConfig(t *testing.T) {
 	expectedSecretsDir := filepath.Join("clusters", "cluster", "secrets")
 	assert.Equal(t, expectedSecretsDir, cfg.SecretsDir)
 
-	assert.Len(t, cfg.ProxmoxNodeIPs, 4)
-	assert.Contains(t, cfg.ProxmoxNodeIPs, "pve1")
+	assert.Empty(t, cfg.ProxmoxNodeIPs, "ProxmoxNodeIPs should be empty by default")
+}
+
+func TestConfigValidate(t *testing.T) {
+	t.Run("fails with empty config", func(t *testing.T) {
+		cfg := types.DefaultConfig()
+		err := cfg.Validate()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "control-plane-endpoint")
+		assert.Contains(t, err.Error(), "haproxy-ip")
+	})
+
+	t.Run("passes with complete config", func(t *testing.T) {
+		cfg := types.TestConfig()
+		err := cfg.Validate()
+		assert.NoError(t, err)
+	})
 }
 
 func TestReconcilePlanEmpty(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// RebootState represets the current phase of the reboot monitoring state machine
+// RebootState represents the current phase of the reboot monitoring state machine
 type RebootState int
 
 const (

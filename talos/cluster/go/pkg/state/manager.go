@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/hcl/v2"
@@ -26,6 +27,7 @@ import (
 // Manager handles the three-way state reconciliation
 // (Terraform desired → Local deployed → Live reality)
 type Manager struct {
+	mu       sync.Mutex // protects ClusterState mutations (UpdateNodeState, RemoveNodeState)
 	config   *types.Config
 	stateDir string
 	nodesDir string
@@ -533,8 +535,12 @@ func (m *Manager) Save(ctx context.Context, state *types.ClusterState) error {
 	return nil
 }
 
-// UpdateNodeState updates a node's state in the cluster state
+// UpdateNodeState updates a node's state in the cluster state.
+// Safe for concurrent use from multiple goroutines.
 func (m *Manager) UpdateNodeState(state *types.ClusterState, vmid types.VMID, ip string, hash string, role types.Role) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	nodeState := types.NodeState{
 		VMID:       vmid,
 		ConfigHash: hash,
@@ -573,8 +579,12 @@ func (m *Manager) UpdateNodeState(state *types.ClusterState, vmid types.VMID, ip
 	}
 }
 
-// RemoveNodeState removes a node from the cluster state
+// RemoveNodeState removes a node from the cluster state.
+// Safe for concurrent use from multiple goroutines.
 func (m *Manager) RemoveNodeState(state *types.ClusterState, vmid types.VMID, role types.Role) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	switch role {
 	case types.RoleControlPlane:
 		filtered := make([]types.NodeState, 0, len(state.ControlPlanes))

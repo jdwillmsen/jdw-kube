@@ -185,8 +185,8 @@ func (nc *NodeConfig) Generate(spec *types.NodeSpec, outputDir string) (string, 
 	}
 	defer os.Remove(patchFile)
 
-	// Ensure output directory exists
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	// Ensure output directory exists (restricted permissions - contains TLS material)
+	if err := os.MkdirAll(outputDir, 0700); err != nil {
 		return "", fmt.Errorf("create output directory: %w", err)
 	}
 

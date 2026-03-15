@@ -21,7 +21,7 @@ func TestNewScanner(t *testing.T) {
 		"pve2": net.ParseIP("192.168.1.11"),
 	}
 
-	scanner := NewScanner("root", nodeIPs)
+	scanner := NewScanner("root", nodeIPs, true)
 
 	assert.NotNil(t, scanner)
 	assert.Equal(t, "root", scanner.sshUser)
@@ -31,7 +31,7 @@ func TestNewScanner(t *testing.T) {
 }
 
 func TestSetPrivateKey(t *testing.T) {
-	scanner := NewScanner("root", map[string]net.IP{})
+	scanner := NewScanner("root", map[string]net.IP{}, true)
 
 	// Test non-existent key
 	err := scanner.SetPrivateKey("/nonexistent/key")
@@ -143,7 +143,7 @@ func TestScanner_DiscoverVMs(t *testing.T) {
 		"pve1": net.ParseIP("192.168.1.10"),
 	}
 
-	scanner := NewScanner("root", nodeIPs)
+	scanner := NewScanner("root", nodeIPs, true)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -164,7 +164,7 @@ func TestScanner_DiscoverVMs(t *testing.T) {
 
 // Test findIPByMAC without SSH - uses empty scanner
 func TestScanner_FindIPByMAC_NoNodes(t *testing.T) {
-	scanner := NewScanner("root", map[string]net.IP{})
+	scanner := NewScanner("root", map[string]net.IP{}, true)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -289,7 +289,7 @@ func TestParseProxmoxNodes(t *testing.T) {
 func TestScanner_MarkJoinedNodes(t *testing.T) {
 	scanner := NewScanner("root", map[string]net.IP{
 		"pve1": net.ParseIP("192.168.1.10"),
-	})
+	}, true)
 
 	results := map[types.VMID]*types.LiveNode{
 		100: {
@@ -327,7 +327,7 @@ func TestScanner_MarkJoinedNodes(t *testing.T) {
 }
 
 func TestScanner_Close(t *testing.T) {
-	scanner := NewScanner("root", map[string]net.IP{})
+	scanner := NewScanner("root", map[string]net.IP{}, true)
 
 	// Close on fresh scanner should not panic
 	scanner.Close()
@@ -340,7 +340,7 @@ func TestScanner_Close(t *testing.T) {
 func TestScanner_GetConn_Pooling(t *testing.T) {
 	scanner := NewScanner("root", map[string]net.IP{
 		"pve1": net.ParseIP("192.168.1.10"),
-	})
+	}, true)
 
 	// Without actual SSH server, we can't test real pooling
 	// But we can verify the method exists and handles missing connections
@@ -406,7 +406,7 @@ func TestSetPrivateKey_WindowsPath(t *testing.T) {
 		t.Skip("Windows-specific test")
 	}
 
-	scanner := NewScanner("root", map[string]net.IP{})
+	scanner := NewScanner("root", map[string]net.IP{}, true)
 
 	// Test Windows-style path
 	tmpDir := t.TempDir()

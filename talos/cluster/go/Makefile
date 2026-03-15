@@ -13,16 +13,17 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
 # Build flags
-LDFLAGS=-ldflags "-s -w"
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS=-ldflags "-s -w -X main.version=$(VERSION)"
 
-.PHONY: all build clean test deps run help
+.PHONY: all build clean test test-race deps run help
 
 all: deps build
 
 build:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_DIR)/main.go
+	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_DIR)/
 	@echo "Built: $(BUILD_DIR)/$(BINARY_NAME)"
 
 clean:
@@ -34,6 +35,10 @@ clean:
 test:
 	@echo "Running tests..."
 	$(GOTEST) -v ./...
+
+test-race:
+	@echo "Running tests with race detector..."
+	CGO_ENABLED=1 $(GOTEST) -race -v ./...
 
 deps:
 	@echo "Downloading dependencies..."
@@ -48,17 +53,17 @@ run: build
 build-linux:
 	@echo "Building for Linux..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(CMD_DIR)/main.go
+	GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(CMD_DIR)/
 
 build-windows:
 	@echo "Building for Windows..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe $(CMD_DIR)/main.go
+	GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe $(CMD_DIR)/
 
 build-mac:
 	@echo "Building for macOS..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 $(CMD_DIR)/main.go
+	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 $(CMD_DIR)/
 
 build-all: build-linux build-windows build-mac
 
@@ -80,13 +85,20 @@ install: build
 	@echo "Installing to GOPATH/bin..."
 	cp $(BUILD_DIR)/$(BINARY_NAME) $(GOPATH)/bin/
 
+clean-logs:
+	@echo "Removing logs older than 30 days..."
+	find logs/ -maxdepth 1 -type d -mtime +30 -exec rm -rf {} + 2>/dev/null || true
+
 help:
 	@echo "Available targets:"
 	@echo "  make build        - Build the binary"
 	@echo "  make build-all    - Build for all platforms"
 	@echo "  make test         - Run tests"
+	@echo "  make test-race    - Run tests with race detector"
 	@echo "  make clean        - Clean build artifacts"
+	@echo "  make clean-logs   - Remove logs older than 30 days"
 	@echo "  make deps         - Download dependencies"
 	@echo "  make run          - Build and run status command"
 	@echo "  make fmt          - Format code"
 	@echo "  make lint         - Run linter"
+	@echo "  make vet          - Run go vet"

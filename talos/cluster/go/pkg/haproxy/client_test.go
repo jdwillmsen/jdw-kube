@@ -259,7 +259,7 @@ func (m *mockRunner) runSSH(cmd string) error {
 func createTestClient(t *testing.T, server *mockSSHServer) *Client {
 	logger := zaptest.NewLogger(t)
 	host := server.Host()
-	client := NewClient("admin", host, logger)
+	client := NewClient("admin", host, logger, true)
 	// Replace the runner with our mock
 	client.runner = &mockRunner{server: server, t: t}
 	return client
@@ -294,7 +294,7 @@ func TestNewClient(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			client := NewClient(tt.sshUser, tt.sshHost, logger)
+			client := NewClient(tt.sshUser, tt.sshHost, logger, true)
 
 			assert.NotNil(t, client)
 			assert.Equal(t, tt.sshUser, client.sshUser)
@@ -310,7 +310,7 @@ func TestNewClient(t *testing.T) {
 
 func TestSetPrivateKey(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	client := NewClient("admin", "192.168.1.10", logger)
+	client := NewClient("admin", "192.168.1.10", logger, true)
 
 	t.Run("non-existent key", func(t *testing.T) {
 		err := client.SetPrivateKey("/nonexistent/key")
@@ -351,7 +351,7 @@ func TestSetPrivateKey(t *testing.T) {
 
 func TestSetPort(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	client := NewClient("admin", "192.168.1.10", logger)
+	client := NewClient("admin", "192.168.1.10", logger, true)
 
 	assert.Equal(t, "22", client.sshPort)
 	client.SetPort("2222")
@@ -466,7 +466,7 @@ func TestClient_Validate(t *testing.T) {
 
 	t.Run("connection refused", func(t *testing.T) {
 		logger := zaptest.NewLogger(t)
-		client := NewClient("admin", "127.0.0.1", logger)
+		client := NewClient("admin", "127.0.0.1", logger, true)
 		// Use a port that's unlikely to be open
 		client.SetPort("1")
 
@@ -527,7 +527,7 @@ func TestClient_Integration(t *testing.T) {
 	}
 
 	logger := zaptest.NewLogger(t)
-	client := NewClient(sshUser, sshHost, logger)
+	client := NewClient(sshUser, sshHost, logger, true)
 
 	if keyPath != "" {
 		err := client.SetPrivateKey(keyPath)
