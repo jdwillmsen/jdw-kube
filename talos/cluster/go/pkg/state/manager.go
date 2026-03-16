@@ -662,7 +662,7 @@ func (m *Manager) LoadTerraformExtras(ctx context.Context) error {
 
 	// HAProxy IP
 	if m.config.HAProxyIP == nil {
-		if v := extractStringField(content, "haproxy_ip"); v != "" {
+		if v := extractSimpleStringField(content, "haproxy_ip"); v != "" {
 			if ip := net.ParseIP(v); ip != nil {
 				m.config.HAProxyIP = ip
 			}

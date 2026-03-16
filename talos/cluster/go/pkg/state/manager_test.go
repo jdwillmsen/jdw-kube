@@ -1092,7 +1092,7 @@ func TestParseTFVarsMap(t *testing.T) {
 
 	t.Run("key not present", func(t *testing.T) {
 		content := `other_var = { a = "b" }`
-		result := parseTFVarsMap(content, "other_var")
+		result := parseTFVarsMap(content, "proxmox_node_ips")
 		assert.Empty(t, result)
 	})
 
