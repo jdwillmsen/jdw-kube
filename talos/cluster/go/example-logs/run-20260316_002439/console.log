@@ -1,0 +1,40 @@
+[2m00:24:39[0m [34mDEBUG[0m session started cluster=cluster config=../terraform.tfvars log_dir=logs\2026-03-16\run-20260316_002439
+[36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
+╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
+   ██║   ███████║██║     ██║   ██║███████╗
+   ██║   ██╔══██║██║     ██║   ██║╚════██║
+   ██║   ██║  ██║███████╗╚██████╔╝███████║
+   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
+[0m[2m ━━━ Kubernetes Bootstrap Tool dev ━━━[0m
+[2m00:24:39[0m [34mDEBUG[0m prerequisite found tool=talosctl path=F:\Dev\bin\talosctl.exe version=Client:
+[2m00:24:40[0m [34mDEBUG[0m prerequisite found tool=kubectl path=C:\ProgramData\chocolatey\bin\kubectl.exe version=Client Version: v1.35.0
+[2m00:24:40[0m [32mINFO [0m starting reconciliation cluster=core dry_run=false plan_mode=false
+[2m00:24:40[0m [32mINFO [0m refreshing proxmox node IPs
+[2m00:24:45[0m [32mINFO [0m loading desired state from terraform
+[2m00:24:45[0m [32mINFO [0m loaded desired state nodes=7
+[2m00:24:45[0m [32mINFO [0m loading deployed state
+[2m00:24:45[0m [32mINFO [0m discovering live state
+[2m00:24:54[0m [32mINFO [0m discovered live state found=7
+[2m00:24:54[0m [34mDEBUG[0m discovered VM vmid=202 ip=192.168.1.166 status=discovered
+[2m00:24:54[0m [34mDEBUG[0m discovered VM vmid=201 ip=192.168.1.234 status=discovered
+[2m00:24:54[0m [34mDEBUG[0m discovered VM vmid=200 ip=192.168.1.156 status=discovered
+[2m00:24:54[0m [34mDEBUG[0m discovered VM vmid=301 ip=192.168.1.226 status=discovered
+[2m00:24:54[0m [34mDEBUG[0m discovered VM vmid=302 ip=192.168.1.228 status=discovered
+[2m00:24:54[0m [34mDEBUG[0m discovered VM vmid=300 ip=192.168.1.138 status=discovered
+[2m00:24:54[0m [34mDEBUG[0m discovered VM vmid=303 ip=192.168.1.247 status=discovered
+[2m00:24:54[0m [32mINFO [0m running Talos API preflight checks
+[2m00:24:54[0m [34mDEBUG[0m Talos API reachable vmid=201 ip=192.168.1.234
+[2m00:24:54[0m [34mDEBUG[0m Talos API reachable vmid=200 ip=192.168.1.156
+[2m00:24:54[0m [34mDEBUG[0m Talos API reachable vmid=301 ip=192.168.1.226
+[2m00:24:54[0m [34mDEBUG[0m Talos API reachable vmid=302 ip=192.168.1.228
+[2m00:24:54[0m [34mDEBUG[0m Talos API reachable vmid=300 ip=192.168.1.138
+[2m00:24:54[0m [34mDEBUG[0m Talos API reachable vmid=303 ip=192.168.1.247
+[2m00:24:54[0m [34mDEBUG[0m Talos API reachable vmid=202 ip=192.168.1.166
+[2m00:24:54[0m [32mINFO [0m building reconciliation plan
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mRECONCILIATION PLAN[0m                                         [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  = 7 node(s) unchanged                                      [2m┃[0m
+[2m┃[0m  [32m[OK][0m Cluster matches desired state — no changes needed     [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m00:24:54[0m [32mINFO [0m no changes required
