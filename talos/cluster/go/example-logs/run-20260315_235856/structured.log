@@ -1,4 +1,0 @@
-{"level":"debug","ts":"2026-03-15T23:58:56.197-0500","msg":"session started","cluster":"cluster","config":"../terraform.tfvars","log_dir":"logs\\2026-03-15\\run-20260315_235856"}
-{"level":"debug","ts":"2026-03-15T23:58:56.423-0500","msg":"prerequisite found","tool":"talosctl","path":"F:\\Dev\\bin\\talosctl.exe","version":"Client:"}
-{"level":"debug","ts":"2026-03-15T23:58:56.634-0500","msg":"prerequisite found","tool":"kubectl","path":"C:\\ProgramData\\chocolatey\\bin\\kubectl.exe","version":"Client Version: v1.35.0"}
-{"level":"error","ts":"2026-03-15T23:58:56.635-0500","msg":"configuration incomplete","error":"required configuration missing: control-plane-endpoint (CONTROL_PLANE_ENDPOINT), haproxy-ip (HA_PROXY_IP), kubernetes-version (KUBERNETES_VERSION), talos-version (TALOS_VERSION), installer-image (INSTALLER_IMAGE), proxmox-node-ips (configure via tfvars or flags)"}

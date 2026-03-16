@@ -1,0 +1,27 @@
+[2m00:00:50[0m [34mDEBUG[0m session started cluster=cluster config=../terraform.tfvars log_dir=logs\2026-03-16\run-20260316_000050
+[36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
+╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
+   ██║   ███████║██║     ██║   ██║███████╗
+   ██║   ██╔══██║██║     ██║   ██║╚════██║
+   ██║   ██║  ██║███████╗╚██████╔╝███████║
+   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
+[0m[2m ━━━ Kubernetes Bootstrap Tool dev ━━━[0m
+[2m00:00:50[0m [34mDEBUG[0m prerequisite found tool=talosctl path=F:\Dev\bin\talosctl.exe version=Client:
+[2m00:00:50[0m [34mDEBUG[0m prerequisite found tool=kubectl path=C:\ProgramData\chocolatey\bin\kubectl.exe version=Client Version: v1.35.0
+[2m00:00:50[0m [32mINFO [0m starting reconciliation cluster=core dry_run=false plan_mode=false
+[2m00:00:50[0m [32mINFO [0m refreshing proxmox node IPs
+[2m00:00:50[0m [32mINFO [0m loading desired state from terraform
+[2m00:00:50[0m [32mINFO [0m loaded desired state nodes=7
+[2m00:00:50[0m [32mINFO [0m loading deployed state
+[2m00:00:50[0m [32mINFO [0m discovering live state
+[2m00:00:50[0m [33mWARN [0m ARP repopulation failed error=node pve4: ssh dial 192.168.1.203:22: ssh: handshake failed: SSH host key verification failed for 192.168.1.203:22: use --insecure-ssh to skip verification
+[2m00:00:51[0m [32mINFO [0m discovered live state found=0
+[2m00:00:51[0m [32mINFO [0m running Talos API preflight checks
+[2m00:00:51[0m [32mINFO [0m building reconciliation plan
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mRECONCILIATION PLAN[0m                                         [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  = 7 node(s) unchanged                                      [2m┃[0m
+[2m┃[0m  [32m[OK][0m Cluster matches desired state — no changes needed     [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m00:00:51[0m [32mINFO [0m no changes required
