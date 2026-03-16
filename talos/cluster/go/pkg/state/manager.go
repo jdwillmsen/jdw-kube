@@ -54,10 +54,13 @@ func (m *Manager) NodeConfigPath(vmid types.VMID, role types.Role) string {
 // LoadDesiredState parses terraform.tfvars into NodeSpecs
 // This replaces your parse_terraform_array() function with proper HCL parsing
 func (m *Manager) LoadDesiredState(ctx context.Context) (map[types.VMID]*types.NodeSpec, error) {
-	data, err := os.ReadFile(m.config.TerraformTFVars)
+	raw, err := os.ReadFile(m.config.TerraformTFVars)
 	if err != nil {
 		return nil, fmt.Errorf("read terraform.tfvars: %w", err)
 	}
+
+	// Normalize Windows line endings and strip UTF-8 BOM
+	data := []byte(strings.TrimPrefix(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\xef\xbb\xbf"))
 
 	// Parse HCL properly instead of fragile regex
 	var tfConfig struct {
@@ -611,22 +614,33 @@ func parseIP(s string) net.IP {
 	return net.ParseIP(s)
 }
 
-// ResolveTFVarsPath locates the terraform.tfvars file. If the configured path
-// doesn't exist, it tries ../terraform.tfvars (the Go binary typically runs
-// from a subdirectory of the Terraform root).
+// ResolveTFVarsPath locates the terraform.tfvars file. Searches:
+//  1. The configured path (relative to cwd)
+//  2. Parent directory (Go binary is in talos/cluster/go/, tfvars in talos/cluster/)
+//  3. Next to the binary itself
 func (m *Manager) ResolveTFVarsPath() error {
-	if _, err := os.Stat(m.config.TerraformTFVars); err == nil {
-		return nil
+	base := filepath.Base(m.config.TerraformTFVars)
+	candidates := []string{
+		m.config.TerraformTFVars,
+		filepath.Join("..", base),
 	}
-	// Try parent directroy (Go binary is in talos/cluster/go/, tfvars is in talos/cluster/)
-	parent := filepath.Join("..", filepath.Base(m.config.TerraformTFVars))
-	if _, err := os.Stat(parent); err == nil {
-		m.logger.Info("resolved tfvars in parent directory", zap.String("path", parent))
-		m.config.TerraformTFVars = parent
-		return nil
+	// Also try the directory containing the binary
+	if exe, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "..", base))
 	}
+
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			if candidate != m.config.TerraformTFVars {
+				m.logger.Info("resolved tfvars", zap.String("path", candidate))
+				m.config.TerraformTFVars = candidate
+			}
+			return nil
+		}
+	}
+
 	abs, _ := filepath.Abs(m.config.TerraformTFVars)
-	return fmt.Errorf("terraform.tfvars not found at %s or %s (absolute: %s)", m.config.TerraformTFVars, parent, abs)
+	return fmt.Errorf("terraform.tfvars not found (searched: %v, absolute: %s)", candidates, abs)
 }
 
 // LoadTerraformExtras parses additional fields from terraform.tfvars that aren't
@@ -638,7 +652,9 @@ func (m *Manager) LoadTerraformExtras(ctx context.Context) error {
 		return fmt.Errorf("read terraform.tfvars: %w", err)
 	}
 
-	content := string(data)
+	// Normalize Windows line endings and strip UTF-8 BOM
+	content := strings.ReplaceAll(string(data), "\r\n", "\n")
+	content = strings.TrimPrefix(content, "\xef\xbb\xbf")
 
 	// Only update cluster name if it's still at the default value
 	if m.config.ClusterName == "cluster" {
@@ -744,9 +760,9 @@ func (m *Manager) LoadTerraformExtras(ctx context.Context) error {
 }
 
 // extractSimpleStringField extracts a top-level string assignment from HCL/tfvars content.
-// Matches patterns like: key = "value"
+// Matches patterns like: key = "value" (with optional leading whitespace)
 func extractSimpleStringField(content, key string) string {
-	re := regexp.MustCompile(`(?m)^` + key + `\s*=\s*"([^"]*)"`)
+	re := regexp.MustCompile(`(?m)^\s*` + key + `\s*=\s*"([^"]*)"`)
 	matches := re.FindStringSubmatch(content)
 	if len(matches) >= 2 {
 		return matches[1]

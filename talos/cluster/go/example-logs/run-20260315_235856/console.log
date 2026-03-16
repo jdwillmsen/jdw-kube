@@ -1,3 +1,4 @@
+[2m23:58:56[0m [34mDEBUG[0m session started cluster=cluster config=../terraform.tfvars log_dir=logs\2026-03-15\run-20260315_235856
 [36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
 ╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
    ██║   ███████║██║     ██║   ██║███████╗
@@ -5,4 +6,6 @@
    ██║   ██║  ██║███████╗╚██████╔╝███████║
    ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
 [0m[2m ━━━ Kubernetes Bootstrap Tool dev ━━━[0m
-[2m22:38:31[0m [31mERROR[0m configuration incomplete error=required configuration missing: control-plane-endpoint (CONTROL_PLANE_ENDPOINT), haproxy-ip (HA_PROXY_IP), kubernetes-version (KUBERNETES_VERSION), talos-version (TALOS_VERSION), installer-image (INSTALLER_IMAGE), proxmox-node-ips (configure via tfvars or flags)
+[2m23:58:56[0m [34mDEBUG[0m prerequisite found tool=talosctl path=F:\Dev\bin\talosctl.exe version=Client:
+[2m23:58:56[0m [34mDEBUG[0m prerequisite found tool=kubectl path=C:\ProgramData\chocolatey\bin\kubectl.exe version=Client Version: v1.35.0
+[2m23:58:56[0m [31mERROR[0m configuration incomplete error=required configuration missing: control-plane-endpoint (CONTROL_PLANE_ENDPOINT), haproxy-ip (HA_PROXY_IP), kubernetes-version (KUBERNETES_VERSION), talos-version (TALOS_VERSION), installer-image (INSTALLER_IMAGE), proxmox-node-ips (configure via tfvars or flags)
