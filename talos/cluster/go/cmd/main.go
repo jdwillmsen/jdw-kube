@@ -72,6 +72,7 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&cfg.TalosVersion, "talos-version", "", "Talos version (e.g., v1.12.13)")
 	rootCmd.PersistentFlags().StringVar(&cfg.InstallerImage, "installer-image", "", "Talos installer image")
 	rootCmd.PersistentFlags().StringVar(&cfg.HAProxyLoginUser, "haproxy-user", "", "HAProxy SSH login user")
+	rootCmd.PersistentFlags().StringVar(&cfg.HAProxyStatsUser, "haproxy-stats-user", "", "HAProxy stats username")
 	rootCmd.PersistentFlags().StringVar(&cfg.HAProxyStatsPassword, "haproxy-stats-password", "", "HAProxy stats password")
 	rootCmd.PersistentFlags().BoolVar(&cfg.InsecureSSH, "insecure-ssh", false, "Skip SSH host key verification (INSECURE)")
 
@@ -144,6 +145,9 @@ func initConfig(cmd *cobra.Command) error {
 	}
 	if v := os.Getenv("HAPROXY_LOGIN_USER"); v != "" {
 		cfg.HAProxyLoginUser = v
+	}
+	if v := os.Getenv("HAPROXY_STATS_USER"); v != "" {
+		cfg.HAProxyStatsUser = v
 	}
 	if v := os.Getenv("HAPROXY_STATS_PASSWORD"); v != "" {
 		cfg.HAProxyStatsPassword = v

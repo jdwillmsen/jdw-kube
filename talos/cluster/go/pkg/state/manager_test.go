@@ -751,7 +751,7 @@ func TestManager_LoadTerraformExtras(t *testing.T) {
 		{
 			name: "extracts control plane endpoint",
 			initialConfig: func(c *types.Config) {
-				c.ControlPlaneEndpoint = "cluster.jdwlabs.com" // Set to default to allow extraction
+				c.ControlPlaneEndpoint = "" // Clear to allow extraction
 			},
 			tfvarsContent: `control_plane_endpoint = "api.example.com"`,
 			validateConfig: func(t *testing.T, c *types.Config) {
@@ -761,11 +761,97 @@ func TestManager_LoadTerraformExtras(t *testing.T) {
 		{
 			name: "extracts haproxy_ip",
 			initialConfig: func(c *types.Config) {
-				c.HAProxyIP = net.ParseIP("192.168.1.199") // Set to default to allow extraction
+				c.HAProxyIP = nil // Clear to allow extraction
 			},
 			tfvarsContent: `haproxy_ip = "192.168.1.50"`,
 			validateConfig: func(t *testing.T, c *types.Config) {
 				assert.True(t, c.HAProxyIP.Equal(net.ParseIP("192.168.1.50")))
+			},
+		},
+		{
+			name: "preserves control_plane_endpoint when set by flag",
+			initialConfig: func(c *types.Config) {
+				c.ControlPlaneEndpoint = "from-flag.example.com"
+			},
+			tfvarsContent: `control_plane_endpoint = "from-tfvars.example.com"`,
+			validateConfig: func(t *testing.T, c *types.Config) {
+				assert.Equal(t, "from-flag.example.com", c.ControlPlaneEndpoint)
+			},
+		},
+		{
+			name: "preserves haproxy_ip when set by flag",
+			initialConfig: func(c *types.Config) {
+				c.HAProxyIP = net.ParseIP("10.0.0.1")
+			},
+			tfvarsContent: `haproxy_ip = "192.168.1.50"`,
+			validateConfig: func(t *testing.T, c *types.Config) {
+				assert.True(t, c.HAProxyIP.Equal(net.ParseIP("10.0.0.1")))
+			},
+		},
+		{
+			name:          "extracts kubernetes_version",
+			tfvarsContent: `kubernetes_version = "v1.35.1"`,
+			validateConfig: func(t *testing.T, c *types.Config) {
+				assert.Equal(t, "v1.35.1", c.KubernetesVersion)
+			},
+		},
+		{
+			name:          "extracts talos_version",
+			tfvarsContent: `talos_version = "v1.12.3"`,
+			validateConfig: func(t *testing.T, c *types.Config) {
+				assert.Equal(t, "v1.12.3", c.TalosVersion)
+			},
+		},
+		{
+			name:          "extracts installer_image",
+			tfvarsContent: `installer_image = "factory.talos.dev/nocloud-installer/test:v1.12.3"`,
+			validateConfig: func(t *testing.T, c *types.Config) {
+				assert.Equal(t, "factory.talos.dev/nocloud-installer/test:v1.12.3", c.InstallerImage)
+			},
+		},
+		{
+			name:          "extracts haproxy_login_user",
+			tfvarsContent: `haproxy_login_user = "jake"`,
+			validateConfig: func(t *testing.T, c *types.Config) {
+				assert.Equal(t, "jake", c.HAProxyLoginUser)
+			},
+		},
+		{
+			name:          "extracts haproxy_stats_user",
+			tfvarsContent: `haproxy_stats_user = "admin"`,
+			validateConfig: func(t *testing.T, c *types.Config) {
+				assert.Equal(t, "admin", c.HAProxyStatsUser)
+			},
+		},
+		{
+			name:          "extracts haproxy_stats_password",
+			tfvarsContent: `haproxy_stats_password = "admin"`,
+			validateConfig: func(t *testing.T, c *types.Config) {
+				assert.Equal(t, "admin", c.HAProxyStatsPassword)
+			},
+		},
+		{
+			name: "extracts proxmox_node_ips map",
+			tfvarsContent: `proxmox_node_ips = {
+  pve1 = "192.168.1.200"
+  pve2 = "192.168.1.201"
+  pve3 = "192.168.1.202"
+}`,
+			validateConfig: func(t *testing.T, c *types.Config) {
+				assert.Len(t, c.ProxmoxNodeIPs, 3)
+				assert.True(t, c.ProxmoxNodeIPs["pve1"].Equal(net.ParseIP("192.168.1.200")))
+				assert.True(t, c.ProxmoxNodeIPs["pve2"].Equal(net.ParseIP("192.168.1.201")))
+				assert.True(t, c.ProxmoxNodeIPs["pve3"].Equal(net.ParseIP("192.168.1.202")))
+			},
+		},
+		{
+			name: "preserves kubernetes_version when set by flag",
+			initialConfig: func(c *types.Config) {
+				c.KubernetesVersion = "v1.99.0"
+			},
+			tfvarsContent: `kubernetes_version = "v1.35.1"`,
+			validateConfig: func(t *testing.T, c *types.Config) {
+				assert.Equal(t, "v1.99.0", c.KubernetesVersion)
 			},
 		},
 	}
@@ -963,6 +1049,128 @@ func TestParseArrayBlocks(t *testing.T) {
 			assert.Len(t, got, tt.expected)
 		})
 	}
+}
+
+func TestExtractURLHost(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"full URL with port and path", "https://192.168.1.200:8006/api2/json", "192.168.1.200"},
+		{"URL without port", "https://myhost.example.com/path", "myhost.example.com"},
+		{"plain IP (no scheme)", "192.168.1.200", "192.168.1.200"},
+		{"just hostname", "myhost", "myhost"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, extractURLHost(tt.input))
+		})
+	}
+}
+
+func TestParseTFVarsMap(t *testing.T) {
+	t.Run("quoted string values", func(t *testing.T) {
+		content := `proxmox_node_ips = {
+  pve1 = "192.168.1.200"
+  pve2 = "192.168.1.201"
+}`
+		result := parseTFVarsMap(content, "proxmox_node_ips")
+		assert.Len(t, result, 2)
+		assert.Equal(t, "192.168.1.200", result["pve1"])
+		assert.Equal(t, "192.168.1.201", result["pve2"])
+	})
+
+	t.Run("single line with commas", func(t *testing.T) {
+		content := `proxmox_node_ips = { pve1 = "10.0.0.1", pve2 = "10.0.0.2" }`
+		result := parseTFVarsMap(content, "proxmox_node_ips")
+		assert.Len(t, result, 2)
+		assert.Equal(t, "10.0.0.1", result["pve1"])
+		assert.Equal(t, "10.0.0.2", result["pve2"])
+	})
+
+	t.Run("key not present", func(t *testing.T) {
+		content := `other_var = { a = "b" }`
+		result := parseTFVarsMap(content, "other_var")
+		assert.Empty(t, result)
+	})
+
+	t.Run("missing closing brace", func(t *testing.T) {
+		content := `proxmox_node_ips = { pve1 = "10.0.0.1"`
+		result := parseTFVarsMap(content, "proxmox_node_ips")
+		assert.Empty(t, result)
+	})
+
+	t.Run("empty map", func(t *testing.T) {
+		content := `proxmox_node_ips = {}`
+		result := parseTFVarsMap(content, "proxmox_node_ips")
+		assert.Empty(t, result)
+	})
+
+	t.Run("does not match nested keys", func(t *testing.T) {
+		content := `other = {
+  proxmox_node_ips = { pve1 = "10.0.0.1" }
+}`
+		// parseTFVarsMap is anchored to start of line, so nested key should not match
+		result := parseTFVarsMap(content, "proxmox_node_ips")
+		assert.Empty(t, result)
+	})
+}
+
+// TestLoadTerraformExtras_fullScenario proves that a complete tfvars file
+// populates all required Config fields from DefaultConfig() alone.
+func TestLoadTerraformExtras_fullScenario(t *testing.T) {
+	tmpDir := t.TempDir()
+	logger := zaptest.NewLogger(t)
+
+	cfg := types.DefaultConfig()
+	cfg.TerraformTFVars = filepath.Join(tmpDir, "terraform.tfvars")
+
+	content := `cluster_name         = "test-core"
+proxmox_endpoint          = "https://192.168.1.200:8006/api2/json"
+proxmox_api_token_id      = "terraform@pve!cluster"
+proxmox_api_token_secret  = "secret"
+control_plane_endpoint    = "cluster.example.com"
+haproxy_ip                = "192.168.1.199"
+haproxy_login_user        = "root"
+haproxy_stats_user		  = "admin"
+haproxy_stats_password    = "changeme"
+kubernetes_version        = "v1.35.1"
+talos_version             = "v1.12.3"
+installer_image           = "factory.talos.dev/nocloud-installer/test:v1.12.3"
+
+proxmox_node_ips = {
+  pve1 = "192.168.1.200"
+  pve2 = "192.168.1.201"
+}
+
+talos_control_configuration = []
+talos_worker_configuration = []
+`
+	err := os.WriteFile(cfg.TerraformTFVars, []byte(content), 0644)
+	require.NoError(t, err)
+
+	manager := NewManager(cfg, logger)
+	err = manager.LoadTerraformExtras(context.Background())
+	require.NoError(t, err)
+
+	// All required fields must be set - Validate() should pass
+	require.NoError(t, cfg.Validate(), "Config should be valid after loading complete tfvars")
+
+	// Verify specific values
+	assert.Equal(t, "test-core", cfg.ClusterName)
+	assert.Equal(t, "cluster.example.com", cfg.ControlPlaneEndpoint)
+	assert.True(t, cfg.HAProxyIP.Equal(net.ParseIP("192.168.1.199")))
+	assert.Equal(t, "v1.35.1", cfg.KubernetesVersion)
+	assert.Equal(t, "v1.12.3", cfg.TalosVersion)
+	assert.Equal(t, "factory.talos.dev/nocloud-installer/test:v1.12.3", cfg.InstallerImage)
+	assert.Equal(t, "192.168.1.200", cfg.ProxmoxSSHHost)
+	assert.Equal(t, "root", cfg.HAProxyLoginUser)
+	assert.Equal(t, "admin", cfg.HAProxyStatsUser)
+	assert.Equal(t, "changeme", cfg.HAProxyStatsPassword)
+	assert.Len(t, cfg.ProxmoxSSHHost, 2)
+	assert.True(t, cfg.ProxmoxNodeIPs["pve1"].Equal(net.ParseIP("192.168.1.200")))
 }
 
 // Windows-specific path handling validation

@@ -27,6 +27,60 @@ variable "talos_iso" {
   default = "local:iso/nocloud-amd64.iso"
 }
 
+# Go Bootstrapper Configuration
+# Read by the Go bootstrap tool, not used by Terraform.
+# Declared here to supress "undeclared variable" warnings.
+variable "cluster_name" {
+  type    = string
+  default = null
+}
+
+variable "control_plane_endpoint" {
+  type    = string
+  default = null
+}
+
+variable "haproxy_ip" {
+  type    = string
+  default = null
+}
+
+variable "haproxy_login_user" {
+  type    = string
+  default = null
+}
+
+variable "haproxy_stats_user" {
+  type    = string
+  default = null
+}
+
+variable "haproxy_stats_password" {
+  type      = string
+  sensitive = true
+  default   = null
+}
+
+variable "kubernetes_version" {
+  type    = string
+  default = null
+}
+
+variable "talos_version" {
+  type    = string
+  default = null
+}
+
+variable "installer_image" {
+  type    = string
+  default = null
+}
+
+variable "proxmox_node_ips" {
+  type    = map(string)
+  default = null
+}
+
 # CONTROL PLANE CONFIGURATION
 # This is a LIST of objects - add more objects to scale up
 variable "talos_control_configuration" {

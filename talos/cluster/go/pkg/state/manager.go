@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -611,9 +612,8 @@ func parseIP(s string) net.IP {
 }
 
 // LoadTerraformExtras parses additional fields from terraform.tfvars that aren't
-// part of the node configuration arrays: cluster_name, proxmox_api_token_id,
-// proxmox_api_token_secret. Only updates fields still at default/empty values
-// (CLI flags and env vars take precedence).
+// part of the node configuration arrays. Only updates fields still at their
+// zero/empty values so CLI flags and envs take precedence.
 func (m *Manager) LoadTerraformExtras(ctx context.Context) error {
 	data, err := os.ReadFile(m.config.TerraformTFVars)
 	if err != nil {
@@ -634,38 +634,90 @@ func (m *Manager) LoadTerraformExtras(ctx context.Context) error {
 		}
 	}
 
-	// Only update Proxmox token fields if empty
+	// Proxmox credentials
 	if m.config.ProxmoxTokenID == "" {
-		if tokenID := extractSimpleStringField(content, "proxmox_api_token_id"); tokenID != "" {
-			m.config.ProxmoxTokenID = tokenID
+		if v := extractSimpleStringField(content, "proxmox_api_token_id"); v != "" {
+			m.config.ProxmoxTokenID = v
 		}
 	}
-
 	if m.config.ProxmoxTokenSecret == "" {
-		if tokenSecret := extractSimpleStringField(content, "proxmox_api_token_secret"); tokenSecret != "" {
-			m.config.ProxmoxTokenSecret = tokenSecret
+		if v := extractSimpleStringField(content, "proxmox_api_token_secret"); v != "" {
+			m.config.ProxmoxTokenSecret = v
 		}
 	}
 
-	// Extract Proxmox endpoint if not set
-	if m.config.ProxmoxSSHHost == "" || m.config.ProxmoxSSHHost == "192.168.1.199" {
-		if endpoint := extractStringField(content, "proxmox_endpoint"); endpoint != "" {
-			m.config.ProxmoxSSHHost = endpoint
+	// Proxmox SSH host - extract IP from the full API URL
+	if m.config.ProxmoxSSHHost == "" {
+		if v := extractSimpleStringField(content, "proxmox_endpoint"); v != "" {
+			m.config.ProxmoxSSHHost = extractURLHost(v)
 		}
 	}
 
-	// Extract control_plane_endpoint if still at default
-	if m.config.ControlPlaneEndpoint == "cluster.jdwlabs.com" {
-		if ep := extractSimpleStringField(content, "control_plane_endpoint"); ep != "" {
-			m.config.ControlPlaneEndpoint = ep
+	// Control plane endpoint
+	if m.config.ControlPlaneEndpoint == "" {
+		if v := extractSimpleStringField(content, "control_plane_endpoint"); v != "" {
+			m.config.ControlPlaneEndpoint = v
 		}
 	}
 
-	// Extract haproxy_ip if still at default
-	if m.config.HAProxyIP.Equal(net.ParseIP("192.168.1.199")) {
-		if ipStr := extractStringField(content, "haproxy_ip"); ipStr != "" {
-			if ip := net.ParseIP(ipStr); ip != nil {
+	// HAProxy IP
+	if m.config.HAProxyIP == nil {
+		if v := extractStringField(content, "haproxy_ip"); v != "" {
+			if ip := net.ParseIP(v); ip != nil {
 				m.config.HAProxyIP = ip
+			}
+		}
+	}
+
+	// HAProxy credentials
+	if m.config.HAProxyLoginUser == "" {
+		if v := extractSimpleStringField(content, "haproxy_login_user"); v != "" {
+			m.config.HAProxyLoginUser = v
+		}
+	}
+	if m.config.HAProxyStatsUser == "" {
+		if v := extractSimpleStringField(content, "haproxy_stats_user"); v != "" {
+			m.config.HAProxyStatsUser = v
+		}
+	}
+	if m.config.HAProxyStatsPassword == "" {
+		if v := extractSimpleStringField(content, "haproxy_stats_password"); v != "" {
+			m.config.HAProxyStatsPassword = v
+		}
+	}
+
+	// Kubernetes and Talos versions
+	if m.config.KubernetesVersion == "" {
+		if v := extractSimpleStringField(content, "kubernetes_version"); v != "" {
+			m.config.KubernetesVersion = v
+		}
+	}
+	if m.config.TalosVersion == "" {
+		if v := extractSimpleStringField(content, "talos_version"); v != "" {
+			m.config.TalosVersion = v
+		}
+	}
+	if m.config.InstallerImage == "" {
+		if v := extractSimpleStringField(content, "installer_image"); v != "" {
+			m.config.InstallerImage = v
+		}
+	}
+
+	// Proxmox node IPs map
+	if len(m.config.ProxmoxNodeIPs) == 0 {
+		rawMap := parseTFVarsMap(content, "proxmox_node_ips")
+		if len(rawMap) > 0 {
+			nodeIPs := make(map[string]net.IP, len(rawMap))
+			for nodeName, ipStr := range rawMap {
+				if ip := net.ParseIP(ipStr); ip != nil {
+					nodeIPs[nodeName] = ip
+				} else {
+					m.logger.Warn("invalid IP in proxmox_node_ips",
+						zap.String("node", nodeName), zap.String("value", ipStr))
+				}
+			}
+			if len(nodeIPs) > 0 {
+				m.config.ProxmoxNodeIPs = nodeIPs
 			}
 		}
 	}
@@ -682,4 +734,58 @@ func extractSimpleStringField(content, key string) string {
 		return matches[1]
 	}
 	return ""
+}
+
+// extractURLHost parses a URL and returns just the hostname (no scheme, port, or path).
+// e.g., "https://192.168.1.200:8006/api2/json" -> "192.168.1.200"
+// Falls back to returning rawURL unchanged if parsing fails.
+func extractURLHost(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Hostname() == "" {
+		return rawURL
+	}
+	return u.Hostname()
+}
+
+// parseTFVarsMap extracts a string->string map from an HCL map literal.
+// Matches: key = { k1 = "v1", k2 = "v2" }
+// Returns an empty map if the key is not found or parsing fails.
+func parseTFVarsMap(content, key string) map[string]string {
+	result := make(map[string]string)
+
+	re := regexp.MustCompile(`(?m)^` + key + `\s*=\s*\{`)
+	loc := re.FindStringIndex(content)
+	if loc == nil {
+		return result
+	}
+
+	// Find the matching closing brace using brace counting
+	start := loc[1] - 1 // position of the opening '{'
+	depth := 0
+	end := -1
+	for i := start; i < len(content); i++ {
+		switch content[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				end = i
+				i = len(content) // break out of loop
+			}
+		}
+	}
+	if end == -1 {
+		return result
+	}
+
+	body := content[start+1 : end]
+
+	// Extract key = "value" pairs
+	pairRe := regexp.MustCompile(`(\w+)\s*=\s*"([^"]*)"`)
+	for _, m := range pairRe.FindAllStringSubmatch(body, -1) {
+		result[m[1]] = m[2]
+	}
+
+	return result
 }
