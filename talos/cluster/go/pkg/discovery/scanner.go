@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/jdw/talos-bootstrap/pkg/types"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // Scanner handles ARP-based IP discovery across Proxmox nodes
@@ -27,19 +29,10 @@ type Scanner struct {
 }
 
 // NewScanner creates a new discovery scanner.
-// If insecureSSH is false, the scanner will rject connections (no known_hosts
-// implementation yet). Pass true and use --insecure-ssh to acknowledge the risk.
+// If insecure SSH is false, host keys are verified against ~/.ssh/known_hosts.
+// Pass true and use --insecure-ssh to skip verification entirely.
 func NewScanner(sshUser string, nodeIPs map[string]net.IP, insecureSSH bool) *Scanner {
-	var hostKeyCallback ssh.HostKeyCallback
-	if insecureSSH {
-		hostKeyCallback = ssh.InsecureIgnoreHostKey()
-	} else {
-		// Reject all connections when insecure mode is not explicitly enabled.
-		// A future TOFU implementation would replace this.
-		hostKeyCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-			return fmt.Errorf("SSH host key verification failed for %s: use --insecure-ssh to skip verification", hostname)
-		}
-	}
+	hostKeyCallback := knownHostsCallback(insecureSSH)
 	return &Scanner{
 		sshUser: sshUser,
 		sshConfig: &ssh.ClientConfig{
@@ -384,19 +377,10 @@ func DiscoverProxmoxNodes(sshUser, keyPath string, seedIP net.IP, insecureSSH bo
 		return nil, fmt.Errorf("parse key: %w", err)
 	}
 
-	var hostKeyCallback ssh.HostKeyCallback
-	if insecureSSH {
-		hostKeyCallback = ssh.InsecureIgnoreHostKey()
-	} else {
-		hostKeyCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-			return fmt.Errorf("SSH host key verification failed for %s: use --insecure-ssh to skip verification", hostname)
-		}
-	}
-
 	cfg := &ssh.ClientConfig{
 		User:            sshUser,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: hostKeyCallback,
+		HostKeyCallback: knownHostsCallback(insecureSSH),
 		Timeout:         10 * time.Second,
 	}
 
@@ -498,6 +482,29 @@ func (s *Scanner) MarkJoinedNodes(memberAddrs []string, results map[types.VMID]*
 		if node.IP != nil && memberSet[node.IP.String()] {
 			node.Status = types.StatusJoined
 		}
+	}
+}
+
+// knownHostsCallback returns an ssh.HostKeyCallback. When insecure is true,
+// all host keys are accepted. Otherwise, keys are verified against the user's
+// ~/.ssh/known_hosts file. If that file is missing or unredable, connections
+// are rejected with a hint to either populate known_hosts or use --insecure-ssh
+func knownHostsCallback(insecure bool) ssh.HostKeyCallback {
+	if insecure {
+		return ssh.InsecureIgnoreHostKey()
+	}
+
+	home, err := os.UserHomeDir()
+	if err == nil {
+		khPath := filepath.Join(home, ".ssh", "known_hosts")
+		if cb, err := knownhosts.New(khPath); err == nil {
+			return cb
+		}
+	}
+
+	// Fallback: reject with actionable message
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		return fmt.Errorf("SSh host key verification failed for %s: add host keys with ssh-keyscan or use --insecure-ssh", hostname)
 	}
 }
 
