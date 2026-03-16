@@ -13,9 +13,12 @@ import (
 func runStatus(ctx context.Context, cfg *types.Config) error {
 	stateMgr := state.NewManager(cfg, logger)
 
-	// Load additional fields from terraform.tfvars
+	// Resolve and load additional fields from terraform.tfvars
+	if err := stateMgr.ResolveTFVarsPath(); err != nil {
+		logger.Warn("could not locate terraform.tfvars", zap.Error(err))
+	}
 	if err := stateMgr.LoadTerraformExtras(ctx); err != nil {
-		logger.Debug("could not load terraform extras", zap.Error(err))
+		logger.Warn("could not load terraform extras", zap.String("path", cfg.TerraformTFVars), zap.Error(err))
 	}
 
 	desired, err := stateMgr.LoadDesiredState(ctx)

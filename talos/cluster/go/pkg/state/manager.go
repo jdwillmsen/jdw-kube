@@ -611,6 +611,24 @@ func parseIP(s string) net.IP {
 	return net.ParseIP(s)
 }
 
+// ResolveTFVarsPath locates the terraform.tfvars file. If the configured path
+// doesn't exist, it tries ../terraform.tfvars (the Go binary typically runs
+// from a subdirectory of the Terraform root).
+func (m *Manager) ResolveTFVarsPath() error {
+	if _, err := os.Stat(m.config.TerraformTFVars); err == nil {
+		return nil
+	}
+	// Try parent directroy (Go binary is in talos/cluster/go/, tfvars is in talos/cluster/)
+	parent := filepath.Join("..", filepath.Base(m.config.TerraformTFVars))
+	if _, err := os.Stat(parent); err == nil {
+		m.logger.Info("resolved tfvars in parent directory", zap.String("path", parent))
+		m.config.TerraformTFVars = parent
+		return nil
+	}
+	abs, _ := filepath.Abs(m.config.TerraformTFVars)
+	return fmt.Errorf("terraform.tfvars not found at %s or %s (absolute: %s)", m.config.TerraformTFVars, parent, abs)
+}
+
 // LoadTerraformExtras parses additional fields from terraform.tfvars that aren't
 // part of the node configuration arrays. Only updates fields still at their
 // zero/empty values so CLI flags and envs take precedence.

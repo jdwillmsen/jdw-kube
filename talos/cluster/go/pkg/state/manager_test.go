@@ -1169,8 +1169,66 @@ talos_worker_configuration = []
 	assert.Equal(t, "root", cfg.HAProxyLoginUser)
 	assert.Equal(t, "admin", cfg.HAProxyStatsUser)
 	assert.Equal(t, "changeme", cfg.HAProxyStatsPassword)
-	assert.Len(t, cfg.ProxmoxSSHHost, 2)
+	assert.Len(t, cfg.ProxmoxNodeIPs, 2)
 	assert.True(t, cfg.ProxmoxNodeIPs["pve1"].Equal(net.ParseIP("192.168.1.200")))
+}
+
+func TestResolveTFVarsPath(t *testing.T) {
+	t.Run("file exists at configured path", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		tfvarsPath := filepath.Join(tmpDir, "terraform.tfvars")
+		os.WriteFile(tfvarsPath, []byte(`cluster_name = "test"`), 0644)
+
+		cfg := types.TestConfig()
+		cfg.TerraformTFVars = tfvarsPath
+		logger := zaptest.NewLogger(t)
+		mgr := NewManager(cfg, logger)
+
+		err := mgr.ResolveTFVarsPath()
+		require.NoError(t, err)
+		assert.Equal(t, tfvarsPath, cfg.TerraformTFVars)
+	})
+
+	t.Run("file exists in parent directory", func(t *testing.T) {
+		// Create parent/child directory structure
+		parentDir := t.TempDir()
+		childDir := filepath.Join(parentDir, "subdir")
+		require.NoError(t, os.Mkdir(childDir, 0755))
+
+		// Put tfvars in parent
+		tfvarsPath := filepath.Join(parentDir, "terraform.tfvars")
+		os.WriteFile(tfvarsPath, []byte(`cluster_name = "test"`), 0644)
+
+		// Run from child directory
+		origDir, _ := os.Getwd()
+		require.NoError(t, os.Chdir(childDir))
+		defer os.Chdir(origDir)
+
+		cfg := types.TestConfig()
+		cfg.TerraformTFVars = "terraform.tfvars"
+		logger := zaptest.NewLogger(t)
+		mgr := NewManager(cfg, logger)
+
+		err := mgr.ResolveTFVarsPath()
+		require.NoError(t, err)
+		assert.Equal(t, filepath.Join("..", "terraform.tfvars"), cfg.TerraformTFVars)
+	})
+
+	t.Run("file not found anywhere", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		origDir, _ := os.Getwd()
+		require.NoError(t, os.Chdir(tmpDir))
+		defer os.Chdir(origDir)
+
+		cfg := types.TestConfig()
+		cfg.TerraformTFVars = "terraform.tfvars"
+		logger := zaptest.NewLogger(t)
+		mgr := NewManager(cfg, logger)
+
+		err := mgr.ResolveTFVarsPath()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "terraform.tfvars not found")
+	})
 }
 
 // Windows-specific path handling validation

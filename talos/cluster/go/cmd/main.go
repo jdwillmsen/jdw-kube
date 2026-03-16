@@ -257,8 +257,11 @@ func resetCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Load terraform extras so cluster name is resolved from tfvars
 			stateMgr := state.NewManager(cfg, logger)
+			if err := stateMgr.ResolveTFVarsPath(); err != nil {
+				logger.Warn("could not locate terraform.tfvars", zap.Error(err))
+			}
 			if err := stateMgr.LoadTerraformExtras(context.Background()); err != nil {
-				logger.Debug("could not load terraform extras", zap.Error(err))
+				logger.Warn("could not load terraform extras", zap.String("path", cfg.TerraformTFVars), zap.Error(err))
 			}
 
 			clusterDir := filepath.Join("clusters", cfg.ClusterName)
@@ -281,9 +284,14 @@ func resetCmd() *cobra.Command {
 func runReconcile(ctx context.Context, cfg *types.Config) error {
 	stateMgr := state.NewManager(cfg, logger)
 
+	// Resolve terraform.tfvars path (tries configured path, then parent directory)
+	if err := stateMgr.ResolveTFVarsPath(); err != nil {
+		logger.Warn("could not locate terraform.tfvars", zap.Error(err))
+	}
+
 	// Load additional fields from terraform.tfvars (cluster_name, proxmox tokens)
 	if err := stateMgr.LoadTerraformExtras(ctx); err != nil {
-		logger.Debug("could not load terraform extras", zap.Error(err))
+		logger.Warn("could not load terraform extras", zap.String("path", cfg.TerraformTFVars), zap.Error(err))
 	}
 
 	if err := cfg.Validate(); err != nil {
