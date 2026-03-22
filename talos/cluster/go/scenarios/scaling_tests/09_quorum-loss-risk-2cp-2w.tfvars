@@ -27,8 +27,8 @@ storage_pool = "local-lvm"
 talos_iso    = "local:iso/nocloud-amd64.iso"
 
 talos_control_configuration = [
-  { node_name = "pve2", vm_name = "talos-cp-01", vmid = 200, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve3", vm_name = "talos-cp-02", vmid = 201, cpu_cores = 2, memory = 2048, disk_size = 20 },
+  { node_name = "pve2", vm_name = "talos-cp-01", vmid = 200, cpu_cores = 4, memory = 4096, disk_size = 50 },
+  { node_name = "pve3", vm_name = "talos-cp-02", vmid = 201, cpu_cores = 4, memory = 4096, disk_size = 50 },
   # INVALID: Only 2 CP nodes - etcd requires 3 for quorum
 ]
 

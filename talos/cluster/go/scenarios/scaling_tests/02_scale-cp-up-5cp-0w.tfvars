@@ -26,11 +26,11 @@ storage_pool = "local-lvm"
 talos_iso    = "local:iso/nocloud-amd64.iso"
 
 talos_control_configuration = [
-  { node_name = "pve2", vm_name = "talos-cp-01", vmid = 200, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve3", vm_name = "talos-cp-02", vmid = 201, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve4", vm_name = "talos-cp-03", vmid = 202, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve1", vm_name = "talos-cp-04", vmid = 203, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve2", vm_name = "talos-cp-05", vmid = 204, cpu_cores = 2, memory = 2048, disk_size = 20 },
+  { node_name = "pve2", vm_name = "talos-cp-01", vmid = 200, cpu_cores = 4, memory = 4096, disk_size = 50 },
+  { node_name = "pve3", vm_name = "talos-cp-02", vmid = 201, cpu_cores = 4, memory = 4096, disk_size = 50 },
+  { node_name = "pve4", vm_name = "talos-cp-03", vmid = 202, cpu_cores = 4, memory = 4096, disk_size = 50 },
+  { node_name = "pve1", vm_name = "talos-cp-04", vmid = 203, cpu_cores = 4, memory = 4096, disk_size = 50 },
+  { node_name = "pve2", vm_name = "talos-cp-05", vmid = 204, cpu_cores = 4, memory = 4096, disk_size = 50 },
 ]
 
 talos_worker_configuration = []
