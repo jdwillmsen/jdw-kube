@@ -2,7 +2,6 @@ package terraform
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -11,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -116,7 +114,7 @@ func TestRunner_Init(t *testing.T) {
 			execCommandContext = mockExecCommand(tt.output, tt.exitErr)
 
 			logger := zaptest.NewLogger(t)
-			runner := NewRunner("/tmp/test", logger)
+			runner := NewRunner(t.TempDir(), logger)
 
 			err := runner.Init(context.Background())
 			if (err != nil) != tt.wantErr {
@@ -161,7 +159,7 @@ func TestRunner_Fmt(t *testing.T) {
 			execCommandContext = mockExecCommand(tt.output, tt.exitErr)
 
 			logger := zaptest.NewLogger(t)
-			runner := NewRunner("/tmp/test", logger)
+			runner := NewRunner(t.TempDir(), logger)
 
 			err := runner.Fmt(context.Background())
 			if (err != nil) != tt.wantErr {
@@ -200,7 +198,7 @@ func TestRunner_Validate(t *testing.T) {
 			execCommandContext = mockExecCommand(tt.output, tt.exitErr)
 
 			logger := zaptest.NewLogger(t)
-			runner := NewRunner("/tmp/test", logger)
+			runner := NewRunner(t.TempDir(), logger)
 
 			err := runner.Validate(context.Background())
 			if (err != nil) != tt.wantErr {
@@ -262,7 +260,7 @@ func TestRunner_Plan(t *testing.T) {
 			}
 
 			logger := zaptest.NewLogger(t)
-			runner := NewRunner("/tmp/test", logger)
+			runner := NewRunner(t.TempDir(), logger)
 
 			gotChanges, err := runner.Plan(context.Background(), "/tmp/plan.out")
 			if (err != nil) != tt.wantErr {
@@ -328,7 +326,7 @@ func TestRunner_DestroyPlan(t *testing.T) {
 			execCommandContext = mockExecCommand(tt.output, tt.exitErr)
 
 			logger := zaptest.NewLogger(t)
-			runner := NewRunner("/tmp/test", logger)
+			runner := NewRunner(t.TempDir(), logger)
 
 			err := runner.DestroyPlan(context.Background(), "/tmp/destroy.plan")
 			if (err != nil) != tt.wantErr {
@@ -398,7 +396,7 @@ func TestRunner_ShowJSON(t *testing.T) {
 			execCommandContext = mockExecCommand(tt.output, tt.exitErr)
 
 			logger := zaptest.NewLogger(t)
-			runner := NewRunner("/tmp/test", logger)
+			runner := NewRunner(t.TempDir(), logger)
 
 			plan, err := runner.ShowJSON(context.Background(), "/tmp/plan.out")
 			if (err != nil) != tt.wantErr {
@@ -455,7 +453,7 @@ func TestRunner_ShowStateJSON(t *testing.T) {
 			execCommandContext = mockExecCommand(tt.output, tt.exitErr)
 
 			logger := zaptest.NewLogger(t)
-			runner := NewRunner("/tmp/test", logger)
+			runner := NewRunner(t.TempDir(), logger)
 
 			state, err := runner.ShowStateJSON(context.Background())
 			if (err != nil) != tt.wantErr {
@@ -507,7 +505,7 @@ func TestRunner_StateList(t *testing.T) {
 			execCommandContext = mockExecCommand(tt.output, tt.exitErr)
 
 			logger := zaptest.NewLogger(t)
-			runner := NewRunner("/tmp/test", logger)
+			runner := NewRunner(t.TempDir(), logger)
 
 			resources, err := runner.StateList(context.Background())
 			if (err != nil) != tt.wantErr {
@@ -565,7 +563,7 @@ func TestRunner_Version(t *testing.T) {
 			execCommandContext = mockExecCommand(tt.output, tt.exitErr)
 
 			logger := zaptest.NewLogger(t)
-			runner := NewRunner("/tmp/test", logger)
+			runner := NewRunner(t.TempDir(), logger)
 
 			version, err := runner.Version(context.Background())
 			if (err != nil) != tt.wantErr {
@@ -789,7 +787,7 @@ func TestRunner_ApplyWithRetry(t *testing.T) {
 			}
 
 			logger := zaptest.NewLogger(t)
-			runner := NewRunner("/tmp/test", logger)
+			runner := NewRunner(t.TempDir(), logger)
 
 			err := runner.ApplyWithRetry(context.Background(), "/tmp/plan.out", tt.maxRetries, 10*time.Millisecond)
 			if (err != nil) != tt.wantErr {
@@ -806,7 +804,7 @@ func TestRunner_ApplyWithRetry_ContextCancellation(t *testing.T) {
 	execCommandContext = mockExecCommand("", errors.New("exit status 1"))
 
 	logger := zaptest.NewLogger(t)
-	runner := NewRunner("/tmp/test", logger)
+	runner := NewRunner(t.TempDir(), logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
@@ -819,12 +817,13 @@ func TestRunner_ApplyWithRetry_ContextCancellation(t *testing.T) {
 
 func TestRunner_command(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	runner := NewRunner("/tmp/testdir", logger)
+	dir := t.TempDir()
+	runner := NewRunner(dir, logger)
 
 	ctx := context.Background()
 	cmd := runner.command(ctx, "plan", "-out=test")
 
-	if cmd.Dir != "/tmp/testdir" {
+	if cmd.Dir != dir {
 		t.Errorf("command() Dir = %v, want /tmp/testdir", cmd.Dir)
 	}
 
