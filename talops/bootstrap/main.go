@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/jdwlabs/infrastructure/bootstrap"
+	"github.com/jdwlabs/infrastructure/bootstrap/cmd"
 )
 
 func main() {

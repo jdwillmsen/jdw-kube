@@ -101,4 +101,3 @@ help:
 	@echo "  make fmt          - Format code"
 	@echo "  make lint         - Run linter"
 	@echo "  make vet          - Run go vet"
-

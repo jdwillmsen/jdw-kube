@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/jdwlabs/infrastructure/internal/types"
+	"github.com/jdwlabs/bootstrap/infrastructure/internal/types"
 )
 
 // ANSI color codes
