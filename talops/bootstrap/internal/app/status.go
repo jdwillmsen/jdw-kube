@@ -11,14 +11,14 @@ import (
 )
 
 func (app *App) RunStatus(ctx context.Context) error {
-	stateMgr := state.NewManager(cfg, app.Logger)
+	stateMgr := state.NewManager(app.Cfg, app.Logger)
 
 	// Resolve and load additional fields from terraform.tfvars
 	if err := stateMgr.ResolveTFVarsPath(); err != nil {
 		app.Logger.Warn("could not locate terraform.tfvars", zap.Error(err))
 	}
 	if err := stateMgr.LoadTerraformExtras(ctx); err != nil {
-		app.Logger.Warn("could not load terraform extras", zap.String("path", cfg.TerraformTFVars), zap.Error(err))
+		app.Logger.Warn("could not load terraform extras", zap.String("path", app.Cfg.TerraformTFVars), zap.Error(err))
 	}
 
 	desired, err := stateMgr.LoadDesiredState(ctx)
@@ -33,12 +33,12 @@ func (app *App) RunStatus(ctx context.Context) error {
 		return err
 	}
 
-	box := logging.NewBox(session.Console, cfg.NoColor)
-	box.Header(fmt.Sprintf("CLUSTER STATUS: %s", cfg.ClusterName))
+	box := logging.NewBox(app.Session.Console, app.Cfg.NoColor)
+	box.Header(fmt.Sprintf("CLUSTER STATUS: %s", app.Cfg.ClusterName))
 
 	box.Label("Desired State (Terraform)")
-	box.Row("Control Planes", fmt.Sprintf("%d", countByRole(desired, types.RoleControlPlane)))
-	box.Row("Workers", fmt.Sprintf("%d", countByRole(desired, types.RoleWorker)))
+	box.Row("Control Planes", fmt.Sprintf("%d", CountByRole(desired, types.RoleControlPlane)))
+	box.Row("Workers", fmt.Sprintf("%d", CountByRole(desired, types.RoleWorker)))
 
 	box.Section("Deployed State")
 	box.Row("Control Planes", fmt.Sprintf("%d", len(deployed.ControlPlanes)))

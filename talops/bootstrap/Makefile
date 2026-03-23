@@ -13,7 +13,7 @@ GOMOD=$(GOCMD) mod
 
 # Build flags
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS=-ldflags "-s -w -X github.com/jdwlabs/talops/cmd.version=$(VERSION)"
+LDFLAGS=-ldflags "-s -w -X github.com/jdwlabs/infrastructure/bootstrap/cmd.version=$(VERSION)"
 
 .PHONY: all build clean test test-race deps run help
 
@@ -90,15 +90,15 @@ clean-logs:
 
 help:
 	@echo "Available targets:"
-	@echo "  make build         - Build the binary"
-	@echo "  make build-all     - Build for all platforms"
-	@echo "  make test          - Run tests"
-	@echo "  make test-race     - Run tests with race detector"
-	@echo "  make clean         - Clean build artifacts"
-	@echo "  make clean-logs    - Remove logs older than 30 days"
-	@echo "  make deps          - Download dependencies"
-	@echo "  make run           - Build and run status command"
-	@echo "  make fmt           - Format code"
-	@echo "  make lint          - Run linter"
-	@echo "  make vet           - Run go vet"
+	@echo "  make build        - Build the binary"
+	@echo "  make build-all    - Build for all platforms"
+	@echo "  make test         - Run tests"
+	@echo "  make test-race    - Run tests with race detector"
+	@echo "  make clean        - Clean build artifacts"
+	@echo "  make clean-logs   - Remove logs older than 30 days"
+	@echo "  make deps         - Download dependencies"
+	@echo "  make run          - Build and run status command"
+	@echo "  make fmt          - Format code"
+	@echo "  make lint         - Run linter"
+	@echo "  make vet          - Run go vet"
 

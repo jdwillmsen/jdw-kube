@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"github.com/jdw/talos-bootstrap/pkg/logging"
-	"github.com/jdw/talos-bootstrap/pkg/types"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/logging"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/types"
 )
 
 //go:embed patches/control-plane.yaml
@@ -168,7 +168,7 @@ func resolvePatchTemplate(role types.Role, patchDir, clusterDir string) (string,
 }
 
 // resolveNodePatch finds a per-node patch file (plain YAML, not Go template).
-// Searches --patch-dir then clusters/<cluser>/patches/ for node-<vmid>.yaml.
+// Searches --patch-dir then clusters/<cluster>/patches/ for node-<vmid>.yaml.
 // Returns empty string if no per-node patch exists.
 func resolveNodePatch(vmid types.VMID, patchDir, clusterDir string) string {
 	filename := fmt.Sprintf("node-%d.yaml", vmid)
@@ -194,6 +194,7 @@ func resolveNodePatch(vmid types.VMID, patchDir, clusterDir string) string {
 
 // Generate creates a Talos node config by generating a patch file and applying it
 // to the base config using talosctl machineconfig patch. Returns the SHA256 hash.
+// Uses the patch override chain: --patch-dir > clusters/<cluster>/patches/ > embedded.
 func (nc *NodeConfig) Generate(spec *types.NodeSpec, outputDir string) (string, error) {
 	data := templateData{
 		Hostname:                spec.Name,
@@ -205,14 +206,11 @@ func (nc *NodeConfig) Generate(spec *types.NodeSpec, outputDir string) (string, 
 		ClusterName:             nc.cfg.ClusterName,
 	}
 
-	var tmplStr string
 	var baseConfigName string
 	switch spec.Role {
 	case types.RoleControlPlane:
-		tmplStr = controlPlanePatchTemplate
 		baseConfigName = "control-plane.yaml"
 	case types.RoleWorker:
-		tmplStr = workerPatchTemplate
 		baseConfigName = "worker.yaml"
 	default:
 		return "", fmt.Errorf("unknown node role: %s", spec.Role)
@@ -225,6 +223,10 @@ func (nc *NodeConfig) Generate(spec *types.NodeSpec, outputDir string) (string, 
 			return "", fmt.Errorf("cannot generate base configs: %w", err)
 		}
 	}
+
+	// Resolve role patch template from override chain
+	clusterDir := filepath.Join("clusters", nc.cfg.ClusterName)
+	tmplStr, _ := resolvePatchTemplate(spec.Role, nc.cfg.PatchDir, clusterDir)
 
 	// Render patch template
 	tmpl, err := template.New("nodePatch").Parse(tmplStr)
@@ -254,12 +256,21 @@ func (nc *NodeConfig) Generate(spec *types.NodeSpec, outputDir string) (string, 
 		return "", fmt.Errorf("create output directory: %w", err)
 	}
 
-	// Apply patch using talosctl machineconfig patch
+	// Build patch args - role template first, then optional per-node patch
+	patchArgs := []string{"--patch", "@" + patchFile}
+
+	nodePatchPath := resolveNodePatch(spec.VMID, nc.cfg.PatchDir, clusterDir)
+	if nodePatchPath != "" {
+		patchArgs = append(patchArgs, "--patch", "@"+nodePatchPath)
+	}
+
+	// Apply patches using talosctl machineconfig patch
 	outputPath := filepath.Join(outputDir, fmt.Sprintf("node-%s-%d.yaml", spec.Role, spec.VMID))
-	output, err := nc.execCommandAudited("talosctl", "machineconfig", "patch", baseConfig,
-		"--patch", "@"+patchFile,
-		"--output", outputPath,
-	)
+	args := []string{"machineconfig", "patch", baseConfig}
+	args = append(args, patchArgs...)
+	args = append(args, "--output", outputPath)
+
+	output, err := nc.execCommandAudited("talosctl", args...)
 	if err != nil {
 		return "", fmt.Errorf("talosctl machineconfig patch: %w, output: %s", err, string(output))
 	}

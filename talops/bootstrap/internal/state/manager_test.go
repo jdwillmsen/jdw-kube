@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jdw/talos-bootstrap/pkg/types"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"

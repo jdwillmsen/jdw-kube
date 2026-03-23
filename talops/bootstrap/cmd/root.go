@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/jdwlabs/talops/internal/app"
-	"github.com/jdwlabs/talops/internal/state"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/app"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/state"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
@@ -94,7 +94,7 @@ func bootstrapCmd(a *app.App) *cobra.Command {
 
 func reconcileCmd(a *app.App) *cobra.Command {
 	var planMode bool
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "reconcile",
 		Short: "Reconcile cluster with terraform.tfvars",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -166,7 +166,7 @@ func infraCmd(a *app.App) *cobra.Command {
 	cmd.AddCommand(
 		infraDeployCmd(a),
 		infraDestroyCmd(a),
-		infraCmd(a),
+		infraPlanCmd(a),
 		infraStatusCmd(a),
 		infraCleanupCmd(a),
 	)
@@ -178,7 +178,7 @@ func infraDeployCmd(a *app.App) *cobra.Command {
 	var skipPlan bool
 
 	cmd := &cobra.Command{
-		Use:   "infra",
+		Use:   "deploy",
 		Short: "Deploy or update cluster infrastructure",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -227,7 +227,7 @@ func infraDestroyCmd(a *app.App) *cobra.Command {
 func infraPlanCmd(a *app.App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "plan",
-		Short: "Preview infrastructure chagnes without applying",
+		Short: "Preview infrastructure changes without applying",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
@@ -280,7 +280,7 @@ func upCmd(a *app.App) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "up",
-		Short: "Provision infrastructure and boostrap cluster",
+		Short: "Provision infrastructure and bootstrap cluster",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()

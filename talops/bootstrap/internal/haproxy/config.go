@@ -6,7 +6,7 @@ import (
 	"net"
 	"text/template"
 
-	"github.com/jdw/talos-bootstrap/pkg/types"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/types"
 )
 
 // Backend represents a control plane backend server in HAProxy

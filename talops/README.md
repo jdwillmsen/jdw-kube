@@ -18,7 +18,7 @@ cp terraform/terraform.tfvars.example terraform/terraform.tfvars
 # Edit terraform.tfvars with your Proxmox credentials and cluster settings
 
 # 2. Build the bootstrap tool
-cd boostrap && make build
+cd bootstrap && make build
 
 # 3. Provision and bootstrap
 ./build/talops up
@@ -29,7 +29,7 @@ cd boostrap && make build
 ```
 talops up                    Provision VMs + bootstrap cluster
 talops down                  Drain + destroy cluster
-talops bootsrap              Initial cluster deployment
+talops bootstrap             Initial cluster deployment
 talops reconcile             Reconcile cluster with terraform.tfvars
 talops reconcile --plan      Preview changes without applying
 talops status                Show cluster status

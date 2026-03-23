@@ -509,7 +509,7 @@ func knownHostsCallback(insecure bool) ssh.HostKeyCallback {
 }
 
 // StopVM sends a graceful shutdown command to a Proxmox VM via SSH.
-func (s *Sanner) StopVM(ctx context.Context, vmid int, nodeIP net.IP) error {
+func (s *Scanner) StopVM(ctx context.Context, vmid int, nodeIP net.IP) error {
 	client, err := s.getConn(nodeIP)
 	if err != nil {
 		return fmt.Errorf("SSH connect to %s: %w", nodeIP, err)

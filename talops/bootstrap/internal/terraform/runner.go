@@ -3,6 +3,7 @@ package terraform
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,7 +15,7 @@ import (
 // execCommandContext allows tests to mock command execution
 var execCommandContext = exec.CommandContext
 
-// LookPath checks if terraform if available in PATH
+// LookPath checks if terraform is available in PATH
 func LookPath() (string, error) {
 	return exec.LookPath("terraform")
 }
@@ -221,7 +222,7 @@ func (r *Runner) Version(ctx context.Context) (string, error) {
 	return ver.Version, nil
 }
 
-// PlanOutput represents the JSON output of terraform show -json <planFile>
+// PlanOutput represents the JSON output of terraform show -json <planfile>
 type PlanOutput struct {
 	ResourceChanges []ResourceChange `json:"resource_changes"`
 }
@@ -251,7 +252,7 @@ type StateValues struct {
 
 // RootModule contains the resources in the root module
 type RootModule struct {
-	Resources []StateResourcee `json:"resources"`
+	Resources []StateResource `json:"resources"`
 }
 
 // StateResource represents a resource in the terraform state

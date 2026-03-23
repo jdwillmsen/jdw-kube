@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/jdw/talos-bootstrap/pkg/types"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -426,6 +426,112 @@ func BenchmarkHashFile(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		HashFile(testFile)
 	}
+}
+
+func TestResolvePatchTemplate(t *testing.T) {
+	t.Run("falls back to embedded when no overrides exist", func(t *testing.T) {
+		content, source := resolvePatchTemplate(types.RoleControlPlane, "", "")
+		assert.Equal(t, controlPlanePatchTemplate, content)
+		assert.Equal(t, "embedded:control-plane.yaml", source)
+
+		content, source = resolvePatchTemplate(types.RoleWorker, "", "")
+		assert.Equal(t, workerPatchTemplate, content)
+		assert.Equal(t, "embedded:worker.yaml", source)
+	})
+
+	t.Run("patchDir overrides embedded", func(t *testing.T) {
+		patchDir := t.TempDir()
+		customContent := "custom-cp-patch: true"
+		os.WriteFile(filepath.Join(patchDir, "control-plane.yaml"), []byte(customContent), 0644)
+
+		content, source := resolvePatchTemplate(types.RoleControlPlane, patchDir, "")
+		assert.Equal(t, customContent, content)
+		assert.Equal(t, filepath.Join(patchDir, "control-plane.yaml"), source)
+	})
+
+	t.Run("clusterDir overrides embedded", func(t *testing.T) {
+		clusterDir := t.TempDir()
+		patchesDir := filepath.Join(clusterDir, "patches")
+		os.MkdirAll(patchesDir, 0755)
+		customContent := "custom-worker-patch: true"
+		os.WriteFile(filepath.Join(patchesDir, "worker.yaml"), []byte(customContent), 0644)
+
+		content, source := resolvePatchTemplate(types.RoleWorker, "", clusterDir)
+		assert.Equal(t, customContent, content)
+		assert.Equal(t, filepath.Join(patchesDir, "worker.yaml"), source)
+	})
+
+	t.Run("patchDir takes precedence over clusterDir", func(t *testing.T) {
+		patchDir := t.TempDir()
+		clusterDir := t.TempDir()
+		patchesDir := filepath.Join(clusterDir, "patches")
+		os.MkdirAll(patchesDir, 0755)
+
+		os.WriteFile(filepath.Join(patchDir, "control-plane.yaml"), []byte("from-patchDir"), 0644)
+		os.WriteFile(filepath.Join(patchesDir, "control-plane.yaml"), []byte("from-clusterDir"), 0644)
+
+		content, source := resolvePatchTemplate(types.RoleControlPlane, patchDir, clusterDir)
+		assert.Equal(t, "from-patchDir", content)
+		assert.Equal(t, filepath.Join(patchDir, "control-plane.yaml"), source)
+	})
+
+	t.Run("falls through on missing file", func(t *testing.T) {
+		patchDir := t.TempDir()
+		// patchDir exists but has no worker.yaml - should fall through to embedded
+		content, source := resolvePatchTemplate(types.RoleWorker, patchDir, "")
+		assert.Equal(t, workerPatchTemplate, content)
+		assert.Equal(t, "embedded:worker.yaml", source)
+	})
+}
+
+func TestResolveNodePatch(t *testing.T) {
+	t.Run("returns empty when no per-node patch exists", func(t *testing.T) {
+		result := resolveNodePatch(201, "", "")
+		assert.Empty(t, result)
+	})
+
+	t.Run("finds per-node patch is patchDir", func(t *testing.T) {
+		patchDir := t.TempDir()
+		nodePatch := filepath.Join(patchDir, "node-201.yaml")
+		os.WriteFile(nodePatch, []byte("per-node: true"), 0644)
+
+		result := resolveNodePatch(201, patchDir, "")
+		assert.Equal(t, nodePatch, result)
+	})
+
+	t.Run("finds per-node patch in clusterDir", func(t *testing.T) {
+		clusterDir := t.TempDir()
+		patchesDir := filepath.Join(clusterDir, "patches")
+		os.MkdirAll(patchesDir, 0755)
+		nodePatch := filepath.Join(patchesDir, "node-301.yaml")
+		os.WriteFile(nodePatch, []byte("per-node: true"), 0644)
+
+		result := resolveNodePatch(301, "", clusterDir)
+		assert.Equal(t, nodePatch, result)
+	})
+
+	t.Run("patchDir takes precedence over clusterDir", func(t *testing.T) {
+		patchDir := t.TempDir()
+		clusterDir := t.TempDir()
+		patchesDir := filepath.Join(clusterDir, "patches")
+		os.MkdirAll(patchesDir, 0755)
+
+		patchDirNode := filepath.Join(patchDir, "node-201.yaml")
+		clusterDirNode := filepath.Join(patchesDir, "node-201.yaml")
+		os.WriteFile(patchDirNode, []byte("from-patchDir"), 0644)
+		os.WriteFile(clusterDirNode, []byte("from-clusterhDir"), 0644)
+
+		result := resolveNodePatch(201, patchDir, clusterDir)
+		assert.Equal(t, patchDirNode, result)
+	})
+
+	t.Run("does not match wrong VMID", func(t *testing.T) {
+		patchDir := t.TempDir()
+		os.WriteFile(filepath.Join(patchDir, "node-201.yaml"), []byte("data"), 0644)
+
+		result := resolveNodePatch(301, "", "")
+		assert.Empty(t, result)
+	})
 }
 
 func BenchmarkNodeConfigGenerate(b *testing.B) {

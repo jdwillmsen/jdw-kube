@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdwlabs/talops/internal/discovery"
-	"github.com/jdwlabs/talops/internal/logging"
-	"github.com/jdwlabs/talops/internal/state"
-	"github.com/jdwlabs/talops/internal/terraform"
-	"github.com/jdwlabs/talops/internal/types"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/discovery"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/logging"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/state"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/terraform"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/types"
 	"go.uber.org/zap"
 )
 
@@ -54,7 +54,7 @@ func hasTerraformFiles(dir string) bool {
 
 func (app *App) RunInfraDeploy(ctx context.Context, tfDir string, skipPlan bool) error {
 	box := logging.NewBox(app.Session.Console, app.Cfg.NoColor)
-	box.Header("INFASTRUCTURE DEPLOY")
+	box.Header("INFRASTRUCTURE DEPLOY")
 	box.Row("Directory", tfDir)
 	box.Row("Mode", app.deployModeLabel())
 	box.Footer()
@@ -67,7 +67,7 @@ func (app *App) RunInfraDeploy(ctx context.Context, tfDir string, skipPlan bool)
 	// Preflight: terraform.tfvars exists
 	tfvarsPath := filepath.Join(tfDir, "terraform.tfvars")
 	if _, err := os.Stat(tfvarsPath); err != nil {
-		return fmt.Errorf("terraform.tfvars not found in %s: %w", tfvarsPath, err)
+		return fmt.Errorf("terraform.tfvars not found in %s", tfvarsPath)
 	}
 
 	runner := terraform.NewRunner(tfDir, app.Logger)
@@ -157,7 +157,7 @@ func (app *App) RunInfraDeploy(ctx context.Context, tfDir string, skipPlan bool)
 	if err != nil {
 		app.Logger.Warn("could not read state for summary", zap.Error(err))
 	} else {
-		app.displayDeploySummary(ap.Session.Console, stateOutput)
+		app.displayDeploySummary(app.Session.Console, stateOutput)
 	}
 
 	app.Logger.Info("deployment complete")
@@ -167,7 +167,7 @@ func (app *App) RunInfraDeploy(ctx context.Context, tfDir string, skipPlan bool)
 func (app *App) RunInfraDestroy(ctx context.Context, tfDir string, force, graceful bool) error {
 	box := logging.NewBox(app.Session.Console, app.Cfg.NoColor)
 	if force {
-		box.Header("INFASTRUCTURE DESTROY [FORCE]")
+		box.Header("INFRASTRUCTURE DESTROY [FORCE]")
 		box.Badge("WARNING", "Force mode: bypassing safety checks")
 	} else {
 		box.Header("INFRASTRUCTURE DESTROY")
@@ -433,7 +433,7 @@ func (app *App) RunInfraCleanup(tfDir string, all bool) error {
 	app.Logger.Info("cleaning up generated files", zap.String("dir", tfDir))
 
 	patterns := []string{
-		filepath.Join(tfDir, "tfplan"),
+		filepath.Join(tfDir, "tfplan*"),
 		filepath.Join(tfDir, ".terraform.lock.hcl"),
 		filepath.Join(tfDir, "crash.log"),
 	}
@@ -499,7 +499,7 @@ func (app *App) shutdownVMs(ctx context.Context, tfDir string, runner *terraform
 
 	app.Logger.Info("stopping VMs gracefully", zap.Int("count", len(vmResources)))
 
-	// Use insecure SSH for qm stop - these are local Proxmox nodes
+	// Always use insecure SSH for `qm stop` - matching bash behavior
 	scanner := discovery.NewScanner(cfg.ProxmoxSSHUser, cfg.ProxmoxNodeIPs, true)
 	defer scanner.Close()
 
@@ -597,7 +597,7 @@ func (app *App) backupFile(tfDir, filename, prefix string) {
 		return
 	}
 
-	app.Logger.Debug("backed uip", zap.String("file", backupPath))
+	app.Logger.Debug("backed up", zap.String("file", backupPath))
 }
 
 func (app *App) saveInfraState(ctx context.Context, tfDir string, runner *terraform.Runner) {
@@ -641,7 +641,7 @@ func (app *App) displayInfraPlanSummary(w io.Writer, plan *terraform.PlanOutput)
 		box.Item("~", fmt.Sprintf("Update: %d", summary.Update))
 	}
 	if summary.Delete > 0 {
-		box.Item("-", fmt.Sprintf("Replace: %d", summary.Delete))
+		box.Item("-", fmt.Sprintf("Delete: %d", summary.Delete))
 	}
 	if summary.Replace > 0 {
 		box.Item("!", fmt.Sprintf("Replace: %d", summary.Replace))
@@ -650,7 +650,7 @@ func (app *App) displayInfraPlanSummary(w io.Writer, plan *terraform.PlanOutput)
 	if len(summary.Changes) > 0 {
 		box.Section("Details")
 		for _, rc := range summary.Changes {
-			action := strings.ToUpper(strings.Join(rc.Chagne.Actions, "/"))
+			action := strings.ToUpper(strings.Join(rc.Change.Actions, "/"))
 			box.Item(action, fmt.Sprintf("%s.%s", rc.Type, rc.Name))
 		}
 	}
@@ -730,7 +730,7 @@ func (app *App) checkProxmoxISO(ctx context.Context, tfDir string) {
 	if err != nil {
 		return
 	}
-	req.Header.Set("Authorization", fmt.Sprtinf("PVEAPIToken=%S=%s", cfg.ProxmoxTokenID, cfg.ProxmoxTokenSecret))
+	req.Header.Set("Authorization", fmt.Sprintf("PVEAPIToken=%s=%s", cfg.ProxmoxTokenID, cfg.ProxmoxTokenSecret))
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -751,7 +751,7 @@ func (app *App) checkProxmoxISO(ctx context.Context, tfDir string) {
 	}
 }
 
-// ExtractTFVarsString extracts a simple string value from tfvars content.
+// ExtractTFVarString extracts a simple string value from tfvars content.
 // Uses exact key matching (before "=") to avoid prefix collisions.
 func ExtractTFVarString(content, key string) string {
 	for _, line := range strings.Split(content, "\n") {

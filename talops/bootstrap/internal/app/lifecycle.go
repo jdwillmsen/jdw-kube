@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jdwlabs/talops/internal/kubectl"
-	"github.com/jdwlabs/talops/internal/state"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/kubectl"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/state"
 	"go.uber.org/zap"
 )
 

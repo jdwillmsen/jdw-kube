@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/jdw/talos-bootstrap/pkg/types"
+	"github.com/jdwlabs/infrastructure/internal/types"
 )
 
 // ANSI color codes

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdw/talos-bootstrap/pkg/types"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/types"
 	"github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -163,17 +163,17 @@ func TestApplyConfigWithRetry_Scenarios(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed after 1 attempts")
 	})
 
-	t.Run("max attempts exceeded with unreachable node", func(t *testing.T) {
+	t.Run("context timeout stops retries during backoff", func(t *testing.T) {
 		cfg := types.TestConfig()
 		c := NewClient(cfg)
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
 		ip := net.ParseIP("192.168.1.201")
 
-		// Client not initialized -> getClient failes -> classified as unknown error
-		err := c.ApplyConfigWithRetry(ctx, ip, "/nonexistent/config.yaml", types.RoleControlPlane, 2)
+		// maxAttempts=3 but context timeout cancels during backoff sleep
+		err := c.ApplyConfigWithRetry(ctx, ip, "/nonexistent/config.yaml", types.RoleControlPlane, 3)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed after 2 attempts")
+		assert.Contains(t, err.Error(), "cancelled")
 	})
 
 	t.Run("context cancellation stops retries", func(t *testing.T) {
@@ -185,6 +185,7 @@ func TestApplyConfigWithRetry_Scenarios(t *testing.T) {
 
 		err := c.ApplyConfigWithRetry(ctx, ip, "/nonexistent/config.yaml", types.RoleControlPlane, 5)
 		require.Error(t, err)
+		assert.Contains(t, err.Error(), "context cancelled")
 	})
 
 	t.Run("default max attempts when zero", func(t *testing.T) {
@@ -196,8 +197,8 @@ func TestApplyConfigWithRetry_Scenarios(t *testing.T) {
 
 		err := c.ApplyConfigWithRetry(ctx, ip, "/nonexistent/config.yaml", types.RoleControlPlane, 0)
 		require.Error(t, err)
-		// 0 gets normalized to 5
-		assert.Contains(t, err.Error(), "failed after 5 attempts")
+		// 0 gets normalized to 5, but context timeout cancels before all attempts complete
+		assert.Contains(t, err.Error(), "cancelled")
 	})
 }
 

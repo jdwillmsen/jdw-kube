@@ -2,6 +2,8 @@
 build/
 talops
 talops.exe
+talos-bootrap
+talos-bootstrap.exe
 *.exe
 
 # Go
@@ -15,7 +17,7 @@ clusters/
 secrets/
 *.yaml
 !*.example
-# Source YAML files embedded in the binary are not gnerated configs
+# Source YAML files embedded in the binary are not generated configs
 !internal/talos/patches/*.yaml
 
 # IDE

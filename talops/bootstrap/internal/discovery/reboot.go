@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/jdwlabs/infrastrcture/bootstrap/internal/types"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/types"
 	"go.uber.org/zap"
 )
 

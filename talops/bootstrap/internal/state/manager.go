@@ -20,8 +20,8 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsimple"
-	"github.com/jdw/talos-bootstrap/pkg/talos"
-	"github.com/jdw/talos-bootstrap/pkg/types"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/talos"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/types"
 	"go.uber.org/zap"
 )
 

@@ -144,7 +144,7 @@ func (app *App) RunReconcile(ctx context.Context) error {
 			}
 		}
 
-		// Preflight: verify Talos API (port 50000) is reachable on discovered VMS
+		// Preflight: verify Talos API (port 50000) is reachable on discovered VMs
 		app.Logger.Info("running Talos API preflight checks")
 		for vmid, node := range live {
 			if node.IP == nil {
@@ -172,7 +172,7 @@ func (app *App) RunReconcile(ctx context.Context) error {
 		return fmt.Errorf("build plan: %w", err)
 	}
 
-	displayPlan(plan)
+	app.DisplayPlan(plan)
 
 	if cfg.PlanMode {
 		app.Logger.Info("plan mode - exiting without changes")
@@ -186,13 +186,13 @@ func (app *App) RunReconcile(ctx context.Context) error {
 
 	// Confirm if not auto-approved
 	if !cfg.AutoApprove && !cfg.DryRun {
-		if !promptConfirm("Proceed with changes? [y/N]: ") {
+		if !app.PromptConfirm("Proceed with changes? [y/N]: ") {
 			return nil
 		}
 	}
 
 	// Phase 4: Execute
-	if err := executePlan(ctx, plan, desired, deployed, live, stateMgr, scanner, talosClient, k8sClient); err != nil {
+	if err := app.executePlan(ctx, plan, desired, deployed, live, stateMgr, scanner, talosClient, k8sClient); err != nil {
 		app.Logger.Error("plan execution failed", zap.Error(err))
 		if app.Session != nil && app.Session.AuditLog != nil {
 			app.Session.AuditLog.WriteEntry("RECONCILE-END", fmt.Sprintf("cluster=%s status=failed error=%v", cfg.ClusterName, err))
@@ -281,7 +281,7 @@ func (app *App) executePlan(
 ) error {
 	cfg := app.Cfg
 
-	// Populate app.Session counters early so SUMMARY.txt has data even on error
+	// Populate session counters early so SUMMARY.txt has data even on error
 	if app.Session != nil {
 		app.Session.ControlPlanes = len(deployed.ControlPlanes)
 		app.Session.Workers = len(deployed.Workers)
@@ -314,7 +314,7 @@ func (app *App) executePlan(
 					zap.Int("vmid", int(firstVMID)),
 					zap.String("name", spec.Name))
 			} else {
-				newIP, err := deployNode(ctx, firstVMID, types.RoleControlPlane, live, deployed, stateMgr, scanner, talosClient)
+				newIP, err := app.deployNode(ctx, firstVMID, types.RoleControlPlane, live, deployed, stateMgr, scanner, talosClient)
 				if err != nil {
 					app.Logger.Error("bootstrap first control plane failed", zap.Int("vmid", int(firstVMID)), zap.Error(err))
 					return fmt.Errorf("bootstrap first CP: %w", err)
@@ -408,7 +408,7 @@ func (app *App) executePlan(
 		}
 	}
 
-	// Phase 2: Remove control planes (with quorum check, before additions)
+	// Phase 2: Remove control planes (with quorum check)
 	if len(plan.RemoveControlPlanes) > 0 {
 		app.Logger.Info("removing control planes", zap.Int("count", len(plan.RemoveControlPlanes)))
 		audit("REMOVE-CPS", fmt.Sprintf("count=%d vmids=%v", len(plan.RemoveControlPlanes), plan.RemoveControlPlanes))
@@ -491,7 +491,7 @@ func (app *App) executePlan(
 		}
 	}
 
-	// Phase 3: Add Remaining control planes (sequential for etcd safety)
+	// Phase 3: Add remaining control planes (sequential for etcd safety)
 	if len(plan.AddControlPlanes) > 0 {
 		app.Logger.Info("adding control planes", zap.Int("count", len(plan.AddControlPlanes)))
 		audit("ADD-CPS", fmt.Sprintf("count=%d vmids=%v", len(plan.AddControlPlanes), plan.AddControlPlanes))
@@ -511,14 +511,14 @@ func (app *App) executePlan(
 				continue
 			}
 
-			if _, err := deployNode(ctx, vmid, types.RoleControlPlane, live, deployed, stateMgr, scanner, talosClient); err != nil {
+			if _, err := app.deployNode(ctx, vmid, types.RoleControlPlane, live, deployed, stateMgr, scanner, talosClient); err != nil {
 				app.Logger.Error("failed to add control plane", zap.Int("vmid", int(vmid)), zap.Error(err))
 				return fmt.Errorf("add CP %d: %w", vmid, err)
 			}
 		}
 	}
 
-	// Phase 4: Update HAProxy after any CP membership changes.
+	// Phase 4: Update HAProxy after any CP membership changes
 	if len(plan.AddControlPlanes) > 0 || len(plan.RemoveControlPlanes) > 0 || plan.NeedsBootstrap {
 		if !cfg.DryRun && len(deployed.ControlPlanes) > 0 {
 			haproxyConfig := haproxy.ConfigFromClusterState(cfg, deployed)
@@ -564,7 +564,7 @@ func (app *App) executePlan(
 			}
 		}
 
-		app.ConfigureTalosctlEndpoints(cfg, deployed)
+		app.ConfigureTalosctlEndpoints(deployed)
 	}
 
 	// Phase 6: Add workers (parallel, max 3 concurrent)
@@ -595,7 +595,7 @@ func (app *App) executePlan(
 					return nil
 				}
 
-				if _, err := deployNode(gctx, vmid, types.RoleWorker, live, deployed, stateMgr, scanner, talosClient); err != nil {
+				if _, err := app.deployNode(gctx, vmid, types.RoleWorker, live, deployed, stateMgr, scanner, talosClient); err != nil {
 					return fmt.Errorf("add worker %d: %w", vmid, err)
 				}
 				return nil
@@ -676,7 +676,7 @@ func (app *App) executePlan(
 
 	// Phase 9: Post-reconciliation verification
 	if !cfg.DryRun && deployed.BootstrapCompleted {
-		verifyCluster(ctx, talosClient, k8sClient, deployed)
+		app.VerifyCluster(ctx, talosClient, k8sClient, deployed)
 	}
 
 	// Update session counters with final deployed state

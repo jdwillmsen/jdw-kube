@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jdw/talos-bootstrap/pkg/types"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/types"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

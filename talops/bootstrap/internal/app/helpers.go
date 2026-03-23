@@ -11,10 +11,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/jdwlabs/talops/internal/kubectl"
-	"github.com/jdwlabs/talops/internal/logging"
-	"github.com/jdwlabs/talops/internal/talos"
-	"github.com/jdwlabs/talops/internal/types"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/kubectl"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/logging"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/talos"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/types"
 	"go.uber.org/zap"
 )
 
@@ -23,7 +23,7 @@ func (app *App) DisplayPlan(plan *types.ReconcilePlan) {
 }
 
 func (app *App) DisplayPlanTo(plan *types.ReconcilePlan, w io.Writer) {
-	box := logging.NewBox(w, cfg.NoColor)
+	box := logging.NewBox(w, app.Cfg.NoColor)
 	box.Header("RECONCILIATION PLAN")
 	if plan.NeedsBootstrap {
 		box.Badge("BOOTSTRAP", "Cluster needs initial bootstrap")
@@ -52,6 +52,7 @@ func (app *App) DisplayPlanTo(plan *types.ReconcilePlan, w io.Writer) {
 	box.Footer()
 }
 
+// hostsFilePath returns the platform-appropriate hosts file path.
 func hostsFilePath() string {
 	if runtime.GOOS == "windows" {
 		return filepath.Join(os.Getenv("SystemRoot"), "System32", "drivers", "etc", "hosts")
@@ -61,7 +62,7 @@ func hostsFilePath() string {
 
 // EnsureEndpointResolvable checks DNS for the control plane endpoint and
 // adds a hosts file entry if resolution fails or points to the wrong IP.
-func (app *App) EnsureEndpointResolveable() {
+func (app *App) EnsureEndpointResolvable() {
 	cfg := app.Cfg
 	// Skip if endpoint is already an IP
 	if net.ParseIP(cfg.ControlPlaneEndpoint) != nil {
@@ -106,7 +107,7 @@ func (app *App) EnsureEndpointResolveable() {
 		if err := writeHostsFile(hostsFile, []byte(strings.Join(lines, "\n"))); err != nil {
 			app.Logger.Warn("failed to update hosts file (add manually)", zap.String("path", hostsFile), zap.String("entry", entry), zap.Error(err))
 		} else {
-			app.Logger.Info("up[dated hosts entry", zap.String("entry", entry))
+			app.Logger.Info("updated hosts entry", zap.String("entry", entry))
 		}
 		return
 	}
@@ -122,6 +123,7 @@ func (app *App) EnsureEndpointResolveable() {
 
 // writeHostsFile writes the full hosts file content, escalating privileges if needed.
 func writeHostsFile(hostsFile string, data []byte) error {
+	// Try direct write first
 	if err := os.WriteFile(hostsFile, data, 0644); err == nil {
 		return nil
 	}
@@ -151,7 +153,7 @@ func appendHostsFile(hostsFile string, data []byte) error {
 	return cmd.Run()
 }
 
-// ConfigureTalosctlEnpoints sets talosctl endpoints and nodes
+// ConfigureTalosctlEndpoints sets talosctl endpoints and nodes
 func (app *App) ConfigureTalosctlEndpoints(deployed *types.ClusterState) {
 	cfg := app.Cfg
 	// Set endpoint to HAProxy IP
@@ -202,10 +204,10 @@ func (app *App) VerifyCluster(ctx context.Context, talosClient *talos.Client, k8
 	}
 
 	// Print success summary using box
-	box := logging.NewBox(session.Console, cfg.NoColor)
+	box := logging.NewBox(app.Session.Console, app.Cfg.NoColor)
 	box.Header("BOOTSTRAP SUCCESSFUL")
 	box.Row("Cluster", deployed.ClusterName)
-	box.Row("Endpoint", cfg.ControlPlaneEndpoint)
+	box.Row("Endpoint", app.Cfg.ControlPlaneEndpoint)
 	box.Row("Control Planes", fmt.Sprintf("%d", len(deployed.ControlPlanes)))
 	for _, cp := range deployed.ControlPlanes {
 		box.Item("•", fmt.Sprintf("VMID %d: %s", cp.VMID, cp.IP))

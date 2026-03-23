@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdw/talos-bootstrap/pkg/logging"
-	"github.com/jdw/talos-bootstrap/pkg/types"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/logging"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/types"
 	"github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	"github.com/siderolabs/talos/pkg/machinery/client/config"
@@ -145,6 +145,13 @@ func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath
 	insecure := true
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			if lastErr != nil {
+				return fmt.Errorf("context cancelled after %d attempts: %w", attempt-1, lastErr)
+			}
+			return fmt.Errorf("context cancelled: %w", err)
+		}
+
 		err := c.ApplyConfig(ctx, ip, configPath, insecure)
 
 		if err == nil {
@@ -203,7 +210,9 @@ func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath
 						zap.Int("attempt", attempt), zap.Int("max", maxAttempts),
 						zap.Duration("wait", waitTime), zap.Error(err))
 				}
-				time.Sleep(waitTime)
+				if err := sleepCtx(ctx, waitTime); err != nil {
+					return fmt.Errorf("context cancelled after %d attempts: %w", attempt, lastErr)
+				}
 				continue
 			}
 
@@ -218,7 +227,9 @@ func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath
 						zap.Int("attempt", attempt), zap.Int("max", maxAttempts),
 						zap.Duration("wait", waitTime), zap.Error(err))
 				}
-				time.Sleep(waitTime)
+				if err := sleepCtx(ctx, waitTime); err != nil {
+					return fmt.Errorf("context cancelled after %d attempts: %w", attempt, lastErr)
+				}
 				continue
 			}
 		}
@@ -227,9 +238,9 @@ func (c *Client) ApplyConfigWithRetry(ctx context.Context, ip net.IP, configPath
 			break
 		}
 
-		// Standard backoff for unhanded cases (ErrAlreadyConfigured that isn't ready)
+		// Standard backoff for unhandled cases (ErrAlreadyConfigured that isn't ready)
 		if err := sleepCtx(ctx, time.Duration(attempt*5)*time.Second); err != nil {
-			return fmt.Errorf("context cancelled after %d attempts: %w", attempt, err)
+			return fmt.Errorf("context cancelled after %d attempts: %w", attempt, lastErr)
 		}
 	}
 

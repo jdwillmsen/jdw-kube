@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/stretchr/testify/assert/yaml"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )

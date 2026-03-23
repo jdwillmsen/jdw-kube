@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jdwlabs/talops/internal/logging"
-	"github.com/jdwlabs/talops/internal/types"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/logging"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/types"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
@@ -49,9 +49,8 @@ func (app *App) InitSession(cmd *cobra.Command) error {
 
 	logging.PrintBanner(app.Session.Console, app.Version, app.Cfg.NoColor)
 
-	app.CheckPrerequisities()
+	app.CheckPrerequisites()
 
-	// Ensure cluster .gitignore (skip for infra subcommands - no cluster dir needed)
 	if cmd.Parent() == nil || cmd.Parent().Name() != "infra" {
 		clusterDir := filepath.Join("clusters", app.Cfg.ClusterName)
 		EnsureClusterGitignore(clusterDir)
@@ -138,7 +137,7 @@ func (app *App) CheckPrerequisites() {
 }
 
 // EnsureClusterGitignore creates a .gitignore in the cluster directory
-// to prevent commiting generated secrets, node configs, state, and logs
+// to prevent committing generated secrets, node configs, state, and logs.
 func EnsureClusterGitignore(clusterDir string) {
 	gitignorePath := filepath.Join(clusterDir, ".gitignore")
 	if _, err := os.Stat(gitignorePath); err == nil {
@@ -147,6 +146,6 @@ func EnsureClusterGitignore(clusterDir string) {
 	if err := os.MkdirAll(clusterDir, 0755); err != nil {
 		return
 	}
-	content := "/nodes/\n/secrets\n/state/\n/*.log\n"
+	content := "/nodes/\n/secrets/\n/state/\n/*.log\n"
 	os.WriteFile(gitignorePath, []byte(content), 0644)
 }

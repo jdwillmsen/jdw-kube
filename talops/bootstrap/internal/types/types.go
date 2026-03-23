@@ -171,8 +171,23 @@ type Config struct {
 	LogDir           string `json:"log_dir"`
 	NoColor          bool   `json:"no_color"`
 
+	// Infra management
+	TerraformDir string `json:"terraform_dir,omitempty"` // Directory containing .tf files
+	SkipBackup   bool   `json:"skip_backup,omitempty"`
+
+	// Patch overrides
+	PatchDir string `json:"patch_dir,omitempty"` // Directory for patch template overrides
+
 	// Internal
 	TerraformHash string `json:"-"` // Computed, not serialized
+}
+
+// InfraDeployState tracks infrastructure deployment metadata
+type InfraDeployState struct {
+	Timestamp        string `json:"timestamp"`
+	TerraformVersion string `json:"terraform_version"`
+	AutoApproved     bool   `json:"auto_approved"`
+	LastDeployment   string `json:"last_deployment"`
 }
 
 // DefaultConfig returns a config with sensible defaults.
