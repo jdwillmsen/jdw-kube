@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 func base64Encode(s string) string {
@@ -32,16 +34,9 @@ type Client struct {
 }
 
 // NewClient creates a new HAProxy SSH client.
-// If insecureSSH is false, connections will be rejected (no known_hosts yet).
+// If insecureSSH is false, hosts keys are verified against ~/.ssh/known_hosts.
 func NewClient(sshUser, sshHost string, logger *zap.Logger, insecureSSH bool) *Client {
-	var hostKeyCallback ssh.HostKeyCallback
-	if insecureSSH {
-		hostKeyCallback = ssh.InsecureIgnoreHostKey()
-	} else {
-		hostKeyCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-			return fmt.Errorf("SSH host key verification failed for %s: use --insecure-ssh to skip verification", hostname)
-		}
-	}
+	hostKeyCallback := knownHostsCallback(insecureSSH)
 
 	c := &Client{
 		sshUser: sshUser,
@@ -150,4 +145,26 @@ func (c *Client) runSSH(cmd string) error {
 	}
 
 	return nil
+}
+
+// knownHostsCallback returns an ssh.HostKeyCallback. When insecure is true,
+// all host keys are accepted. Otherwise, keys are verified against the user's
+// ~/.ssh/known_hosts file. If that file is missing or unreadable, connections
+// are rejected with a hint to either populate known_hosts or use --insecure-ssh.
+func knownHostsCallback(insecure bool) ssh.HostKeyCallback {
+	if insecure {
+		return ssh.InsecureIgnoreHostKey()
+	}
+
+	home, err := os.UserHomeDir()
+	if err == nil {
+		khPath := filepath.Join(home, ".ssh", "known_hosts")
+		if cb, err := knownhosts.New(khPath); err == nil {
+			return cb
+		}
+	}
+
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		return fmt.Errorf("SSH host key verification failed for %s: add host keys with ssh-keyscan or use --insecure-ssh", hostname)
+	}
 }

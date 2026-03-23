@@ -34,14 +34,14 @@ talos_control_configuration = [
 ]
 
 talos_worker_configuration = [
-  { node_name = "pve1", vm_name = "talos-worker-01", vmid = 300, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve1", vm_name = "talos-worker-02", vmid = 301, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve2", vm_name = "talos-worker-03", vmid = 302, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve2", vm_name = "talos-worker-04", vmid = 303, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve3", vm_name = "talos-worker-05", vmid = 304, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve3", vm_name = "talos-worker-06", vmid = 305, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve3", vm_name = "talos-worker-07", vmid = 306, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve4", vm_name = "talos-worker-08", vmid = 307, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve4", vm_name = "talos-worker-09", vmid = 308, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve4", vm_name = "talos-worker-10", vmid = 309, cpu_cores = 2, memory = 2048, disk_size = 20 },
+  { node_name = "pve1", vm_name = "talos-worker-01", vmid = 300, cpu_cores = 2, memory = 4096, disk_size = 40 },
+  { node_name = "pve1", vm_name = "talos-worker-02", vmid = 301, cpu_cores = 2, memory = 4096, disk_size = 40 },
+  { node_name = "pve2", vm_name = "talos-worker-03", vmid = 302, cpu_cores = 2, memory = 4096, disk_size = 40 },
+  { node_name = "pve2", vm_name = "talos-worker-04", vmid = 303, cpu_cores = 2, memory = 4096, disk_size = 40 },
+  { node_name = "pve3", vm_name = "talos-worker-05", vmid = 304, cpu_cores = 2, memory = 4096, disk_size = 40 },
+  { node_name = "pve3", vm_name = "talos-worker-06", vmid = 305, cpu_cores = 2, memory = 4096, disk_size = 40 },
+  { node_name = "pve3", vm_name = "talos-worker-07", vmid = 306, cpu_cores = 2, memory = 4096, disk_size = 40 },
+  { node_name = "pve4", vm_name = "talos-worker-08", vmid = 307, cpu_cores = 2, memory = 4096, disk_size = 40 },
+  { node_name = "pve4", vm_name = "talos-worker-09", vmid = 308, cpu_cores = 2, memory = 4096, disk_size = 40 },
+  { node_name = "pve4", vm_name = "talos-worker-10", vmid = 309, cpu_cores = 2, memory = 4096, disk_size = 40 },
 ]

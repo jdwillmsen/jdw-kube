@@ -33,6 +33,6 @@ talos_control_configuration = [
 ]
 
 talos_worker_configuration = [
-  { node_name = "pve1", vm_name = "talos-worker-01", vmid = 300, cpu_cores = 2, memory = 2048, disk_size = 20 },
-  { node_name = "pve4", vm_name = "talos-worker-02", vmid = 301, cpu_cores = 2, memory = 2048, disk_size = 20 },
+  { node_name = "pve1", vm_name = "talos-worker-01", vmid = 300, cpu_cores = 2, memory = 4096, disk_size = 40 },
+  { node_name = "pve4", vm_name = "talos-worker-02", vmid = 301, cpu_cores = 2, memory = 4096, disk_size = 40 },
 ]

@@ -247,7 +247,7 @@ func (app *App) deployNode(
 	}
 
 	monitor := discovery.NewRebootMonitor(vmid, node.IP, node.MAC, scanner, app.Logger)
-	newIP, err := monitor.WaitForReady(ctx, 3*time.Minute)
+	newIP, err := monitor.WaitForReady(ctx, 5*time.Minute)
 	if err != nil {
 		app.Logger.Error("node reboot wait failed", zap.Int("vmid", int(vmid)), zap.String("role", string(role)), zap.Error(err))
 		return nil, fmt.Errorf("wait for %s %d reboot: %w", role, vmid, err)
@@ -533,6 +533,10 @@ func (app *App) executePlan(
 					}
 				}
 				if err := haproxyClient.Update(ctx, configStr); err != nil {
+					if plan.NeedsBootstrap {
+						app.Logger.Error("HAProxy update failed during bootstrap (fatal)", zap.Error(err))
+						return fmt.Errorf("HAProxy update during bootstrap: %w", err)
+					}
 					app.Logger.Warn("HAProxy update failed", zap.Error(err))
 				}
 			}
@@ -556,9 +560,17 @@ func (app *App) executePlan(
 			}
 
 			if err := kubeconfigMgr.FetchAndMerge(ctx, cpIP, cfg.ClusterName, cfg.ControlPlaneEndpoint); err != nil {
+				if len(plan.AddWorkers) > 0 {
+					app.Logger.Error("kubeconfig fetch failed during bootstrap with worker pending (fatal)", zap.Error(err))
+					return fmt.Errorf("kubeconfig fetch during bootstrap: %w", err)
+				}
 				app.Logger.Warn("kubeconfig fetch failed (can retry later)", zap.Error(err))
 			} else {
 				if err := kubeconfigMgr.Verify(ctx, cfg.ClusterName); err != nil {
+					if len(plan.AddWorkers) > 0 {
+						app.Logger.Error("K8s API unreachable during bootstrap with workers pending (fatal)", zap.Error(err))
+						return fmt.Errorf("K8s API verification during bootstrap: %w", err)
+					}
 					app.Logger.Warn("kubeconfig verification failed", zap.Error(err))
 				}
 			}
