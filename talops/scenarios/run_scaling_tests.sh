@@ -48,7 +48,7 @@ fi
 # Ensure bootstrap binary exists
 if [ ! -f "$BOOTSTRAP_BIN" ]; then
     echo -e "${YELLOW}Building bootstrap binary...${NC}"
-    make -C "$BOOTSTRAP_BIN" build
+    make -C "$BOOTSTRAP_DIR" build
 fi
 
 echo -e "${YELLOW}=== Scenario Runner ===${NC}"
@@ -60,11 +60,11 @@ cp "$SCENARIO_FILE" "$TFVARS_FILE"
 echo -e "${GREEN}✓ Done${NC}"
 
 echo -e "${YELLOW}[2/3] Destroying cluster...${NC}"
-"$BOOTSTRAP_BIN" destroy --auto-approve --terraform-dir "$SCRIPT_DIR/../terraform"
+"$BOOTSTRAP_BIN" down --auto-approve --force --terraform-dir "$SCRIPT_DIR/../terraform" --tfvars "$TFVARS_FILE"
 echo -e "${GREEN}✓ Done${NC}"
 
 echo -e "${YELLOW}[3/3] Deploying cluster...${NC}"
-"$BOOTSTRAP_BIN" deploy --auto-approve --terraform-dir "$SCRIPT_DIR/../terraform"
+"$BOOTSTRAP_BIN" up --auto-approve --terraform-dir "$SCRIPT_DIR/../terraform" --tfvars "$TFVARS_FILE"
 echo -e "${GREEN}✓ Done${NC}"
 
 echo ""

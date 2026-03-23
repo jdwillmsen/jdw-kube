@@ -1,0 +1,177 @@
+[36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
+╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
+   ██║   ███████║██║     ██║   ██║███████╗
+   ██║   ██╔══██║██║     ██║   ██║╚════██║
+   ██║   ██║  ██║███████╗╚██████╔╝███████║
+   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
+[0m[2m ━━━ Kubernetes Bootstrap Tool c59da85-dirty ━━━[0m
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mINFRASTRUCTURE DEPLOY[0m                                       [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  Directory: [36mF:/Dev/projects/personal/jdw-kube/talops/scenar[0m [2m┃[0m
+[2m┃[0m    [36mios/../terraform[0m                                         [2m┃[0m
+[2m┃[0m  Mode: [36mDEPLOY[0m                                               [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m01:32:36[0m [32mINFO [0m initializing terraform
+[2m01:32:36[0m [32mINFO [0m formatting and validating
+[2m01:32:37[0m [32mINFO [0m ISO found on Proxmox iso=local:iso/nocloud-amd64.iso
+[2m01:32:37[0m [32mINFO [0m creating plan
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mPLAN SUMMARY[0m                                                [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  [32m+[0m Create: 5                                                [2m┃[0m
+[2m┠─────────────────────────────────────────────────────────────┨[0m
+[2m┃[0m [1mDetails[0m                                                     [2m┃[0m
+[2m┃[0m  CREATE proxmox_virtual_environment_vm.controlplane         [2m┃[0m
+[2m┃[0m  CREATE proxmox_virtual_environment_vm.controlplane         [2m┃[0m
+[2m┃[0m  CREATE proxmox_virtual_environment_vm.controlplane         [2m┃[0m
+[2m┃[0m  CREATE proxmox_virtual_environment_vm.worker               [2m┃[0m
+[2m┃[0m  CREATE proxmox_virtual_environment_vm.worker               [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m01:32:37[0m [32mINFO [0m auto-approving deployment
+[2m01:32:37[0m [32mINFO [0m applying changes
+[2m01:32:37[0m [32mINFO [0m terraform apply attempt attempt=1 max=3
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mDEPLOYMENT SUMMARY[0m                                          [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  [31m-[0m talos-cp-01 (VMID: 200)                                  [2m┃[0m
+[2m┃[0m  [31m-[0m talos-cp-02 (VMID: 201)                                  [2m┃[0m
+[2m┃[0m  [31m-[0m talos-cp-03 (VMID: 202)                                  [2m┃[0m
+[2m┃[0m  [31m-[0m talos-worker-01 (VMID: 300)                              [2m┃[0m
+[2m┃[0m  [31m-[0m talos-worker-02 (VMID: 301)                              [2m┃[0m
+[2m┠─────────────────────────────────────────────────────────────┨[0m
+[2m┃[0m [1mNext Steps[0m                                                  [2m┃[0m
+[2m┃[0m  1 Verify VMs: terraform show                               [2m┃[0m
+[2m┃[0m  2 Bootstrap cluster: talops bootstrap                      [2m┃[0m
+[2m┃[0m  3 Check status: talops infra status                        [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m01:33:33[0m [32mINFO [0m deployment complete
+[2m01:33:33[0m [32mINFO [0m starting reconciliation cluster=test-core dry_run=false plan_mode=false
+[2m01:33:33[0m [32mINFO [0m refreshing proxmox node IPs
+[2m01:33:39[0m [32mINFO [0m loading desired state from terraform
+[2m01:33:39[0m [32mINFO [0m loaded desired state nodes=5
+[2m01:33:39[0m [32mINFO [0m generating config for node vmid=200 role=control-plane
+[2m01:33:39[0m [32mINFO [0m generating config for node vmid=201 role=control-plane
+[2m01:33:39[0m [32mINFO [0m generating config for node vmid=202 role=control-plane
+[2m01:33:39[0m [32mINFO [0m generating config for node vmid=300 role=worker
+[2m01:33:39[0m [32mINFO [0m generating config for node vmid=301 role=worker
+[2m01:33:39[0m [32mINFO [0m loading deployed state
+[2m01:33:39[0m [32mINFO [0m discovering live state
+[2m01:33:47[0m [32mINFO [0m discovered live state found=5
+[2m01:33:47[0m [32mINFO [0m running Talos API preflight checks
+[2m01:33:47[0m [32mINFO [0m building reconciliation plan
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mRECONCILIATION PLAN[0m                                         [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  [33m[BOOTSTRAP][0m Cluster needs initial bootstrap                [2m┃[0m
+[2m┃[0m  [32m+[0m Add 3 control plane(s): [200 201 202]                    [2m┃[0m
+[2m┃[0m  [32m+[0m Add 2 worker(s): [300 301]                               [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m01:33:47[0m [32mINFO [0m executing bootstrap
+[2m01:33:47[0m [32mINFO [0m applying config vmid=200 role=control-plane
+[2m01:33:47[0m [33mWARN [0m talos apply-config warning reason=extra kernel arguments are not supported when booting using SDBoot
+[2m01:33:51[0m [32mINFO [0m node unreachable, entering reboot state vmid=200 ip=192.168.1.91
+[2m01:33:54[0m [32mINFO [0m found candidate IP vmid=200 candidate_ip=192.168.1.135 ip_changed=true
+[2m01:34:01[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=200 candidate_ip=192.168.1.135
+[2m01:34:04[0m [32mINFO [0m found candidate IP vmid=200 candidate_ip=192.168.1.135 ip_changed=true
+[2m01:34:13[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=200 candidate_ip=192.168.1.135
+[2m01:34:18[0m [32mINFO [0m found candidate IP vmid=200 candidate_ip=192.168.1.91 ip_changed=false
+[2m01:34:28[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=200 candidate_ip=192.168.1.91
+[2m01:34:31[0m [32mINFO [0m found candidate IP vmid=200 candidate_ip=192.168.1.135 ip_changed=true
+[2m01:34:33[0m [32mINFO [0m node is ready vmid=200 final_ip=192.168.1.135 ip_changed=true
+[2m01:34:43[0m [32mINFO [0m node deployed, Talos API responding vmid=200 role=control-plane ip=192.168.1.135
+[2m01:34:43[0m [32mINFO [0m bootstrapping etcd on first control plane ip=192.168.1.135 vmid=200
+[2m01:34:48[0m [32mINFO [0m first control plane ready (API + etcd) ip=192.168.1.135 vmid=200
+[2m01:34:48[0m [32mINFO [0m adding control planes count=3
+[2m01:34:48[0m [32mINFO [0m applying config vmid=201 role=control-plane
+[2m01:34:48[0m [33mWARN [0m talos apply-config warning reason=extra kernel arguments are not supported when booting using SDBoot
+[2m01:34:52[0m [32mINFO [0m node unreachable, entering reboot state vmid=201 ip=192.168.1.160
+[2m01:34:55[0m [32mINFO [0m found candidate IP vmid=201 candidate_ip=192.168.1.161 ip_changed=true
+[2m01:35:02[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=201 candidate_ip=192.168.1.161
+[2m01:35:05[0m [32mINFO [0m found candidate IP vmid=201 candidate_ip=192.168.1.161 ip_changed=true
+[2m01:35:14[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=201 candidate_ip=192.168.1.161
+[2m01:35:21[0m [32mINFO [0m found candidate IP vmid=201 candidate_ip=192.168.1.161 ip_changed=true
+[2m01:35:24[0m [32mINFO [0m node is ready vmid=201 final_ip=192.168.1.161 ip_changed=true
+[2m01:35:34[0m [32mINFO [0m node deployed, Talos API responding vmid=201 role=control-plane ip=192.168.1.161
+[2m01:35:34[0m [32mINFO [0m applying config vmid=202 role=control-plane
+[2m01:35:34[0m [33mWARN [0m talos apply-config warning reason=extra kernel arguments are not supported when booting using SDBoot
+[2m01:35:38[0m [32mINFO [0m node unreachable, entering reboot state vmid=202 ip=192.168.1.210
+[2m01:35:41[0m [32mINFO [0m found candidate IP vmid=202 candidate_ip=192.168.1.119 ip_changed=true
+[2m01:35:48[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=202 candidate_ip=192.168.1.119
+[2m01:35:51[0m [32mINFO [0m found candidate IP vmid=202 candidate_ip=192.168.1.119 ip_changed=true
+[2m01:36:00[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=202 candidate_ip=192.168.1.119
+[2m01:36:05[0m [32mINFO [0m found candidate IP vmid=202 candidate_ip=192.168.1.210 ip_changed=false
+[2m01:36:15[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=202 candidate_ip=192.168.1.210
+[2m01:36:18[0m [32mINFO [0m found candidate IP vmid=202 candidate_ip=192.168.1.119 ip_changed=true
+[2m01:36:20[0m [32mINFO [0m node is ready vmid=202 final_ip=192.168.1.119 ip_changed=true
+[2m01:36:30[0m [32mINFO [0m node deployed, Talos API responding vmid=202 role=control-plane ip=192.168.1.119
+[2m01:36:30[0m [32mINFO [0m updating HAProxy configuration host=192.168.1.199 backup_suffix=20260323-013630
+[2m01:36:30[0m [33mWARN [0m HAProxy update failed error=write temp config: dial SSH: ssh: handshake failed: SSH host key verification failed for 192.168.1.199:22: use --insecure-ssh to skip verification
+[2m01:36:30[0m [32mINFO [0m waiting for control plane readiness before kubeconfig fetch ip=192.168.1.135
+[2m01:36:35[0m [32mINFO [0m fetching kubeconfig endpoint=192.168.1.135 cluster=test-core
+[2m01:36:35[0m [32mINFO [0m kubeconfig updated path=C:\Users\jdwil\.kube\config context=test-core
+[2m01:36:35[0m [32mINFO [0m verifying Kubernetes access context=test-core
+[2m01:37:26[0m [33mWARN [0m kubeconfig verification failed error=kubectl cluster-info failed: exit status 1, output: E0323 01:36:45.949733   52152 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+E0323 01:36:56.013382   52152 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+E0323 01:37:06.064305   52152 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+E0323 01:37:16.117665   52152 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+E0323 01:37:26.160675   52152 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+Unable to connect to the server: EOF
+
+[2m01:37:26[0m [32mINFO [0m adding workers count=2
+[2m01:37:26[0m [32mINFO [0m applying config vmid=301 role=worker
+[2m01:37:26[0m [32mINFO [0m applying config vmid=300 role=worker
+[2m01:37:26[0m [33mWARN [0m talos apply-config warning reason=extra kernel arguments are not supported when booting using SDBoot
+[2m01:37:26[0m [33mWARN [0m talos apply-config warning reason=extra kernel arguments are not supported when booting using SDBoot
+[2m01:37:30[0m [32mINFO [0m node unreachable, entering reboot state vmid=300 ip=192.168.1.75
+[2m01:37:30[0m [32mINFO [0m node unreachable, entering reboot state vmid=301 ip=192.168.1.148
+[2m01:37:33[0m [32mINFO [0m found candidate IP vmid=300 candidate_ip=192.168.1.242 ip_changed=true
+[2m01:37:33[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:37:40[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:37:40[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=300 candidate_ip=192.168.1.242
+[2m01:37:43[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:37:43[0m [32mINFO [0m found candidate IP vmid=300 candidate_ip=192.168.1.242 ip_changed=true
+[2m01:37:49[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:37:52[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=300 candidate_ip=192.168.1.242
+[2m01:37:54[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:38:02[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:38:05[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:38:11[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:38:14[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:38:21[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:38:24[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:38:24[0m [32mINFO [0m original IP is reachable again vmid=300
+[2m01:38:26[0m [32mINFO [0m node is ready vmid=300 final_ip=192.168.1.75 ip_changed=false
+[2m01:38:30[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:38:33[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:38:39[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:38:42[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:38:48[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:38:51[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:38:58[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:39:01[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:39:07[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:39:10[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:39:16[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:39:19[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:39:25[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:39:28[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:39:34[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:39:38[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:39:44[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:39:47[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:39:53[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:39:56[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:40:02[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:40:05[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:40:11[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:40:14[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:40:21[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.227
+[2m01:40:24[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.227 ip_changed=true
+[2m01:40:28[0m [31mERROR[0m node reboot wait failed vmid=301 role=worker error=timeout waiting for node 301 (VMID) after 3m0s in state verifying
+[2m01:40:28[0m [31mERROR[0m Talos API not reachable vmid=300 role=worker error=timeout waiting for api to become healthy on 192.168.1.75
+[2m01:40:28[0m [31mERROR[0m worker deployment failed error=add worker 301: wait for worker 301 reboot: timeout waiting for node 301 (VMID) after 3m0s in state verifying
+[2m01:40:28[0m [31mERROR[0m plan execution failed error=add worker 301: wait for worker 301 reboot: timeout waiting for node 301 (VMID) after 3m0s in state verifying
+[2m01:40:28[0m [31mERROR[0m up: bootstrap failed; infrastructure is up hint=run 'talops reconcile' to retry

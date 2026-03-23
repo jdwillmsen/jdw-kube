@@ -1,0 +1,30 @@
+[2026-03-23 01:33:33] [RECONCILE-START] cluster=test-core dry_run=false plan_mode=false
+[2026-03-23 01:33:38] [CMD-START] talosctl gen secrets -o clusters\test-core\secrets\secrets.yaml
+[2026-03-23 01:33:38] [CMD-EXIT] 0 [DURATION: 361ms]
+[2026-03-23 01:33:39] [CMD-START] talosctl gen config --with-secrets clusters\test-core\secrets\secrets.yaml --kubernetes-version v1.35.1 --talos-version v1.12.3 --install-image factory.talos.dev/nocloud-installer/b553b4a25d76e938fd7a9aaa7f887c06ea4ef75275e64f4630e6f8f739cf07df:v1.12.3 --additional-sans 192.168.1.199,cluster.jdwlabs.com,127.0.0.1 --output-dir C:\Users\jdwil\AppData\Local\Temp\talos-gen-config-2743568090 test-core https://cluster.jdwlabs.com:6443
+[2026-03-23 01:33:39] [CMD-OUTPUT] 
+generating PKI and tokens
+Created C:\Users\jdwil\AppData\Local\Temp\talos-gen-config-2743568090\controlplane.yaml
+Created C:\Users\jdwil\AppData\Local\Temp\talos-gen-config-2743568090\worker.yaml
+Created C:\Users\jdwil\AppData\Local\Temp\talos-gen-config-2743568090\talosconfig
+
+[2026-03-23 01:33:39] [CMD-EXIT] 0 [DURATION: 128ms]
+[2026-03-23 01:33:39] [CMD-START] talosctl machineconfig patch clusters\test-core\secrets\control-plane.yaml --patch @clusters\test-core\nodes\.patches\control-plane-200.yaml --output clusters\test-core\nodes\node-control-plane-200.yaml
+[2026-03-23 01:33:39] [CMD-EXIT] 0 [DURATION: 111ms]
+[2026-03-23 01:33:39] [CMD-START] talosctl machineconfig patch clusters\test-core\secrets\control-plane.yaml --patch @clusters\test-core\nodes\.patches\control-plane-201.yaml --output clusters\test-core\nodes\node-control-plane-201.yaml
+[2026-03-23 01:33:39] [CMD-EXIT] 0 [DURATION: 105ms]
+[2026-03-23 01:33:39] [CMD-START] talosctl machineconfig patch clusters\test-core\secrets\control-plane.yaml --patch @clusters\test-core\nodes\.patches\control-plane-202.yaml --output clusters\test-core\nodes\node-control-plane-202.yaml
+[2026-03-23 01:33:39] [CMD-EXIT] 0 [DURATION: 104ms]
+[2026-03-23 01:33:39] [CMD-START] talosctl machineconfig patch clusters\test-core\secrets\worker.yaml --patch @clusters\test-core\nodes\.patches\worker-300.yaml --output clusters\test-core\nodes\node-worker-300.yaml
+[2026-03-23 01:33:39] [CMD-EXIT] 0 [DURATION: 102ms]
+[2026-03-23 01:33:39] [CMD-START] talosctl machineconfig patch clusters\test-core\secrets\worker.yaml --patch @clusters\test-core\nodes\.patches\worker-301.yaml --output clusters\test-core\nodes\node-worker-301.yaml
+[2026-03-23 01:33:39] [CMD-EXIT] 0 [DURATION: 105ms]
+[2026-03-23 01:33:47] [BOOTSTRAP-START] control_planes=3 workers=2
+[2026-03-23 01:33:47] [APPLY-CONFIG] vmid=200 role=control-plane ip=192.168.1.91
+[2026-03-23 01:34:48] [ADD-CPS] count=3 vmids=[200 201 202]
+[2026-03-23 01:34:48] [APPLY-CONFIG] vmid=201 role=control-plane ip=192.168.1.160
+[2026-03-23 01:35:34] [APPLY-CONFIG] vmid=202 role=control-plane ip=192.168.1.210
+[2026-03-23 01:37:26] [ADD-WORKERS] count=2 vmids=[300 301]
+[2026-03-23 01:37:26] [APPLY-CONFIG] vmid=301 role=worker ip=192.168.1.148
+[2026-03-23 01:37:26] [APPLY-CONFIG] vmid=300 role=worker ip=192.168.1.75
+[2026-03-23 01:40:28] [RECONCILE-END] cluster=test-core status=failed error=add worker 301: wait for worker 301 reboot: timeout waiting for node 301 (VMID) after 3m0s in state verifying

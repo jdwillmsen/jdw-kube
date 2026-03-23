@@ -1,0 +1,16 @@
+━━━ TALOS BOOTSTRAP RUN SUMMARY ━━━
+  Status:       failed
+  Cluster:      test-core
+  Start:        2026-03-23 01:32:36
+  Duration:     7m52s
+  Run Dir:      logs\2026-03-23\run-20260323_013236
+  Error:        up: cluster bootstrap failed: execute plan: add worker 301: wait for worker 301 reboot: timeout waiting for node 301 (VMID) after 3m0s in state verifying
+  ─── Cluster Nodes ───
+  Control Planes: 0
+  Workers:        0
+  ─── Operations ───
+  Added:          5
+  Removed:        0
+  Updated:        0
+  Bootstrap:      true
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
