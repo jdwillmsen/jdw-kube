@@ -1,0 +1,59 @@
+{"level":"info","ts":"2026-03-23T22:32:17.705-0500","msg":"initializing terraform"}
+{"level":"info","ts":"2026-03-23T22:32:17.706-0500","msg":"formatting and validating"}
+{"level":"info","ts":"2026-03-23T22:32:18.615-0500","msg":"ISO found on Proxmox","iso":"local:iso/nocloud-amd64.iso"}
+{"level":"info","ts":"2026-03-23T22:32:18.615-0500","msg":"creating plan"}
+{"level":"info","ts":"2026-03-23T22:32:19.597-0500","msg":"no changes needed - infrastructure is up to date"}
+{"level":"info","ts":"2026-03-23T22:32:19.597-0500","msg":"starting reconciliation","cluster":"test-core","dry_run":false,"plan_mode":false}
+{"level":"info","ts":"2026-03-23T22:32:19.598-0500","msg":"refreshing proxmox node IPs"}
+{"level":"info","ts":"2026-03-23T22:32:24.552-0500","msg":"loading desired state from terraform"}
+{"level":"info","ts":"2026-03-23T22:32:24.554-0500","msg":"loaded desired state","nodes":5}
+{"level":"info","ts":"2026-03-23T22:32:24.554-0500","msg":"loading deployed state"}
+{"level":"info","ts":"2026-03-23T22:32:24.554-0500","msg":"discovering live state"}
+{"level":"info","ts":"2026-03-23T22:32:30.949-0500","msg":"discovered live state","found":5}
+{"level":"info","ts":"2026-03-23T22:32:30.951-0500","msg":"running Talos API preflight checks"}
+{"level":"info","ts":"2026-03-23T22:32:30.957-0500","msg":"building reconciliation plan"}
+{"level":"info","ts":"2026-03-23T22:32:49.504-0500","msg":"confirmed by user","response":"y"}
+{"level":"info","ts":"2026-03-23T22:32:49.505-0500","msg":"executing bootstrap"}
+{"level":"info","ts":"2026-03-23T22:32:49.505-0500","msg":"applying config","vmid":200,"role":"control-plane"}
+{"level":"warn","ts":"2026-03-23T22:32:49.596-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-23T22:32:53.613-0500","msg":"node unreachable, entering reboot state","vmid":200,"ip":"192.168.1.212"}
+{"level":"info","ts":"2026-03-23T22:32:56.671-0500","msg":"found candidate IP","vmid":200,"candidate_ip":"192.168.1.133","ip_changed":true}
+{"level":"warn","ts":"2026-03-23T22:33:03.757-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":200,"candidate_ip":"192.168.1.133"}
+{"level":"info","ts":"2026-03-23T22:33:06.842-0500","msg":"found candidate IP","vmid":200,"candidate_ip":"192.168.1.133","ip_changed":true}
+{"level":"warn","ts":"2026-03-23T22:33:14.875-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":200,"candidate_ip":"192.168.1.133"}
+{"level":"info","ts":"2026-03-23T22:33:27.067-0500","msg":"found candidate IP","vmid":200,"candidate_ip":"192.168.1.212","ip_changed":false}
+{"level":"warn","ts":"2026-03-23T22:33:36.068-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":200,"candidate_ip":"192.168.1.212"}
+{"level":"info","ts":"2026-03-23T22:33:39.130-0500","msg":"found candidate IP","vmid":200,"candidate_ip":"192.168.1.133","ip_changed":true}
+{"level":"info","ts":"2026-03-23T22:33:39.601-0500","msg":"node is ready","vmid":200,"final_ip":"192.168.1.133","ip_changed":true}
+{"level":"info","ts":"2026-03-23T22:33:49.613-0500","msg":"node deployed, Talos API responding","vmid":200,"role":"control-plane","ip":"192.168.1.133"}
+{"level":"info","ts":"2026-03-23T22:33:49.613-0500","msg":"bootstrapping etcd on first control plane","ip":"192.168.1.133","vmid":200}
+{"level":"info","ts":"2026-03-23T22:33:54.671-0500","msg":"first control plane ready (API + etcd)","ip":"192.168.1.133","vmid":200}
+{"level":"info","ts":"2026-03-23T22:33:54.674-0500","msg":"adding control planes","count":3}
+{"level":"info","ts":"2026-03-23T22:33:54.674-0500","msg":"applying config","vmid":201,"role":"control-plane"}
+{"level":"warn","ts":"2026-03-23T22:33:54.689-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-23T22:33:58.690-0500","msg":"node unreachable, entering reboot state","vmid":201,"ip":"192.168.1.112"}
+{"level":"info","ts":"2026-03-23T22:34:01.759-0500","msg":"found candidate IP","vmid":201,"candidate_ip":"192.168.1.144","ip_changed":true}
+{"level":"warn","ts":"2026-03-23T22:34:08.839-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":201,"candidate_ip":"192.168.1.144"}
+{"level":"info","ts":"2026-03-23T22:34:11.947-0500","msg":"found candidate IP","vmid":201,"candidate_ip":"192.168.1.144","ip_changed":true}
+{"level":"warn","ts":"2026-03-23T22:34:20.948-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":201,"candidate_ip":"192.168.1.144"}
+{"level":"info","ts":"2026-03-23T22:34:28.101-0500","msg":"found candidate IP","vmid":201,"candidate_ip":"192.168.1.112","ip_changed":false}
+{"level":"warn","ts":"2026-03-23T22:34:37.689-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":201,"candidate_ip":"192.168.1.112"}
+{"level":"info","ts":"2026-03-23T22:34:40.770-0500","msg":"found candidate IP","vmid":201,"candidate_ip":"192.168.1.144","ip_changed":true}
+{"level":"info","ts":"2026-03-23T22:34:42.690-0500","msg":"node is ready","vmid":201,"final_ip":"192.168.1.144","ip_changed":true}
+{"level":"info","ts":"2026-03-23T22:34:52.704-0500","msg":"node deployed, Talos API responding","vmid":201,"role":"control-plane","ip":"192.168.1.144"}
+{"level":"info","ts":"2026-03-23T22:34:52.704-0500","msg":"applying config","vmid":202,"role":"control-plane"}
+{"level":"warn","ts":"2026-03-23T22:34:52.727-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-23T22:34:56.728-0500","msg":"node unreachable, entering reboot state","vmid":202,"ip":"192.168.1.120"}
+{"level":"info","ts":"2026-03-23T22:34:59.784-0500","msg":"found candidate IP","vmid":202,"candidate_ip":"192.168.1.140","ip_changed":true}
+{"level":"warn","ts":"2026-03-23T22:35:06.859-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":202,"candidate_ip":"192.168.1.140"}
+{"level":"info","ts":"2026-03-23T22:35:09.927-0500","msg":"found candidate IP","vmid":202,"candidate_ip":"192.168.1.140","ip_changed":true}
+{"level":"warn","ts":"2026-03-23T22:35:18.928-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":202,"candidate_ip":"192.168.1.140"}
+{"level":"info","ts":"2026-03-23T22:35:23.996-0500","msg":"found candidate IP","vmid":202,"candidate_ip":"192.168.1.120","ip_changed":false}
+{"level":"warn","ts":"2026-03-23T22:35:33.728-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":202,"candidate_ip":"192.168.1.120"}
+{"level":"info","ts":"2026-03-23T22:35:36.839-0500","msg":"found candidate IP","vmid":202,"candidate_ip":"192.168.1.140","ip_changed":true}
+{"level":"info","ts":"2026-03-23T22:35:38.727-0500","msg":"node is ready","vmid":202,"final_ip":"192.168.1.140","ip_changed":true}
+{"level":"info","ts":"2026-03-23T22:35:48.748-0500","msg":"node deployed, Talos API responding","vmid":202,"role":"control-plane","ip":"192.168.1.140"}
+{"level":"info","ts":"2026-03-23T22:35:48.796-0500","msg":"updating HAProxy configuration","host":"192.168.1.199","backup_suffix":"20260323-223548"}
+{"level":"error","ts":"2026-03-23T22:35:48.812-0500","msg":"HAProxy update failed during bootstrap (fatal)","error":"write temp config: dial SSH: ssh: handshake failed: knownhosts: key mismatch"}
+{"level":"error","ts":"2026-03-23T22:35:48.813-0500","msg":"plan execution failed","error":"HAProxy update during bootstrap: write temp config: dial SSH: ssh: handshake failed: knownhosts: key mismatch"}
+{"level":"error","ts":"2026-03-23T22:35:48.814-0500","msg":"up: bootstrap failed; infrastructure is up","hint":"run 'talops reconcile' to retry"}

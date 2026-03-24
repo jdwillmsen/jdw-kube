@@ -1,10 +1,10 @@
 ━━━ TALOS BOOTSTRAP RUN SUMMARY ━━━
   Status:       failed
   Cluster:      test-core
-  Start:        2026-03-23 01:32:36
-  Duration:     7m52s
-  Run Dir:      logs\2026-03-23\run-20260323_013236
-  Error:        up: cluster bootstrap failed: execute plan: add worker 301: wait for worker 301 reboot: timeout waiting for node 301 (VMID) after 3m0s in state verifying
+  Start:        2026-03-23 22:32:17
+  Duration:     3m32s
+  Run Dir:      logs\2026-03-23\run-20260323_223217
+  Error:        up: cluster bootstrap failed: execute plan: HAProxy update during bootstrap: write temp config: dial SSH: ssh: handshake failed: knownhosts: key mismatch
   ─── Cluster Nodes ───
   Control Planes: 0
   Workers:        0

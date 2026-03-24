@@ -1,0 +1,7 @@
+[2026-03-23 22:32:19] [RECONCILE-START] cluster=test-core dry_run=false plan_mode=false
+[2026-03-23 22:32:49] [BOOTSTRAP-START] control_planes=3 workers=2
+[2026-03-23 22:32:49] [APPLY-CONFIG] vmid=200 role=control-plane ip=192.168.1.212
+[2026-03-23 22:33:54] [ADD-CPS] count=3 vmids=[200 201 202]
+[2026-03-23 22:33:54] [APPLY-CONFIG] vmid=201 role=control-plane ip=192.168.1.112
+[2026-03-23 22:34:52] [APPLY-CONFIG] vmid=202 role=control-plane ip=192.168.1.120
+[2026-03-23 22:35:48] [RECONCILE-END] cluster=test-core status=failed error=HAProxy update during bootstrap: write temp config: dial SSH: ssh: handshake failed: knownhosts: key mismatch
