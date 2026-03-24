@@ -1,6 +1,7 @@
 package haproxy
 
 import (
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -73,7 +74,7 @@ func TestConfig_Generate(t *testing.T) {
 			checks: func(t *testing.T, config string) {
 				// Check all three servers are present
 				for _, vmid := range []types.VMID{201, 202, 203} {
-					expected := "server talos-cp-" + string(rune(vmid))
+					expected := fmt.Sprintf("server talos-cp-%d", vmid)
 					if !strings.Contains(config, expected) {
 						t.Errorf("config missing backend server for VMID %d", vmid)
 					}
@@ -204,26 +205,20 @@ func TestConfigFromClusterState(t *testing.T) {
 	}
 
 	state := &types.ClusterState{
-		ControlPlanes: []types.Node{
+		ControlPlanes: []types.NodeState{
 			{
-				VMID:   201,
-				IP:     net.ParseIP("192.168.1.201"),
-				Role:   types.RoleControlPlane,
-				Status: types.StatusReady,
+				VMID: 201,
+				IP:   net.ParseIP("192.168.1.201"),
 			},
 			{
-				VMID:   202,
-				IP:     net.ParseIP("192.168.1.202"),
-				Role:   types.RoleControlPlane,
-				Status: types.StatusReady,
+				VMID: 202,
+				IP:   net.ParseIP("192.168.1.202"),
 			},
 		},
-		Workers: []types.Node{
+		Workers: []types.NodeState{
 			{
-				VMID:   301,
-				IP:     net.ParseIP("192.168.1.301"),
-				Role:   types.RoleWorker,
-				Status: types.StatusReady,
+				VMID: 301,
+				IP:   net.ParseIP("192.168.1.301"),
 			},
 		},
 	}
@@ -277,9 +272,9 @@ func TestConfigFromClusterState_EmptyControlPlanes(t *testing.T) {
 	}
 
 	state := &types.ClusterState{
-		ControlPlanes: []types.Node{},
-		Workers: []types.Node{
-			{VMID: 301, IP: net.ParseIP("192.168.1.301"), Role: types.RoleWorker},
+		ControlPlanes: []types.NodeState{},
+		Workers: []types.NodeState{
+			{VMID: 301, IP: net.ParseIP("192.168.1.301")},
 		},
 	}
 
