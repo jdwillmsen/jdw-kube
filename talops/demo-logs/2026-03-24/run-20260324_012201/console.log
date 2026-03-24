@@ -1,0 +1,34 @@
+[36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
+╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
+   ██║   ███████║██║     ██║   ██║███████╗
+   ██║   ██╔══██║██║     ██║   ██║╚════██║
+   ██║   ██║  ██║███████╗╚██████╔╝███████║
+   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
+[0m[2m ━━━ Kubernetes Bootstrap Tool f87bc06 ━━━[0m
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mINFRASTRUCTURE DEPLOY[0m                                       [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  Directory: [36m../terraform[0m                                    [2m┃[0m
+[2m┃[0m  Mode: [36mDEPLOY[0m                                               [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m01:22:02[0m [32mINFO [0m initializing terraform
+[2m01:22:02[0m [32mINFO [0m formatting and validating
+[2m01:22:04[0m [32mINFO [0m ISO found on Proxmox iso=local:iso/nocloud-amd64.iso
+[2m01:22:04[0m [32mINFO [0m creating plan
+[2m01:22:05[0m [32mINFO [0m no changes needed - infrastructure is up to date
+[2m01:22:05[0m [32mINFO [0m starting reconciliation cluster=test-core dry_run=false plan_mode=false
+[2m01:22:05[0m [32mINFO [0m refreshing proxmox node IPs
+[2m01:22:10[0m [32mINFO [0m loading desired state from terraform
+[2m01:22:10[0m [32mINFO [0m loaded desired state nodes=5
+[2m01:22:10[0m [32mINFO [0m loading deployed state
+[2m01:22:10[0m [32mINFO [0m discovering live state
+[2m01:22:17[0m [32mINFO [0m discovered live state found=5
+[2m01:22:17[0m [32mINFO [0m running Talos API preflight checks
+[2m01:22:17[0m [32mINFO [0m building reconciliation plan
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mRECONCILIATION PLAN[0m                                         [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  = 5 node(s) unchanged                                      [2m┃[0m
+[2m┃[0m  [32m[OK][0m Cluster matches desired state — no changes needed     [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m01:22:17[0m [32mINFO [0m no changes required

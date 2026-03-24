@@ -1,0 +1,45 @@
+[36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
+╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
+   ██║   ███████║██║     ██║   ██║███████╗
+   ██║   ██╔══██║██║     ██║   ██║╚════██║
+   ██║   ██║  ██║███████╗╚██████╔╝███████║
+   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
+[0m[2m ━━━ Kubernetes Bootstrap Tool f87bc06 ━━━[0m
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mINFRASTRUCTURE DEPLOY[0m                                       [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  Directory: [36m../terraform[0m                                    [2m┃[0m
+[2m┃[0m  Mode: [36mDEPLOY[0m                                               [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m01:22:30[0m [32mINFO [0m initializing terraform
+[2m01:22:30[0m [32mINFO [0m formatting and validating
+[2m01:22:30[0m [32mINFO [0m ISO found on Proxmox iso=local:iso/nocloud-amd64.iso
+[2m01:22:30[0m [32mINFO [0m creating plan
+[2m01:22:31[0m [32mINFO [0m no changes needed - infrastructure is up to date
+[2m01:22:31[0m [32mINFO [0m starting reconciliation cluster=test-core dry_run=false plan_mode=false
+[2m01:22:31[0m [32mINFO [0m refreshing proxmox node IPs
+[2m01:22:36[0m [32mINFO [0m loading desired state from terraform
+[2m01:22:36[0m [32mINFO [0m loaded desired state nodes=5
+[2m01:22:36[0m [32mINFO [0m generating config for node vmid=204 role=control-plane
+[2m01:22:36[0m [32mINFO [0m generating config for node vmid=203 role=control-plane
+[2m01:22:36[0m [32mINFO [0m loading deployed state
+[2m01:22:36[0m [32mINFO [0m discovering live state
+[2m01:22:44[0m [32mINFO [0m discovered live state found=3
+[2m01:22:44[0m [32mINFO [0m running Talos API preflight checks
+[2m01:22:44[0m [32mINFO [0m building reconciliation plan
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mRECONCILIATION PLAN[0m                                         [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  [32m+[0m Add 2 control plane(s): [203 204]                        [2m┃[0m
+[2m┃[0m  [31m-[0m Remove 2 worker(s): [300 301]                            [2m┃[0m
+[2m┃[0m  = 3 node(s) unchanged                                      [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m01:22:44[0m [32mINFO [0m bootstrapping etcd on already-deployed control plane ip=192.168.1.133 vmid=200
+[2m01:22:49[0m [32mINFO [0m removing workers count=2
+[2m01:23:40[0m [33mWARN [0m failed to get node name for worker vmid=300 error=kubectl get nodes: exit status 1
+[2m01:24:30[0m [33mWARN [0m failed to get node name for worker vmid=301 error=kubectl get nodes: exit status 1
+[2m01:24:30[0m [32mINFO [0m adding control planes count=2
+[2m01:24:37[0m [31mERROR[0m VM IP not discovered vmid=203
+[2m01:24:37[0m [31mERROR[0m failed to add control plane vmid=203 error=VM 203 IP not discovered
+[2m01:24:37[0m [31mERROR[0m plan execution failed error=add CP 203: VM 203 IP not discovered
+[2m01:24:37[0m [31mERROR[0m up: bootstrap failed; infrastructure is up hint=run 'talops reconcile' to retry

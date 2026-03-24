@@ -1,0 +1,25 @@
+{"level":"info","ts":"2026-03-24T01:22:30.143-0500","msg":"initializing terraform"}
+{"level":"info","ts":"2026-03-24T01:22:30.143-0500","msg":"formatting and validating"}
+{"level":"info","ts":"2026-03-24T01:22:30.532-0500","msg":"ISO found on Proxmox","iso":"local:iso/nocloud-amd64.iso"}
+{"level":"info","ts":"2026-03-24T01:22:30.532-0500","msg":"creating plan"}
+{"level":"info","ts":"2026-03-24T01:22:31.357-0500","msg":"no changes needed - infrastructure is up to date"}
+{"level":"info","ts":"2026-03-24T01:22:31.357-0500","msg":"starting reconciliation","cluster":"test-core","dry_run":false,"plan_mode":false}
+{"level":"info","ts":"2026-03-24T01:22:31.358-0500","msg":"refreshing proxmox node IPs"}
+{"level":"info","ts":"2026-03-24T01:22:36.568-0500","msg":"loading desired state from terraform"}
+{"level":"info","ts":"2026-03-24T01:22:36.570-0500","msg":"loaded desired state","nodes":5}
+{"level":"info","ts":"2026-03-24T01:22:36.570-0500","msg":"generating config for node","vmid":204,"role":"control-plane"}
+{"level":"info","ts":"2026-03-24T01:22:36.724-0500","msg":"generating config for node","vmid":203,"role":"control-plane"}
+{"level":"info","ts":"2026-03-24T01:22:36.855-0500","msg":"loading deployed state"}
+{"level":"info","ts":"2026-03-24T01:22:36.855-0500","msg":"discovering live state"}
+{"level":"info","ts":"2026-03-24T01:22:44.485-0500","msg":"discovered live state","found":3}
+{"level":"info","ts":"2026-03-24T01:22:44.503-0500","msg":"running Talos API preflight checks"}
+{"level":"info","ts":"2026-03-24T01:22:44.506-0500","msg":"building reconciliation plan"}
+{"level":"info","ts":"2026-03-24T01:22:44.507-0500","msg":"bootstrapping etcd on already-deployed control plane","ip":"192.168.1.133","vmid":200}
+{"level":"info","ts":"2026-03-24T01:22:49.550-0500","msg":"removing workers","count":2}
+{"level":"warn","ts":"2026-03-24T01:23:40.302-0500","msg":"failed to get node name for worker","vmid":300,"error":"kubectl get nodes: exit status 1"}
+{"level":"warn","ts":"2026-03-24T01:24:30.891-0500","msg":"failed to get node name for worker","vmid":301,"error":"kubectl get nodes: exit status 1"}
+{"level":"info","ts":"2026-03-24T01:24:30.909-0500","msg":"adding control planes","count":2}
+{"level":"error","ts":"2026-03-24T01:24:37.298-0500","msg":"VM IP not discovered","vmid":203}
+{"level":"error","ts":"2026-03-24T01:24:37.298-0500","msg":"failed to add control plane","vmid":203,"error":"VM 203 IP not discovered"}
+{"level":"error","ts":"2026-03-24T01:24:37.298-0500","msg":"plan execution failed","error":"add CP 203: VM 203 IP not discovered"}
+{"level":"error","ts":"2026-03-24T01:24:37.299-0500","msg":"up: bootstrap failed; infrastructure is up","hint":"run 'talops reconcile' to retry"}

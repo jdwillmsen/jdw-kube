@@ -1,0 +1,15 @@
+{"level":"info","ts":"2026-03-24T01:22:02.897-0500","msg":"initializing terraform"}
+{"level":"info","ts":"2026-03-24T01:22:02.897-0500","msg":"formatting and validating"}
+{"level":"info","ts":"2026-03-24T01:22:04.144-0500","msg":"ISO found on Proxmox","iso":"local:iso/nocloud-amd64.iso"}
+{"level":"info","ts":"2026-03-24T01:22:04.145-0500","msg":"creating plan"}
+{"level":"info","ts":"2026-03-24T01:22:05.144-0500","msg":"no changes needed - infrastructure is up to date"}
+{"level":"info","ts":"2026-03-24T01:22:05.145-0500","msg":"starting reconciliation","cluster":"test-core","dry_run":false,"plan_mode":false}
+{"level":"info","ts":"2026-03-24T01:22:05.167-0500","msg":"refreshing proxmox node IPs"}
+{"level":"info","ts":"2026-03-24T01:22:10.401-0500","msg":"loading desired state from terraform"}
+{"level":"info","ts":"2026-03-24T01:22:10.401-0500","msg":"loaded desired state","nodes":5}
+{"level":"info","ts":"2026-03-24T01:22:10.402-0500","msg":"loading deployed state"}
+{"level":"info","ts":"2026-03-24T01:22:10.406-0500","msg":"discovering live state"}
+{"level":"info","ts":"2026-03-24T01:22:17.582-0500","msg":"discovered live state","found":5}
+{"level":"info","ts":"2026-03-24T01:22:17.688-0500","msg":"running Talos API preflight checks"}
+{"level":"info","ts":"2026-03-24T01:22:17.692-0500","msg":"building reconciliation plan"}
+{"level":"info","ts":"2026-03-24T01:22:17.698-0500","msg":"no changes required"}

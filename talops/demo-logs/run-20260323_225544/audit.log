@@ -1,8 +1,0 @@
-[2026-03-23 22:55:46] [RECONCILE-START] cluster=test-core dry_run=false plan_mode=false
-[2026-03-23 22:56:03] [ADD-CPS] count=2 vmids=[201 202]
-[2026-03-23 22:56:03] [APPLY-CONFIG] vmid=201 role=control-plane ip=192.168.1.144
-[2026-03-23 22:56:15] [APPLY-CONFIG] vmid=202 role=control-plane ip=192.168.1.140
-[2026-03-23 22:56:27] [ADD-WORKERS] count=2 vmids=[300 301]
-[2026-03-23 22:56:27] [APPLY-CONFIG] vmid=301 role=worker ip=192.168.1.116
-[2026-03-23 22:56:27] [APPLY-CONFIG] vmid=300 role=worker ip=192.168.1.105
-[2026-03-23 22:59:01] [RECONCILE-END] cluster=test-core status=success
