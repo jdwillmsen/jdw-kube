@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"testing"
@@ -561,6 +562,81 @@ frontend test
 	if err != nil {
 		t.Logf("Update error (may be expected): %v", err)
 	}
+}
+
+func TestKnownHostsCallback_Insecure(t *testing.T) {
+	cb := knownHostsCallback(true)
+	// Should accept any key without error
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	pubKey, err := ssh.NewPublicKey(&key.PublicKey)
+	require.NoError(t, err)
+
+	addr := &net.TCPAddr{IP: net.ParseIP("192.168.1.100"), Port: 22}
+	err = cb("192.168.1.100:22", addr, pubKey)
+	assert.NoError(t, err)
+}
+
+func TestKnownHostsCallback_TOFU(t *testing.T) {
+	// Create a temp known_hosts file via temp HOME
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	sshDir := filepath.Join(tmpHome, ".ssh")
+	require.NoError(t, os.Mkdir(sshDir, 0700))
+
+	cb := knownHostsCallback(false)
+
+	// Generate a host key
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	pubKey, err := ssh.NewPublicKey(&key.PublicKey)
+	require.NoError(t, err)
+
+	addr := &net.TCPAddr{IP: net.ParseIP("192.168.1.100"), Port: 22}
+
+	// First connection: unknown key should be accepted (TOFU) and written to known_hosts
+	err = cb("192.168.1.100:22", addr, pubKey)
+	assert.NoError(t, err)
+
+	// Verify the key was written to known_hosts
+	khPath := filepath.Join(sshDir, "known_hosts")
+	data, err := os.ReadFile(khPath)
+	require.NoError(t, err)
+	assert.NotEmpty(t, data, "known_hosts should contain the new key")
+}
+
+func TestKnownHostsCallback_Mismatch(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	sshDir := filepath.Join(tmpHome, ".ssh")
+	require.NoError(t, os.Mkdir(sshDir, 0700))
+
+	// First, establish a known key via TOFU
+	cb := knownHostsCallback(false)
+
+	key1, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	pubKey1, err := ssh.NewPublicKey(&key1.PublicKey)
+	require.NoError(t, err)
+
+	addr := &net.TCPAddr{IP: net.ParseIP("192.168.1.100"), Port: 22}
+	err = cb("192.168.1.100:22", addr, pubKey1)
+	assert.NoError(t, err)
+
+	// Re-create the callback to reload known_hosts with the new entry
+	cb = knownHostsCallback(false)
+
+	// Now try with a different key - should be rejected as mismatch
+	key2, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	pubKey2, err := ssh.NewPublicKey(&key2.PublicKey)
+	require.NoError(t, err)
+
+	err = cb("192.168.1.100:22", addr, pubKey2)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "mismatch")
 }
 
 // Benchmarks

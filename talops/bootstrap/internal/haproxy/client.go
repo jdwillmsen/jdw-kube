@@ -3,6 +3,7 @@ package haproxy
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -149,22 +150,81 @@ func (c *Client) runSSH(cmd string) error {
 
 // knownHostsCallback returns an ssh.HostKeyCallback. When insecure is true,
 // all host keys are accepted. Otherwise, keys are verified against the user's
-// ~/.ssh/known_hosts file. If that file is missing or unreadable, connections
-// are rejected with a hint to either populate known_hosts or use --insecure-ssh.
+// ~/.ssh/known_hosts file with trust-on-first-use (TOFU): unknown keys are
+// automatically added to known_hosts, while mismatched keys are rejected.
 func knownHostsCallback(insecure bool) ssh.HostKeyCallback {
 	if insecure {
 		return ssh.InsecureIgnoreHostKey()
 	}
 
 	home, err := os.UserHomeDir()
-	if err == nil {
-		khPath := filepath.Join(home, ".ssh", "known_hosts")
-		if cb, err := knownhosts.New(khPath); err == nil {
-			return cb
+	if err != nil {
+		return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			return fmt.Errorf("SSH host key verification failed for %s: cannot determine home directory: %v", hostname, err)
+		}
+	}
+
+	khPath := filepath.Join(home, ".ssh", "known_hosts")
+
+	// Ensure ~/.ssh directory and known_hosts file exist
+	sshDir := filepath.Dir(khPath)
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			return fmt.Errorf("SSH host key verification failed: cannot create %s: %v", sshDir, err)
+		}
+	}
+	if _, err := os.Stat(khPath); os.IsNotExist(err) {
+		if err := os.WriteFile(khPath, nil, 0600); err != nil {
+			return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+				return fmt.Errorf("SSH host key verification failed: cannot create %s: %v", khPath, err)
+			}
+		}
+	}
+
+	cb, err := knownhosts.New(khPath)
+	if err != nil {
+		return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			return fmt.Errorf("SSH host key verification failed for %s: cannot read known_hosts: %v", hostname, err)
 		}
 	}
 
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		return fmt.Errorf("SSH host key verification failed for %s: add host keys with ssh-keyscan or use --insecure-ssh", hostname)
+		err := cb(hostname, remote, key)
+		if err == nil {
+			return nil
+		}
+
+		// Check if this is a KeyError (unknown or mismatch)
+		var keyErr *knownhosts.KeyError
+		if !errors.As(err, &keyErr) {
+			return err
+		}
+
+		// If Want is non-empty, the file has a different key for this host - reject (mismatch)
+		if len(keyErr.Want) > 0 {
+			return fmt.Errorf("SSH host key mismatch for %s: the server key has changed. Remove the old key with: ssh-keygen -R %s", hostname, hostname)
+		}
+
+		// Want is empty - key is unknown. Trust on first use: append to known_hosts.
+		return appendKnownHost(khPath, remote, key)
 	}
+}
+
+// appendKnownHost adds a new host key entry to the known_hosts file.
+func appendKnownHost(khPath string, remote net.Addr, key ssh.PublicKey) error {
+	// knownhosts.Normalize gives us the right format (e.g. "[host]:port" or just "host")
+	host := knownhosts.Normalize(remote.String())
+	line := knownhosts.Line([]string{host}, key)
+
+	f, err := os.OpenFile(khPath, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to add host key to known_hosts: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := fmt.Fprintln(f, line); err != nil {
+		return fmt.Errorf("failed to write host key to known_hosts: %w", err)
+	}
+
+	return nil
 }

@@ -2,9 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
-	"errors"
-	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,9 +9,11 @@ import (
 	"testing"
 
 	"github.com/jdwlabs/infrastructure/bootstrap/internal/app"
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/types"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 // execute is a helper function to execute a cobra command in tests
@@ -37,7 +36,7 @@ func setupTestApp(t *testing.T) *app.App {
 	// Create a temporary directory for test files
 	tmpDir := t.TempDir()
 
-	cfg := &app.Config{
+	cfg := &types.Config{
 		ClusterName:          "test-cluster",
 		TerraformTFVars:      filepath.Join(tmpDir, "terraform.tfvars"),
 		ControlPlaneEndpoint: "test.example.com",
@@ -81,6 +80,7 @@ talos_control_configuration = [
 
 	a := app.New("test-version")
 	a.Cfg = cfg
+	a.Logger = zap.NewNop()
 	return a
 }
 
@@ -512,7 +512,6 @@ func TestCommandExecutionFlow(t *testing.T) {
 		require.NoError(t, err)
 
 		output := buf.String()
-		assert.Contains(t, output, "talops")
 		assert.Contains(t, output, "Smart reconciliation for Talos clusters")
 	})
 

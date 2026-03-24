@@ -166,13 +166,14 @@ func (m *RebootMonitor) tickRebooting(ctx context.Context) (net.IP, bool, error)
 
 // tickVerifying confirms the candidate IP has a responding Talos API.
 // Requires 2 consecutive successful checks before declaring ready.
-// Falls back to Rebooting only after 3 consecutive failures (tolerates port flicker during boot).
+// Falls back to Rebooting only after 5 consecutive failures (tolerates DHCP IP
+// flapping and port flicker during boot).
 func (m *RebootMonitor) tickVerifying(ctx context.Context) (net.IP, bool, error) {
 	if !TestPort(m.candidateIP.String(), m.talosPort, 3*time.Second) {
 		m.verifyCount = 0
 		m.verifyFailures++
 
-		if m.verifyFailures >= 3 {
+		if m.verifyFailures >= 5 {
 			m.logger.Warn("candidate IP lost during verification, returning to rebooting",
 				zap.String("candidate_ip", m.candidateIP.String()))
 			m.transitionTo(StateRebooting)
