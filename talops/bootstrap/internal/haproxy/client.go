@@ -34,7 +34,7 @@ type Client struct {
 }
 
 // NewClient creates a new HAProxy SSH client.
-// If insecureSSH is false, hosts keys are verified against ~/.ssh/known_hosts.
+// If insecureSSH is false, host keys are verified against ~/.ssh/known_hosts.
 func NewClient(sshUser, sshHost string, logger *zap.Logger, insecureSSH bool) *Client {
 	hostKeyCallback := knownHostsCallback(insecureSSH)
 

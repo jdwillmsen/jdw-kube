@@ -561,7 +561,7 @@ func (app *App) executePlan(
 
 			if err := kubeconfigMgr.FetchAndMerge(ctx, cpIP, cfg.ClusterName, cfg.ControlPlaneEndpoint); err != nil {
 				if len(plan.AddWorkers) > 0 {
-					app.Logger.Error("kubeconfig fetch failed during bootstrap with worker pending (fatal)", zap.Error(err))
+					app.Logger.Error("kubeconfig fetch failed during bootstrap with workers pending (fatal)", zap.Error(err))
 					return fmt.Errorf("kubeconfig fetch during bootstrap: %w", err)
 				}
 				app.Logger.Warn("kubeconfig fetch failed (can retry later)", zap.Error(err))
