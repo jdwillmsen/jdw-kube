@@ -1,13 +1,13 @@
 ━━━ TALOS BOOTSTRAP RUN SUMMARY ━━━
-  Status:       failed
+  Status:       success
   Cluster:      test-core
-  Start:        2026-03-24 01:22:29
-  Duration:     2m8s
-  Run Dir:      logs\2026-03-24\run-20260324_012229
-  Error:        up: cluster bootstrap failed: execute plan: add CP 203: VM 203 IP not discovered
+  Start:        2026-03-25 01:13:56
+  Duration:     7m29s
+  Run Dir:      logs\2026-03-25\run-20260325_011356
+  Error:        none
   ─── Cluster Nodes ───
-  Control Planes: 3
-  Workers:        2
+  Control Planes: 5
+  Workers:        0
   ─── Operations ───
   Added:          2
   Removed:        2

@@ -1,8 +1,0 @@
-[2026-03-24 01:22:31] [RECONCILE-START] cluster=test-core dry_run=false plan_mode=false
-[2026-03-24 01:22:36] [CMD-START] talosctl machineconfig patch clusters\test-core\secrets\control-plane.yaml --patch @clusters\test-core\nodes\.patches\control-plane-204.yaml --output clusters\test-core\nodes\node-control-plane-204.yaml
-[2026-03-24 01:22:36] [CMD-EXIT] 0 [DURATION: 133ms]
-[2026-03-24 01:22:36] [CMD-START] talosctl machineconfig patch clusters\test-core\secrets\control-plane.yaml --patch @clusters\test-core\nodes\.patches\control-plane-203.yaml --output clusters\test-core\nodes\node-control-plane-203.yaml
-[2026-03-24 01:22:36] [CMD-EXIT] 0 [DURATION: 118ms]
-[2026-03-24 01:22:49] [REMOVE-WORKERS] count=2 vmids=[300 301]
-[2026-03-24 01:24:30] [ADD-CPS] count=2 vmids=[203 204]
-[2026-03-24 01:24:37] [RECONCILE-END] cluster=test-core status=failed error=add CP 203: VM 203 IP not discovered
