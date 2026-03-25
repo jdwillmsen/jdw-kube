@@ -51,6 +51,8 @@ func (c *Client) command(ctx context.Context, args ...string) *exec.Cmd {
 
 // GetNodeNameByIP finds the Kubernetes node name for a given IP address
 func (c *Client) GetNodeNameByIP(ctx context.Context, ip net.IP) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
 	cmd := c.command(ctx, "get", "nodes", "-o", "wide", "--no-headers")
 	output, err := cmd.Output()
 	if err != nil {

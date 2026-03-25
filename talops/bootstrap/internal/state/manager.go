@@ -432,9 +432,13 @@ func (m *Manager) BuildReconcilePlan(
 				if cp, ok := deployedCPs[vmid]; ok {
 					if cp.IP == nil || !cp.IP.Equal(liveNode.IP) {
 						if m.logger != nil {
+							oldIP := "<nil>"
+							if cp.IP != nil {
+								oldIP = cp.IP.String()
+							}
 							m.logger.Info("IP changed for deployed CP (live sync)",
 								zap.Int("vmid", int(vmid)),
-								zap.String("old_ip", cp.IP.String()),
+								zap.String("old_ip", oldIP),
 								zap.String("new_ip", liveNode.IP.String()))
 						}
 						cp.IP = liveNode.IP
@@ -451,9 +455,13 @@ func (m *Manager) BuildReconcilePlan(
 				if w, ok := deployedWorkers[vmid]; ok {
 					if w.IP == nil || !w.IP.Equal(liveNode.IP) {
 						if m.logger != nil {
+							oldIP := "<nil>"
+							if w.IP != nil {
+								oldIP = w.IP.String()
+							}
 							m.logger.Info("IP changed for deployed worker (live sync)",
 								zap.Int("vmid", int(vmid)),
-								zap.String("old_ip", w.IP.String()),
+								zap.String("old_ip", oldIP),
 								zap.String("new_ip", liveNode.IP.String()))
 						}
 						w.IP = liveNode.IP

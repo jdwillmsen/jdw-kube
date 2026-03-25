@@ -65,9 +65,13 @@ func (app *App) RunInfraDeploy(ctx context.Context, tfDir string, skipPlan bool)
 	}
 
 	// Preflight: terraform.tfvars exists
-	tfvarsPath := filepath.Join(tfDir, "terraform.tfvars")
+	// Use the configured tfvars path (may be a scenario file via --tfvars flag)
+	tfvarsPath := app.Cfg.TerraformTFVars
+	if !filepath.IsAbs(tfvarsPath) {
+		tfvarsPath = filepath.Join(tfDir, tfvarsPath)
+	}
 	if _, err := os.Stat(tfvarsPath); err != nil {
-		return fmt.Errorf("terraform.tfvars not found in %s", tfvarsPath)
+		return fmt.Errorf("tfvars file not found: %s", tfvarsPath)
 	}
 
 	runner := terraform.NewRunner(tfDir, app.Logger)
@@ -106,7 +110,7 @@ func (app *App) RunInfraDeploy(ctx context.Context, tfDir string, skipPlan bool)
 	planFile := filepath.Join(tfDir, fmt.Sprintf("tfplan-%d", time.Now().Unix()))
 	defer os.Remove(planFile)
 
-	varFileArg := fmt.Sprintf("-var-file=%s", filepath.Join(tfDir, "terraform.tfvars"))
+	varFileArg := fmt.Sprintf("-var-file=%s", tfvarsPath)
 	hasChanges, err := runner.Plan(ctx, planFile, varFileArg)
 	if err != nil {
 		return err
@@ -351,9 +355,13 @@ func (app *App) RunInfraPlan(ctx context.Context, tfDir string) error {
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
-	// Plan
+	// Plan - use configured tfvars path (may be a scenario file)
+	tfvarsPath := app.Cfg.TerraformTFVars
+	if !filepath.IsAbs(tfvarsPath) {
+		tfvarsPath = filepath.Join(tfDir, tfvarsPath)
+	}
 	planFile := filepath.Join(tfDir, "tfplan-view")
-	varFileArg := fmt.Sprintf("-var-file=%s", filepath.Join(tfDir, "terraform.tfvars"))
+	varFileArg := fmt.Sprintf("-var-file=%s", tfvarsPath)
 	hasChanges, err := runner.Plan(ctx, planFile, varFileArg)
 	if err != nil {
 		return err

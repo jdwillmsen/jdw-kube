@@ -86,7 +86,7 @@ func (app *App) RunReconcile(ctx context.Context) error {
 		return fmt.Errorf("load desired state: %w", err)
 	}
 	if len(desired) == 0 {
-		app.Logger.Error("no nodes defined in desired state", zap.Error(err))
+		app.Logger.Error("no nodes defined in desired state")
 		return fmt.Errorf("no nodes defined in desired state - check your terraform.tfvars")
 	}
 	app.Logger.Info("loaded desired state", zap.Int("nodes", len(desired)))
@@ -220,19 +220,39 @@ func (app *App) deployNode(
 ) (net.IP, error) {
 	node, ok := live[vmid]
 	if !ok || node.IP == nil {
-		app.Logger.Debug("VM not in live map, re-discovering", zap.Int("vmid", int(vmid)))
-		if err := scanner.RepopulateARP(ctx); err != nil {
-			app.Logger.Warn("ARP repopulation failed", zap.Error(err))
+		// Retry IP discovery up to 3 times with 10s intervals - VMs may still be booting
+		const maxRetries = 3
+		for attempt := 1; attempt <= maxRetries; attempt++ {
+			app.Logger.Info("VM not in live map, re-discovering",
+				zap.Int("vmid", int(vmid)),
+				zap.Int("attempt", attempt),
+				zap.Int("max_attempts", maxRetries))
+			if err := scanner.RepopulateARP(ctx); err != nil {
+				app.Logger.Warn("ARP repopulation failed", zap.Error(err))
+			}
+			liveNodes, err := scanner.DiscoverVMs(ctx, []types.VMID{vmid})
+			if err != nil {
+				app.Logger.Error("failed to discover VM", zap.Int("vmid", int(vmid)), zap.Error(err))
+			} else {
+				node, ok = liveNodes[vmid]
+				if ok && node.IP != nil {
+					break
+				}
+			}
+			if attempt < maxRetries {
+				app.Logger.Info("VM IP not yet available, waiting before retry",
+					zap.Int("vmid", int(vmid)),
+					zap.Duration("wait", 10*time.Second))
+				select {
+				case <-ctx.Done():
+					return nil, fmt.Errorf("context cancelled waiting for VM %d IP: %w", vmid, ctx.Err())
+				case <-time.After(10 * time.Second):
+				}
+			}
 		}
-		liveNodes, err := scanner.DiscoverVMs(ctx, []types.VMID{vmid})
-		if err != nil {
-			app.Logger.Error("failed to discover VM", zap.Int("vmid", int(vmid)))
-			return nil, fmt.Errorf("discover VM %d: %w", vmid, err)
-		}
-		node, ok = liveNodes[vmid]
-		if !ok || node.IP == nil {
-			app.Logger.Error("VM IP not discovered", zap.Int("vmid", int(vmid)))
-			return nil, fmt.Errorf("VM %d IP not discovered", vmid)
+		if !ok || node == nil || node.IP == nil {
+			app.Logger.Error("VM IP not discovered after retries", zap.Int("vmid", int(vmid)))
+			return nil, fmt.Errorf("VM %d IP not discovered after %d attempts", vmid, maxRetries)
 		}
 	}
 
@@ -339,7 +359,7 @@ func (app *App) executePlan(
 				return fmt.Errorf("save state after bootstrap: %w", err)
 			}
 		}
-	} else if len(deployed.ControlPlanes) > 0 {
+	} else if len(deployed.ControlPlanes) > 0 && !deployed.BootstrapCompleted {
 		if cfg.DryRun {
 			app.Logger.Info("would bootstrap etcd on existing first control plane",
 				zap.Int("vmid", int(deployed.ControlPlanes[0].VMID)))

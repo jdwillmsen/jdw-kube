@@ -383,10 +383,9 @@ func (c *Client) WaitForReady(ctx context.Context, ip net.IP, role types.Role) e
 				tc.Close()
 				tc = nil
 
-				// If secure fails, try insecure once
-				if insecure && !triedInsecure {
+				// If the insecure connection's checkReady fails, revert to secure
+				if insecure {
 					insecure = false
-					triedInsecure = true
 				}
 				continue
 			}
