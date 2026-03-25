@@ -547,6 +547,31 @@ func (app *App) executePlan(
 				app.Logger.Warn("failed to generate HAProxy config", zap.Error(err))
 			} else {
 				haproxyClient := haproxy.NewClient(cfg.HAProxyLoginUser, cfg.HAProxyIP.String(), app.Logger, cfg.InsecureSSH)
+				haproxyKeyPath := cfg.HAProxySSHKeyPath
+				if haproxyKeyPath == "" {
+					haproxyKeyPath = cfg.HAProxySSHKeyPath
+				}
+				keyOK := true
+				if haproxyKeyPath != "" {
+					if err := haproxyClient.SetPrivateKey(haproxyKeyPath); err != nil {
+						app.Logger.Error("failed to set SSH private key for HAProxy client", zap.String("key_path", haproxyKeyPath), zap.Error(err))
+						if plan.NeedsBootstrap {
+							return fmt.Errorf("HAProxy SSH key setup failed: %w", err)
+						}
+						app.Logger.Warn("skipping HAProxy update due to SSH key failure")
+						keyOK = false
+					}
+				}
+				if keyOK {
+					if err := haproxyClient.Update(ctx, configStr); err != nil {
+						if plan.NeedsBootstrap {
+							app.Logger.Error("HAProxy update failed during bootstrap (fatal)", zap.Error(err))
+							return fmt.Errorf("HAProxy update during bootstrap: %w", err)
+						}
+						app.Logger.Warn("HAProxy update failed", zap.Error(err))
+					}
+				}
+
 				if cfg.ProxmoxSSHKeyPath != "" {
 					if err := haproxyClient.SetPrivateKey(cfg.ProxmoxSSHKeyPath); err != nil {
 						app.Logger.Warn("failed to set SSH private key for HAProxy client", zap.String("key_path", cfg.ProxmoxSSHKeyPath), zap.Error(err))

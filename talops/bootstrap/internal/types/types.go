@@ -143,6 +143,7 @@ type Config struct {
 	ControlPlaneEndpoint    string `json:"control_plane_endpoint"`
 	HAProxyIP               net.IP `json:"haproxy_ip"`
 	HAProxyLoginUser        string `json:"haproxy_login_username"`
+	HAProxySSHKeyPath       string `json:"haproxy_ssh_key_path"`
 	HAProxyStatsUser        string `json:"haproxy_stats_username"`
 	HAProxyStatsPassword    string `json:"haproxy_stats_password"`
 	KubernetesVersion       string `json:"kubernetes_version"`

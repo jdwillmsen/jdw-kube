@@ -55,6 +55,7 @@ func Execute() error {
 	rootCmd.PersistentFlags().StringVar(&cfg.TalosVersion, "talos-version", "", "Talos version (e.g., v1.12.13)")
 	rootCmd.PersistentFlags().StringVar(&cfg.InstallerImage, "installer-image", "", "Talos installer image")
 	rootCmd.PersistentFlags().StringVar(&cfg.HAProxyLoginUser, "haproxy-user", "", "HAProxy SSH login user")
+	rootCmd.PersistentFlags().StringVar(&cfg.HAProxySSHKeyPath, "haproxy-ssh-key", "", "Path to SSH private key for HAProxy (defaults to --ssh-key)")
 	rootCmd.PersistentFlags().StringVar(&cfg.HAProxyStatsUser, "haproxy-stats-user", "", "HAProxy stats username")
 	rootCmd.PersistentFlags().StringVar(&cfg.HAProxyStatsPassword, "haproxy-stats-password", "", "HAProxy stats password")
 	rootCmd.PersistentFlags().BoolVar(&cfg.InsecureSSH, "insecure-ssh", false, "Skip SSH host key verification (INSECURE)")

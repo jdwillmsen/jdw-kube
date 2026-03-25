@@ -711,6 +711,13 @@ func (m *Manager) LoadTerraformExtras(ctx context.Context) error {
 		}
 	}
 
+	// HAProxy SSH key
+	if m.config.HAProxySSHKeyPath == "" {
+		if v := extractSimpleStringField(content, "haproxy_ssh_key_path"); v != "" {
+			m.config.HAProxySSHKeyPath = v
+		}
+	}
+
 	// HAProxy credentials
 	if m.config.HAProxyLoginUser == "" {
 		if v := extractSimpleStringField(content, "haproxy_login_user"); v != "" {

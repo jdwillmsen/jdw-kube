@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"time"
@@ -24,11 +25,18 @@ func LookPath() (string, error) {
 type Runner struct {
 	dir    string
 	logger *zap.Logger
+	output io.Writer // writer for streaming command output (apply/destroy)
 }
 
 // NewRunner creates a new terraform runner for the given directory
 func NewRunner(dir string, logger *zap.Logger) *Runner {
-	return &Runner{dir: dir, logger: logger}
+	return &Runner{dir: dir, logger: logger, output: os.Stdout}
+}
+
+// SetOutput sets the writer used for streaming terraform apply/destroy output.
+// This allows callers to capture output in session logs.
+func (r *Runner) SetOutput(w io.Writer) {
+	r.output = w
 }
 
 // command builds an exec.Cmd rooted in the terraform directory
@@ -103,15 +111,15 @@ func (r *Runner) DestroyPlan(ctx context.Context, planFile string, extraArgs ...
 	return nil
 }
 
-// Apply runs terraform apply with the given plan file, streaming output to stdout/stderr.
+// Apply runs terraform apply with the given plan file, streaming output to the configured writer.
 func (r *Runner) Apply(ctx context.Context, planFile string, extraArgs ...string) error {
 	args := []string{"apply"}
 	args = append(args, extraArgs...)
 	args = append(args, planFile)
 
 	cmd := r.command(ctx, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = r.output
+	cmd.Stderr = r.output
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("terraform apply: %w", err)
 	}
@@ -144,14 +152,14 @@ func (r *Runner) ApplyWithRetry(ctx context.Context, planFile string, maxRetries
 	return fmt.Errorf("terraform apply: max retries exceeded")
 }
 
-// Destroy runs terraform destroy with auto-approve, streaming output to stdout/stderr.
+// Destroy runs terraform destroy with auto-approve, streaming output to the configured writer.
 func (r *Runner) Destroy(ctx context.Context, extraArgs ...string) error {
 	args := []string{"destroy", "-auto-approve"}
 	args = append(args, extraArgs...)
 
 	cmd := r.command(ctx, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = r.output
+	cmd.Stderr = r.output
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("terraform destroy: %w", err)
 	}

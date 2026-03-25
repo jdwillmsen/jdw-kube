@@ -75,6 +75,9 @@ func (app *App) RunInfraDeploy(ctx context.Context, tfDir string, skipPlan bool)
 	}
 
 	runner := terraform.NewRunner(tfDir, app.Logger)
+	if app.Session != nil {
+		runner.SetOutput(app.Session.Console)
+	}
 
 	// Backup
 	if !app.Cfg.SkipBackup {
@@ -187,6 +190,9 @@ func (app *App) RunInfraDestroy(ctx context.Context, tfDir string, force, gracef
 	}
 
 	runner := terraform.NewRunner(tfDir, app.Logger)
+	if app.Session != nil {
+		runner.SetOutput(app.Session.Console)
+	}
 
 	// Init
 	app.Logger.Info("initializing terraform")
@@ -681,7 +687,7 @@ func (app *App) displayDeploySummary(w io.Writer, stateOutput *terraform.StateOu
 			name, _ := r.Values["name"].(string)
 			vmID, _ := r.Values["vm_id"].(float64)
 			detail := fmt.Sprintf("%s (VMID: %.0f)", name, vmID)
-			box.Item("-", detail)
+			box.Item("•", detail)
 		}
 	}
 
