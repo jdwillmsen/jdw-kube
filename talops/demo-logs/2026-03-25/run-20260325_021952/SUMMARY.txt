@@ -1,16 +1,16 @@
 ━━━ TALOS BOOTSTRAP RUN SUMMARY ━━━
   Status:       success
   Cluster:      test-core
-  Start:        2026-03-25 02:08:17
-  Duration:     5m42s
-  Run Dir:      logs\2026-03-25\run-20260325_020817
+  Start:        2026-03-25 02:19:52
+  Duration:     5m41s
+  Run Dir:      logs\2026-03-25\run-20260325_021952
   Error:        none
   ─── Cluster Nodes ───
   Control Planes: 3
-  Workers:        2
+  Workers:        10
   ─── Operations ───
-  Added:          2
-  Removed:        2
+  Added:          8
+  Removed:        0
   Updated:        0
   Bootstrap:      false
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

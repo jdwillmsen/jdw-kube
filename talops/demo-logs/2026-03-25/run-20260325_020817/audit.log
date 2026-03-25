@@ -1,6 +1,0 @@
-[2026-03-25 02:08:19] [RECONCILE-START] cluster=test-core dry_run=false plan_mode=false
-[2026-03-25 02:08:32] [REMOVE-CPS] count=2 vmids=[203 204]
-[2026-03-25 02:11:33] [ADD-WORKERS] count=2 vmids=[300 301]
-[2026-03-25 02:11:33] [APPLY-CONFIG] vmid=301 role=worker ip=192.168.1.179
-[2026-03-25 02:11:33] [APPLY-CONFIG] vmid=300 role=worker ip=192.168.1.182
-[2026-03-25 02:14:00] [RECONCILE-END] cluster=test-core status=success
