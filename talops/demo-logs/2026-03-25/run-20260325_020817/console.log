@@ -1,0 +1,100 @@
+[36m[1m████████╗ █████╗ ██╗      ██████╗ ███████╗
+╚══██╔══╝██╔══██╗██║     ██╔═══██╗██╔════╝
+   ██║   ███████║██║     ██║   ██║███████╗
+   ██║   ██╔══██║██║     ██║   ██║╚════██║
+   ██║   ██║  ██║███████╗╚██████╔╝███████║
+   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
+[0m[2m ━━━ Kubernetes Bootstrap Tool 5e430c0 ━━━[0m
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mINFRASTRUCTURE DEPLOY[0m                                       [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  Directory: [36m../terraform[0m                                    [2m┃[0m
+[2m┃[0m  Mode: [36mDEPLOY[0m                                               [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m02:08:18[0m [32mINFO [0m initializing terraform
+[2m02:08:18[0m [32mINFO [0m formatting and validating
+[2m02:08:18[0m [32mINFO [0m ISO found on Proxmox iso=local:iso/nocloud-amd64.iso
+[2m02:08:18[0m [32mINFO [0m creating plan
+[2m02:08:19[0m [32mINFO [0m no changes needed - infrastructure is up to date
+[2m02:08:19[0m [32mINFO [0m starting reconciliation cluster=test-core dry_run=false plan_mode=false
+[2m02:08:19[0m [32mINFO [0m refreshing proxmox node IPs
+[2m02:08:24[0m [32mINFO [0m loading desired state from terraform
+[2m02:08:24[0m [32mINFO [0m loaded desired state nodes=5
+[2m02:08:24[0m [32mINFO [0m loading deployed state
+[2m02:08:24[0m [32mINFO [0m discovering live state
+[2m02:08:32[0m [32mINFO [0m discovered live state found=5
+[2m02:08:32[0m [32mINFO [0m running Talos API preflight checks
+[2m02:08:32[0m [32mINFO [0m building reconciliation plan
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mRECONCILIATION PLAN[0m                                         [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  [32m+[0m Add 2 worker(s): [300 301]                               [2m┃[0m
+[2m┃[0m  [31m-[0m Remove 2 control plane(s): [203 204]                     [2m┃[0m
+[2m┃[0m  = 3 node(s) unchanged                                      [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m02:08:32[0m [32mINFO [0m removing control planes count=2
+[2m02:08:32[0m [32mINFO [0m quorum safety check passed current_cps=5 removing=2
+[2m02:09:22[0m [33mWARN [0m could not find k8s node name for CP vmid=203 error=kubectl get nodes: exit status 1
+[2m02:09:42[0m [33mWARN [0m graceful reset failed, trying forced vmid=203 error=failed to reset node: rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 192.168.1.146:50000: i/o timeout"
+[2m02:10:02[0m [33mWARN [0m forced reset also failed vmid=203 error=failed to reset node: rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 192.168.1.146:50000: i/o timeout"
+[2m02:10:53[0m [33mWARN [0m could not find k8s node name for CP vmid=204 error=kubectl get nodes: exit status 1
+[2m02:11:13[0m [33mWARN [0m graceful reset failed, trying forced vmid=204 error=failed to reset node: rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 192.168.1.125:50000: i/o timeout"
+[2m02:11:33[0m [33mWARN [0m forced reset also failed vmid=204 error=failed to reset node: rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 192.168.1.125:50000: i/o timeout"
+[2m02:11:33[0m [32mINFO [0m updating HAProxy configuration host=192.168.1.199 backup_suffix=20260325-021133
+[2m02:11:33[0m [33mWARN [0m HAProxy update failed error=write temp config: dial SSH: ssh: handshake failed: ssh: unable to authenticate, attempted methods [none], no supported methods remain
+[2m02:11:33[0m [32mINFO [0m updating HAProxy configuration host=192.168.1.199 backup_suffix=20260325-021133
+[2m02:11:33[0m [33mWARN [0m HAProxy update failed error=write temp config: dial SSH: ssh: handshake failed: ssh: unable to authenticate, attempted methods [none publickey], no supported methods remain
+[2m02:11:33[0m [32mINFO [0m adding workers count=2
+[2m02:11:33[0m [32mINFO [0m applying config vmid=301 role=worker
+[2m02:11:33[0m [32mINFO [0m applying config vmid=300 role=worker
+[2m02:11:33[0m [33mWARN [0m talos apply-config warning reason=extra kernel arguments are not supported when booting using SDBoot
+[2m02:11:33[0m [33mWARN [0m talos apply-config warning reason=extra kernel arguments are not supported when booting using SDBoot
+[2m02:11:37[0m [32mINFO [0m node unreachable, entering reboot state vmid=300 ip=192.168.1.182
+[2m02:11:37[0m [32mINFO [0m node unreachable, entering reboot state vmid=301 ip=192.168.1.179
+[2m02:11:40[0m [32mINFO [0m found candidate IP vmid=300 candidate_ip=192.168.1.253 ip_changed=true
+[2m02:11:40[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.163 ip_changed=true
+[2m02:11:51[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=300 candidate_ip=192.168.1.253
+[2m02:11:51[0m [33mWARN [0m candidate IP lost during verification, returning to rebooting vmid=301 candidate_ip=192.168.1.163
+[2m02:11:54[0m [32mINFO [0m found candidate IP vmid=301 candidate_ip=192.168.1.163 ip_changed=true
+[2m02:12:05[0m [32mINFO [0m found candidate IP vmid=300 candidate_ip=192.168.1.253 ip_changed=true
+[2m02:12:07[0m [32mINFO [0m node is ready vmid=301 final_ip=192.168.1.163 ip_changed=true
+[2m02:12:09[0m [32mINFO [0m node is ready vmid=300 final_ip=192.168.1.253 ip_changed=true
+[2m02:12:17[0m [32mINFO [0m node deployed, Talos API responding vmid=301 role=worker ip=192.168.1.163
+[2m02:12:19[0m [32mINFO [0m node deployed, Talos API responding vmid=300 role=worker ip=192.168.1.253
+[2m02:12:19[0m [32mINFO [0m verifying cluster health
+[2m02:13:09[0m [33mWARN [0m cluster-info check failed error=kubectl cluster-info: exit status 1, output: E0325 02:12:29.608521    9436 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+E0325 02:12:39.661537    9436 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+E0325 02:12:49.708144    9436 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+E0325 02:12:59.756473    9436 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+E0325 02:13:09.807058    9436 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+Unable to connect to the server: EOF
+
+[2m02:14:00[0m [33mWARN [0m failed to get nodes error=kubectl get nodes: exit status 1, output: E0325 02:13:20.031825   50544 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+E0325 02:13:30.083543   50544 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+E0325 02:13:40.129719   50544 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+E0325 02:13:50.183758   50544 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+E0325 02:14:00.270718   50544 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": EOF"
+Unable to connect to the server: EOF
+
+[2m02:14:00[0m [32mINFO [0m etcd members healthy count=3
+[2m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[0m
+[2m┃[0m [36m[1mBOOTSTRAP SUCCESSFUL[0m                                        [2m┃[0m
+[2m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫[0m
+[2m┃[0m  Cluster: [36mtest-core[0m                                         [2m┃[0m
+[2m┃[0m  Endpoint: [36mcluster.jdwlabs.com[0m                              [2m┃[0m
+[2m┃[0m  Control Planes: [36m3[0m                                          [2m┃[0m
+[2m┃[0m  • VMID 200: 192.168.1.133                                  [2m┃[0m
+[2m┃[0m  • VMID 201: 192.168.1.144                                  [2m┃[0m
+[2m┃[0m  • VMID 202: 192.168.1.140                                  [2m┃[0m
+[2m┃[0m  Workers: [36m2[0m                                                 [2m┃[0m
+[2m┃[0m  • VMID 301: 192.168.1.163                                  [2m┃[0m
+[2m┃[0m  • VMID 300: 192.168.1.253                                  [2m┃[0m
+[2m┠─────────────────────────────────────────────────────────────┨[0m
+[2m┃[0m [1mQuick Start[0m                                                 [2m┃[0m
+[2m┃[0m  [2m$[0m kubectl get nodes                                        [2m┃[0m
+[2m┃[0m  [2m$[0m talosctl dashboard                                       [2m┃[0m
+[2m┃[0m  [2m$[0m talosctl etcd members                                    [2m┃[0m
+[2m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[0m
+[2m02:14:00[0m [32mINFO [0m reconciliation complete
