@@ -538,42 +538,42 @@ func (app *App) executePlan(
 		}
 	}
 
-	// Phase 4: Update HAProxy after any CP membership changes
-	if len(plan.AddControlPlanes) > 0 || len(plan.RemoveControlPlanes) > 0 || plan.NeedsBootstrap {
-		if !cfg.DryRun && len(deployed.ControlPlanes) > 0 {
-			haproxyConfig := haproxy.ConfigFromClusterState(cfg, deployed)
-			configStr, err := haproxyConfig.Generate()
-			if err != nil {
-				app.Logger.Warn("failed to generate HAProxy config", zap.Error(err))
-			} else {
-				haproxyClient := haproxy.NewClient(cfg.HAProxyLoginUser, cfg.HAProxyIP.String(), app.Logger, cfg.InsecureSSH)
-				haproxyKeyPath := cfg.HAProxySSHKeyPath
-				if haproxyKeyPath == "" {
-					haproxyKeyPath = cfg.ProxmoxSSHKeyPath
-				}
-				keyOK := true
-				if haproxyKeyPath != "" {
-					if err := haproxyClient.SetPrivateKey(haproxyKeyPath); err != nil {
-						app.Logger.Error("failed to set SSH private key for HAProxy client", zap.String("key_path", haproxyKeyPath), zap.Error(err))
-						if plan.NeedsBootstrap {
-							return fmt.Errorf("HAProxy SSH key setup failed: %w", err)
-						}
-						app.Logger.Warn("skipping HAProxy update due to SSH key failure")
-						keyOK = false
+	// Phase 4: Update HAProxy config
+	// Always update when CPs exist - CP IPs may change during reboots (DHCP)
+	// even when no CP membership change occurred.
+	if cfg.DryRun && len(deployed.ControlPlanes) > 0 {
+		app.Logger.Info("would update HAProxy configuration", zap.Int("backends", len(deployed.ControlPlanes)))
+	} else if !cfg.DryRun && len(deployed.ControlPlanes) > 0 {
+		haproxyConfig := haproxy.ConfigFromClusterState(cfg, deployed)
+		configStr, err := haproxyConfig.Generate()
+		if err != nil {
+			app.Logger.Warn("failed to generate HAProxy config", zap.Error(err))
+		} else {
+			haproxyClient := haproxy.NewClient(cfg.HAProxyLoginUser, cfg.HAProxyIP.String(), app.Logger, cfg.InsecureSSH)
+			haproxyKeyPath := cfg.HAProxySSHKeyPath
+			if haproxyKeyPath == "" {
+				haproxyKeyPath = cfg.ProxmoxSSHKeyPath
+			}
+			keyOK := true
+			if haproxyKeyPath != "" {
+				if err := haproxyClient.SetPrivateKey(haproxyKeyPath); err != nil {
+					app.Logger.Error("failed to set SSH private key for HAProxy client", zap.String("key_path", haproxyKeyPath), zap.Error(err))
+					if plan.NeedsBootstrap {
+						return fmt.Errorf("HAProxy SSH key setup failed: %w", err)
 					}
-				}
-				if keyOK {
-					if err := haproxyClient.Update(ctx, configStr); err != nil {
-						if plan.NeedsBootstrap {
-							app.Logger.Error("HAProxy update failed during bootstrap (fatal)", zap.Error(err))
-							return fmt.Errorf("HAProxy update during bootstrap: %w", err)
-						}
-						app.Logger.Warn("HAProxy update failed", zap.Error(err))
-					}
+					app.Logger.Warn("skipping HAProxy update due to SSH key failure")
+					keyOK = false
 				}
 			}
-		} else if cfg.DryRun {
-			app.Logger.Info("would update HAProxy configuration", zap.Int("backends", len(deployed.ControlPlanes)))
+			if keyOK {
+				if err := haproxyClient.Update(ctx, configStr); err != nil {
+					if plan.NeedsBootstrap {
+						app.Logger.Error("HAProxy update failed during bootstrap (fatal)", zap.Error(err))
+						return fmt.Errorf("HAProxy update during bootstrap: %w", err)
+					}
+					app.Logger.Warn("HAProxy update failed", zap.Error(err))
+				}
+			}
 		}
 	}
 
