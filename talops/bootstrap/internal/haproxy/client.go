@@ -107,7 +107,7 @@ func (c *Client) SetPort(port string) {
 }
 
 // Update writes a new HAProxy configuration, validates it, and reloads the service.
-// On validation failure, it automatically rolls back to previous config.
+// On validation failure, it automatically rolls back to the previous config.
 // Retries up to maxRetries times on SSH connection failures before giving up.
 func (c *Client) Update(ctx context.Context, config string) error {
 	return c.UpdateWithRetry(ctx, config, 3)
@@ -143,7 +143,7 @@ func (c *Client) UpdateWithRetry(ctx context.Context, config string, maxRetries 
 	return fmt.Errorf("HAProxy update failed after %d attempts: %w", maxRetries, lastErr)
 }
 
-// isSSHConnectionError returns true fi the error is an SSH dial/connection failure
+// isSSHConnectionError returns true if the error is an SSH dial/connection failure
 // (as opposed to a command execution or validation failure).
 func isSSHConnectionError(err error) bool {
 	if err == nil {
@@ -163,7 +163,7 @@ func contains(s, substr string) bool {
 }
 
 func searchString(s, substr string) bool {
-	for i := 0; i < len(s)-len(substr); i++ {
+	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
 			return true
 		}

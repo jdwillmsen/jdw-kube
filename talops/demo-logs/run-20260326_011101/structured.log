@@ -1,0 +1,140 @@
+{"level":"info","ts":"2026-03-26T01:11:02.059-0500","msg":"initializing terraform"}
+{"level":"info","ts":"2026-03-26T01:11:02.060-0500","msg":"formatting and validating"}
+{"level":"info","ts":"2026-03-26T01:11:02.431-0500","msg":"ISO found on Proxmox","iso":"local:iso/nocloud-amd64.iso"}
+{"level":"info","ts":"2026-03-26T01:11:02.431-0500","msg":"creating plan"}
+{"level":"info","ts":"2026-03-26T01:11:03.668-0500","msg":"auto-approving deployment"}
+{"level":"info","ts":"2026-03-26T01:11:03.668-0500","msg":"applying changes"}
+{"level":"info","ts":"2026-03-26T01:11:03.668-0500","msg":"terraform apply attempt","attempt":1,"max":3}
+{"level":"info","ts":"2026-03-26T01:12:34.817-0500","msg":"deployment complete"}
+{"level":"info","ts":"2026-03-26T01:12:34.817-0500","msg":"starting reconciliation","cluster":"test-core","dry_run":false,"plan_mode":false}
+{"level":"info","ts":"2026-03-26T01:12:34.819-0500","msg":"preflight: checking HAProxy SSH connectivity","host":"192.168.1.199","user":"root"}
+{"level":"info","ts":"2026-03-26T01:12:35.198-0500","msg":"preflight: HAProxy SSH connectivity OK"}
+{"level":"info","ts":"2026-03-26T01:12:35.199-0500","msg":"refreshing proxmox node IPs"}
+{"level":"info","ts":"2026-03-26T01:12:41.099-0500","msg":"loading desired state from terraform"}
+{"level":"info","ts":"2026-03-26T01:12:41.099-0500","msg":"loaded desired state","nodes":15}
+{"level":"info","ts":"2026-03-26T01:12:41.100-0500","msg":"loading deployed state"}
+{"level":"info","ts":"2026-03-26T01:12:41.101-0500","msg":"discovering live state"}
+{"level":"info","ts":"2026-03-26T01:12:55.910-0500","msg":"discovered live state","found":15}
+{"level":"info","ts":"2026-03-26T01:12:55.932-0500","msg":"running Talos API preflight checks"}
+{"level":"info","ts":"2026-03-26T01:12:55.964-0500","msg":"building reconciliation plan"}
+{"level":"info","ts":"2026-03-26T01:12:55.965-0500","msg":"adding control planes","count":2}
+{"level":"info","ts":"2026-03-26T01:12:55.965-0500","msg":"applying config","vmid":203,"role":"control-plane"}
+{"level":"warn","ts":"2026-03-26T01:12:56.005-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-26T01:13:00.006-0500","msg":"node unreachable, entering reboot state","vmid":203,"ip":"192.168.1.250"}
+{"level":"info","ts":"2026-03-26T01:13:03.063-0500","msg":"found candidate IP","vmid":203,"candidate_ip":"192.168.1.84","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:13:15.201-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":203,"candidate_ip":"192.168.1.84"}
+{"level":"info","ts":"2026-03-26T01:13:27.378-0500","msg":"found candidate IP","vmid":203,"candidate_ip":"192.168.1.84","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:13:28.006-0500","msg":"node is ready","vmid":203,"final_ip":"192.168.1.84","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:13:38.013-0500","msg":"node deployed, Talos API responding","vmid":203,"role":"control-plane","ip":"192.168.1.84"}
+{"level":"info","ts":"2026-03-26T01:13:38.013-0500","msg":"applying config","vmid":204,"role":"control-plane"}
+{"level":"warn","ts":"2026-03-26T01:13:38.031-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-26T01:13:42.033-0500","msg":"node unreachable, entering reboot state","vmid":204,"ip":"192.168.1.155"}
+{"level":"info","ts":"2026-03-26T01:13:45.090-0500","msg":"found candidate IP","vmid":204,"candidate_ip":"192.168.1.81","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:13:56.284-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":204,"candidate_ip":"192.168.1.81"}
+{"level":"info","ts":"2026-03-26T01:13:59.344-0500","msg":"found candidate IP","vmid":204,"candidate_ip":"192.168.1.81","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:14:09.631-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":204,"candidate_ip":"192.168.1.81"}
+{"level":"info","ts":"2026-03-26T01:14:12.709-0500","msg":"found candidate IP","vmid":204,"candidate_ip":"192.168.1.81","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:14:24.832-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":204,"candidate_ip":"192.168.1.81"}
+{"level":"info","ts":"2026-03-26T01:14:37.077-0500","msg":"found candidate IP","vmid":204,"candidate_ip":"192.168.1.81","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:14:38.032-0500","msg":"node is ready","vmid":204,"final_ip":"192.168.1.81","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:14:48.040-0500","msg":"node deployed, Talos API responding","vmid":204,"role":"control-plane","ip":"192.168.1.81"}
+{"level":"info","ts":"2026-03-26T01:14:48.041-0500","msg":"updating HAProxy configuration","host":"192.168.1.199","user":"root","backup_suffix":"20260326-011448"}
+{"level":"info","ts":"2026-03-26T01:14:48.991-0500","msg":"HAProxy configuration updated and reloaded successfully"}
+{"level":"info","ts":"2026-03-26T01:14:48.993-0500","msg":"adding workers","count":10}
+{"level":"info","ts":"2026-03-26T01:14:48.993-0500","msg":"applying config","vmid":300,"role":"worker"}
+{"level":"info","ts":"2026-03-26T01:14:48.993-0500","msg":"applying config","vmid":309,"role":"worker"}
+{"level":"info","ts":"2026-03-26T01:14:48.993-0500","msg":"applying config","vmid":302,"role":"worker"}
+{"level":"warn","ts":"2026-03-26T01:14:49.000-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"warn","ts":"2026-03-26T01:14:49.016-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"warn","ts":"2026-03-26T01:14:49.020-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-26T01:14:53.000-0500","msg":"node unreachable, entering reboot state","vmid":300,"ip":"192.168.1.168"}
+{"level":"info","ts":"2026-03-26T01:14:53.016-0500","msg":"node unreachable, entering reboot state","vmid":309,"ip":"192.168.1.65"}
+{"level":"info","ts":"2026-03-26T01:14:53.021-0500","msg":"node unreachable, entering reboot state","vmid":302,"ip":"192.168.1.167"}
+{"level":"info","ts":"2026-03-26T01:14:56.115-0500","msg":"found candidate IP","vmid":300,"candidate_ip":"192.168.1.236","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:14:56.115-0500","msg":"found candidate IP","vmid":309,"candidate_ip":"192.168.1.165","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:14:56.116-0500","msg":"found candidate IP","vmid":302,"candidate_ip":"192.168.1.217","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:15:07.261-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":309,"candidate_ip":"192.168.1.165"}
+{"level":"warn","ts":"2026-03-26T01:15:07.262-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":302,"candidate_ip":"192.168.1.217"}
+{"level":"warn","ts":"2026-03-26T01:15:08.217-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":300,"candidate_ip":"192.168.1.236"}
+{"level":"info","ts":"2026-03-26T01:15:10.306-0500","msg":"found candidate IP","vmid":302,"candidate_ip":"192.168.1.217","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:15:10.309-0500","msg":"found candidate IP","vmid":309,"candidate_ip":"192.168.1.165","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:15:20.430-0500","msg":"found candidate IP","vmid":300,"candidate_ip":"192.168.1.236","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:15:21.002-0500","msg":"node is ready","vmid":300,"final_ip":"192.168.1.236","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:15:23.030-0500","msg":"node is ready","vmid":302,"final_ip":"192.168.1.217","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:15:25.310-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":309,"candidate_ip":"192.168.1.165"}
+{"level":"info","ts":"2026-03-26T01:15:28.394-0500","msg":"found candidate IP","vmid":309,"candidate_ip":"192.168.1.165","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:15:29.017-0500","msg":"node is ready","vmid":309,"final_ip":"192.168.1.165","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:15:31.014-0500","msg":"node deployed, Talos API responding","vmid":300,"role":"worker","ip":"192.168.1.236"}
+{"level":"info","ts":"2026-03-26T01:15:31.015-0500","msg":"applying config","vmid":305,"role":"worker"}
+{"level":"warn","ts":"2026-03-26T01:15:31.029-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-26T01:15:33.039-0500","msg":"node deployed, Talos API responding","vmid":302,"role":"worker","ip":"192.168.1.217"}
+{"level":"info","ts":"2026-03-26T01:15:33.039-0500","msg":"applying config","vmid":303,"role":"worker"}
+{"level":"warn","ts":"2026-03-26T01:15:33.073-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-26T01:15:35.032-0500","msg":"node unreachable, entering reboot state","vmid":305,"ip":"192.168.1.134"}
+{"level":"info","ts":"2026-03-26T01:15:37.074-0500","msg":"node unreachable, entering reboot state","vmid":303,"ip":"192.168.1.107"}
+{"level":"info","ts":"2026-03-26T01:15:38.127-0500","msg":"found candidate IP","vmid":305,"candidate_ip":"192.168.1.102","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:15:39.027-0500","msg":"node deployed, Talos API responding","vmid":309,"role":"worker","ip":"192.168.1.165"}
+{"level":"info","ts":"2026-03-26T01:15:39.028-0500","msg":"applying config","vmid":304,"role":"worker"}
+{"level":"warn","ts":"2026-03-26T01:15:39.052-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-26T01:15:40.176-0500","msg":"found candidate IP","vmid":303,"candidate_ip":"192.168.1.87","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:15:43.052-0500","msg":"node unreachable, entering reboot state","vmid":304,"ip":"192.168.1.99"}
+{"level":"info","ts":"2026-03-26T01:15:46.137-0500","msg":"found candidate IP","vmid":304,"candidate_ip":"192.168.1.66","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:15:49.342-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":305,"candidate_ip":"192.168.1.102"}
+{"level":"warn","ts":"2026-03-26T01:15:51.315-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":303,"candidate_ip":"192.168.1.87"}
+{"level":"info","ts":"2026-03-26T01:15:52.394-0500","msg":"found candidate IP","vmid":305,"candidate_ip":"192.168.1.102","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:15:54.404-0500","msg":"found candidate IP","vmid":303,"candidate_ip":"192.168.1.87","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:15:57.403-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":304,"candidate_ip":"192.168.1.66"}
+{"level":"info","ts":"2026-03-26T01:16:00.478-0500","msg":"found candidate IP","vmid":304,"candidate_ip":"192.168.1.66","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:16:07.396-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":305,"candidate_ip":"192.168.1.102"}
+{"level":"warn","ts":"2026-03-26T01:16:09.406-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":303,"candidate_ip":"192.168.1.87"}
+{"level":"info","ts":"2026-03-26T01:16:10.516-0500","msg":"found candidate IP","vmid":305,"candidate_ip":"192.168.1.102","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:16:11.032-0500","msg":"node is ready","vmid":305,"final_ip":"192.168.1.102","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:16:12.504-0500","msg":"found candidate IP","vmid":303,"candidate_ip":"192.168.1.87","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:16:13.075-0500","msg":"node is ready","vmid":303,"final_ip":"192.168.1.87","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:16:15.481-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":304,"candidate_ip":"192.168.1.66"}
+{"level":"info","ts":"2026-03-26T01:16:18.556-0500","msg":"found candidate IP","vmid":304,"candidate_ip":"192.168.1.99","ip_changed":false}
+{"level":"info","ts":"2026-03-26T01:16:21.044-0500","msg":"node deployed, Talos API responding","vmid":305,"role":"worker","ip":"192.168.1.102"}
+{"level":"info","ts":"2026-03-26T01:16:21.045-0500","msg":"applying config","vmid":301,"role":"worker"}
+{"level":"warn","ts":"2026-03-26T01:16:21.051-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-26T01:16:23.084-0500","msg":"node deployed, Talos API responding","vmid":303,"role":"worker","ip":"192.168.1.87"}
+{"level":"info","ts":"2026-03-26T01:16:23.085-0500","msg":"applying config","vmid":307,"role":"worker"}
+{"level":"warn","ts":"2026-03-26T01:16:23.101-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-26T01:16:25.052-0500","msg":"node unreachable, entering reboot state","vmid":301,"ip":"192.168.1.82"}
+{"level":"info","ts":"2026-03-26T01:16:27.103-0500","msg":"node unreachable, entering reboot state","vmid":307,"ip":"192.168.1.239"}
+{"level":"info","ts":"2026-03-26T01:16:28.151-0500","msg":"found candidate IP","vmid":301,"candidate_ip":"192.168.1.164","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:16:30.199-0500","msg":"found candidate IP","vmid":307,"candidate_ip":"192.168.1.189","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:16:33.558-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":304,"candidate_ip":"192.168.1.99"}
+{"level":"info","ts":"2026-03-26T01:16:36.649-0500","msg":"found candidate IP","vmid":304,"candidate_ip":"192.168.1.66","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:16:37.053-0500","msg":"node is ready","vmid":304,"final_ip":"192.168.1.66","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:16:41.167-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":301,"candidate_ip":"192.168.1.164"}
+{"level":"warn","ts":"2026-03-26T01:16:41.338-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":307,"candidate_ip":"192.168.1.189"}
+{"level":"info","ts":"2026-03-26T01:16:44.422-0500","msg":"found candidate IP","vmid":307,"candidate_ip":"192.168.1.189","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:16:47.061-0500","msg":"node deployed, Talos API responding","vmid":304,"role":"worker","ip":"192.168.1.66"}
+{"level":"info","ts":"2026-03-26T01:16:47.061-0500","msg":"applying config","vmid":306,"role":"worker"}
+{"level":"warn","ts":"2026-03-26T01:16:47.101-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-26T01:16:51.102-0500","msg":"node unreachable, entering reboot state","vmid":306,"ip":"192.168.1.154"}
+{"level":"info","ts":"2026-03-26T01:16:52.204-0500","msg":"found candidate IP","vmid":301,"candidate_ip":"192.168.1.164","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:16:53.052-0500","msg":"node is ready","vmid":301,"final_ip":"192.168.1.164","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:16:54.208-0500","msg":"found candidate IP","vmid":306,"candidate_ip":"192.168.1.145","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:16:59.424-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":307,"candidate_ip":"192.168.1.189"}
+{"level":"info","ts":"2026-03-26T01:17:02.513-0500","msg":"found candidate IP","vmid":307,"candidate_ip":"192.168.1.189","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:17:03.060-0500","msg":"node deployed, Talos API responding","vmid":301,"role":"worker","ip":"192.168.1.164"}
+{"level":"info","ts":"2026-03-26T01:17:03.061-0500","msg":"applying config","vmid":308,"role":"worker"}
+{"level":"warn","ts":"2026-03-26T01:17:03.096-0500","msg":"talos apply-config warning","reason":"extra kernel arguments are not supported when booting using SDBoot"}
+{"level":"info","ts":"2026-03-26T01:17:03.102-0500","msg":"node is ready","vmid":307,"final_ip":"192.168.1.189","ip_changed":true}
+{"level":"warn","ts":"2026-03-26T01:17:05.395-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":306,"candidate_ip":"192.168.1.145"}
+{"level":"info","ts":"2026-03-26T01:17:07.098-0500","msg":"node unreachable, entering reboot state","vmid":308,"ip":"192.168.1.184"}
+{"level":"info","ts":"2026-03-26T01:17:10.184-0500","msg":"found candidate IP","vmid":308,"candidate_ip":"192.168.1.213","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:17:13.130-0500","msg":"node deployed, Talos API responding","vmid":307,"role":"worker","ip":"192.168.1.189"}
+{"level":"warn","ts":"2026-03-26T01:17:21.381-0500","msg":"candidate IP lost during verification, returning to rebooting","vmid":308,"candidate_ip":"192.168.1.213"}
+{"level":"info","ts":"2026-03-26T01:17:26.422-0500","msg":"found candidate IP","vmid":306,"candidate_ip":"192.168.1.145","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:17:27.103-0500","msg":"node is ready","vmid":306,"final_ip":"192.168.1.145","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:17:37.116-0500","msg":"node deployed, Talos API responding","vmid":306,"role":"worker","ip":"192.168.1.145"}
+{"level":"info","ts":"2026-03-26T01:17:42.650-0500","msg":"found candidate IP","vmid":308,"candidate_ip":"192.168.1.213","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:17:43.100-0500","msg":"node is ready","vmid":308,"final_ip":"192.168.1.213","ip_changed":true}
+{"level":"info","ts":"2026-03-26T01:17:53.115-0500","msg":"node deployed, Talos API responding","vmid":308,"role":"worker","ip":"192.168.1.213"}
+{"level":"info","ts":"2026-03-26T01:17:53.117-0500","msg":"verifying cluster health"}
+{"level":"warn","ts":"2026-03-26T01:17:53.309-0500","msg":"cluster-info check failed","error":"kubectl cluster-info: exit status 1, output: E0326 01:17:53.281016   43152 memcache.go:265] \"Unhandled Error\" err=\"couldn't get current server API group list: Get \\\"https://cluster.jdwlabs.com:6443/api?timeout=32s\\\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \\\"x509: ECDSA verification failure\\\" while trying to verify candidate authority certificate \\\"kubernetes\\\")\"\nE0326 01:17:53.285726   43152 memcache.go:265] \"Unhandled Error\" err=\"couldn't get current server API group list: Get \\\"https://cluster.jdwlabs.com:6443/api?timeout=32s\\\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \\\"x509: ECDSA verification failure\\\" while trying to verify candidate authority certificate \\\"kubernetes\\\")\"\nE0326 01:17:53.289896   43152 memcache.go:265] \"Unhandled Error\" err=\"couldn't get current server API group list: Get \\\"https://cluster.jdwlabs.com:6443/api?timeout=32s\\\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \\\"x509: ECDSA verification failure\\\" while trying to verify candidate authority certificate \\\"kubernetes\\\")\"\nE0326 01:17:53.294102   43152 memcache.go:265] \"Unhandled Error\" err=\"couldn't get current server API group list: Get \\\"https://cluster.jdwlabs.com:6443/api?timeout=32s\\\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \\\"x509: ECDSA verification failure\\\" while trying to verify candidate authority certificate \\\"kubernetes\\\")\"\nE0326 01:17:53.297131   43152 memcache.go:265] \"Unhandled Error\" err=\"couldn't get current server API group list: Get \\\"https://cluster.jdwlabs.com:6443/api?timeout=32s\\\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \\\"x509: ECDSA verification failure\\\" while trying to verify candidate authority certificate \\\"kubernetes\\\")\"\n\nTo further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.\nUnable to connect to the server: tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"kubernetes\")\n"}
+{"level":"warn","ts":"2026-03-26T01:17:53.499-0500","msg":"failed to get nodes","error":"kubectl get nodes: exit status 1, output: E0326 01:17:53.467137   12284 memcache.go:265] \"Unhandled Error\" err=\"couldn't get current server API group list: Get \\\"https://cluster.jdwlabs.com:6443/api?timeout=32s\\\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \\\"x509: ECDSA verification failure\\\" while trying to verify candidate authority certificate \\\"kubernetes\\\")\"\nE0326 01:17:53.473252   12284 memcache.go:265] \"Unhandled Error\" err=\"couldn't get current server API group list: Get \\\"https://cluster.jdwlabs.com:6443/api?timeout=32s\\\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \\\"x509: ECDSA verification failure\\\" while trying to verify candidate authority certificate \\\"kubernetes\\\")\"\nE0326 01:17:53.478983   12284 memcache.go:265] \"Unhandled Error\" err=\"couldn't get current server API group list: Get \\\"https://cluster.jdwlabs.com:6443/api?timeout=32s\\\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \\\"x509: ECDSA verification failure\\\" while trying to verify candidate authority certificate \\\"kubernetes\\\")\"\nE0326 01:17:53.484186   12284 memcache.go:265] \"Unhandled Error\" err=\"couldn't get current server API group list: Get \\\"https://cluster.jdwlabs.com:6443/api?timeout=32s\\\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \\\"x509: ECDSA verification failure\\\" while trying to verify candidate authority certificate \\\"kubernetes\\\")\"\nE0326 01:17:53.488859   12284 memcache.go:265] \"Unhandled Error\" err=\"couldn't get current server API group list: Get \\\"https://cluster.jdwlabs.com:6443/api?timeout=32s\\\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \\\"x509: ECDSA verification failure\\\" while trying to verify candidate authority certificate \\\"kubernetes\\\")\"\nUnable to connect to the server: tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"kubernetes\")\n"}
+{"level":"info","ts":"2026-03-26T01:17:53.534-0500","msg":"etcd members healthy","count":5}
+{"level":"info","ts":"2026-03-26T01:17:53.536-0500","msg":"reconciliation complete"}
