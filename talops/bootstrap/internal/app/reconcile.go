@@ -66,6 +66,25 @@ func (app *App) RunReconcile(ctx context.Context) error {
 		}
 	}
 
+	// Preflight: verify SSH connectivity to HAProxy before doing any work
+	if !cfg.SkipPreflight && !cfg.DryRun && cfg.HAProxyIP != nil {
+		haproxyPreflight := app.createHAProxyClient(cfg)
+		if haproxyPreflight != nil {
+			app.Logger.Info("preflight: checking HAProxy SSH connectivity",
+				zap.String("host", cfg.HAProxyIP.String()),
+				zap.String("user", cfg.HAProxyLoginUser))
+			if err := haproxyPreflight.CheckConnectivity(); err != nil {
+				app.Logger.Error("preflight: HAProxy SSH connectivity check failed",
+					zap.String("host", cfg.HAProxyIP.String()),
+					zap.String("user", cfg.HAProxyLoginUser),
+					zap.Error(err))
+				return fmt.Errorf("HAProxy SSH preflight failed (fix SSH auth to %s@%s or use --skip-preflight): %w",
+					cfg.HAProxyLoginUser, cfg.HAProxyIP, err)
+			}
+			app.Logger.Info("preflight: HAProxy SSH connectivity OK")
+		}
+	}
+
 	// Refresh Proxmox node IP map from the cluster
 	if !cfg.SkipPreflight {
 		app.Logger.Info("refreshing proxmox node IPs")
@@ -547,33 +566,22 @@ func (app *App) executePlan(
 		haproxyConfig := haproxy.ConfigFromClusterState(cfg, deployed)
 		configStr, err := haproxyConfig.Generate()
 		if err != nil {
-			app.Logger.Warn("failed to generate HAProxy config", zap.Error(err))
-		} else {
-			haproxyClient := haproxy.NewClient(cfg.HAProxyLoginUser, cfg.HAProxyIP.String(), app.Logger, cfg.InsecureSSH)
-			haproxyKeyPath := cfg.HAProxySSHKeyPath
-			if haproxyKeyPath == "" {
-				haproxyKeyPath = cfg.ProxmoxSSHKeyPath
-			}
-			keyOK := true
-			if haproxyKeyPath != "" {
-				if err := haproxyClient.SetPrivateKey(haproxyKeyPath); err != nil {
-					app.Logger.Error("failed to set SSH private key for HAProxy client", zap.String("key_path", haproxyKeyPath), zap.Error(err))
-					if plan.NeedsBootstrap {
-						return fmt.Errorf("HAProxy SSH key setup failed: %w", err)
-					}
-					app.Logger.Warn("skipping HAProxy update due to SSH key failure")
-					keyOK = false
-				}
-			}
-			if keyOK {
-				if err := haproxyClient.Update(ctx, configStr); err != nil {
-					if plan.NeedsBootstrap {
-						app.Logger.Error("HAProxy update failed during bootstrap (fatal)", zap.Error(err))
-						return fmt.Errorf("HAProxy update during bootstrap: %w", err)
-					}
-					app.Logger.Warn("HAProxy update failed", zap.Error(err))
-				}
-			}
+			app.Logger.Error("failed to generate HAProxy config", zap.Error(err))
+			return fmt.Errorf("generate HAProxy config: %w", err)
+		}
+
+		haproxyClient := app.createHAProxyClient(cfg)
+		if haproxyClient == nil {
+			app.Logger.Error("HAProxy SSH auth not configured (no key file and no SSH agent)")
+			return fmt.Errorf("HAProxy SSH auth not configured: set --ssh-key, --haproxy-ssh-key, or ensure SSH_AUTH_SOCK is available")
+		}
+
+		if err := haproxyClient.Update(ctx, configStr); err != nil {
+			app.Logger.Error("HAProxy update failed",
+				zap.String("host", cfg.HAProxyIP.String()),
+				zap.String("user", cfg.HAProxyLoginUser),
+				zap.Error(err))
+			return fmt.Errorf("HAProxy update failed: %w", err)
 		}
 	}
 
@@ -729,5 +737,38 @@ func (app *App) executePlan(
 		app.Session.Workers = len(deployed.Workers)
 	}
 
+	return nil
+}
+
+// createHAProxyClient builds an HAProxy SSH client with the best available auth method.
+// Tries, in order: explicit haproxy key, proxmox key (with agent fallback), agent-only.
+// Returns nil if no auth method is available.
+func (app *App) createHAProxyClient(cfg *types.Config) *haproxy.Client {
+	client := haproxy.NewClient(cfg.HAProxyLoginUser, cfg.HAProxyIP.String(), app.Logger, cfg.InsecureSSH)
+
+	haproxyKeyPath := cfg.HAProxySSHKeyPath
+	if haproxyKeyPath == "" {
+		haproxyKeyPath = cfg.ProxmoxSSHKeyPath
+	}
+
+	if haproxyKeyPath != "" {
+		if err := client.SetPrivateKey(haproxyKeyPath); err != nil {
+			app.Logger.Warn("failed to load SSH key for HAProxy, trying SSH agent",
+				zap.String("key_path", haproxyKeyPath),
+				zap.Error(err))
+			if !client.SetSSHAgent() {
+				app.Logger.Error("no SSH auth available for HAProxy",
+					zap.String("key_path", haproxyKeyPath),
+					zap.String("host", cfg.HAProxyIP.String()))
+				return nil
+			}
+		}
+		return client
+	}
+
+	// No key path configured - try SSH agent only
+	if client.SetSSHAgent() {
+		return client
+	}
 	return nil
 }

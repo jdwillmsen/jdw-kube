@@ -12,6 +12,7 @@ import (
 
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
@@ -54,7 +55,8 @@ func NewClient(sshUser, sshHost string, logger *zap.Logger, insecureSSH bool) *C
 	return c
 }
 
-// SetPrivateKey configures SSH public key authentication
+// SetPrivateKey configures SSH public key authentication.
+// It also appends SSH agent auth as a fallback if SSH_AUTH_SOCK is available.
 func (c *Client) SetPrivateKey(keyPath string) error {
 	key, err := os.ReadFile(keyPath)
 	if err != nil {
@@ -66,8 +68,37 @@ func (c *Client) SetPrivateKey(keyPath string) error {
 		return fmt.Errorf("parse private key: %w", err)
 	}
 
-	c.sshConfig.Auth = []ssh.AuthMethod{ssh.PublicKeys(signer)}
+	authMethods := []ssh.AuthMethod{ssh.PublicKeys(signer)}
+
+	// Append SSH agent as fallback if available
+	if agentAuth := sshAgentAuth(); agentAuth != nil {
+		authMethods = append(authMethods, agentAuth)
+	}
+	c.sshConfig.Auth = authMethods
 	return nil
+}
+
+// SetSSHAgent configures SSH agent authentication only (no key file).
+// Use when no explicit key path is provided but SSH_AUTH_SOCK is available.
+func (c *Client) SetSSHAgent() bool {
+	if agentAuth := sshAgentAuth(); agentAuth != nil {
+		c.sshConfig.Auth = []ssh.AuthMethod{agentAuth}
+		return true
+	}
+	return false
+}
+
+// sshAgentAuth returns an ssh.AuthMethod using the SSH agent, or nil if unavailable.
+func sshAgentAuth() ssh.AuthMethod {
+	sock := os.Getenv("SSH_AUTH_SOCK")
+	if sock == "" {
+		return nil
+	}
+	conn, err := net.Dial("unix", sock)
+	if err != nil {
+		return nil
+	}
+	return ssh.PublicKeysCallback(agent.NewClient(conn).Signers)
 }
 
 // SetPort allows overriding the default SSH port (for testing)
@@ -76,12 +107,76 @@ func (c *Client) SetPort(port string) {
 }
 
 // Update writes a new HAProxy configuration, validates it, and reloads the service.
-// On validation failure, it automatically rolls back to the previous config.
+// On validation failure, it automatically rolls back to previous config.
+// Retries up to maxRetries times on SSH connection failures before giving up.
 func (c *Client) Update(ctx context.Context, config string) error {
+	return c.UpdateWithRetry(ctx, config, 3)
+}
+
+// UpdateWithRetry is like Update but allows specifying the retry count.
+func (c *Client) UpdateWithRetry(ctx context.Context, config string, maxRetries int) error {
+	var lastErr error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if attempt > 1 {
+			c.logger.Info("retrying HAProxy update",
+				zap.Int("attempt", attempt),
+				zap.Int("max_attempts", maxRetries),
+				zap.Error(lastErr))
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("context cancelled during HAProxy retry: %w", ctx.Err())
+			case <-time.After(5 * time.Second):
+			}
+		}
+
+		lastErr = c.doUpdate(ctx, config)
+		if lastErr == nil {
+			return nil
+		}
+
+		// Only retry on SSH connection errors, not config validation failures
+		if isSSHConnectionError(lastErr) {
+			continue
+		}
+		return lastErr
+	}
+	return fmt.Errorf("HAProxy update failed after %d attempts: %w", maxRetries, lastErr)
+}
+
+// isSSHConnectionError returns true fi the error is an SSH dial/connection failure
+// (as opposed to a command execution or validation failure).
+func isSSHConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	for _, substr := range []string{"dial SSH", "unable to authenticate", "connection refused", "i/o timeout", "connection reset"} {
+		if contains(msg, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && searchString(s, substr)
+}
+
+func searchString(s, substr string) bool {
+	for i := 0; i < len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Client) doUpdate(_ context.Context, config string) error {
 	timestamp := time.Now().Format("20060102-150405")
 
 	c.logger.Info("updating HAProxy configuration",
 		zap.String("host", c.sshHost),
+		zap.String("user", c.sshUser),
 		zap.String("backup_suffix", timestamp))
 
 	// 1. Write new config to temp location using base64 to avoid heredoc injection
@@ -124,6 +219,12 @@ func (c *Client) Update(ctx context.Context, config string) error {
 // Validate checks if HAProxy is currently running and healthy
 func (c *Client) Validate(ctx context.Context) error {
 	return c.runner.runSSH("sudo systemctl is-active haproxy")
+}
+
+// CheckConnectivity verifies SSH connectivity to the HAProxy host.
+// Returns nil if SSH connection succeeds, or an error describing the failure.
+func (c *Client) CheckConnectivity() error {
+	return c.runner.runSSH("echo ok")
 }
 
 func (c *Client) runSSH(cmd string) error {

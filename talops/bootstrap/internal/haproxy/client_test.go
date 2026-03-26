@@ -333,7 +333,8 @@ func TestSetPrivateKey(t *testing.T) {
 		keyPath, _ := generateTestKey(t)
 		err := client.SetPrivateKey(keyPath)
 		assert.NoError(t, err)
-		assert.Len(t, client.sshConfig.Auth, 1)
+		// At least 1 (key auth), possibly 2 if SSH agent is available
+		assert.GreaterOrEqual(t, len(client.sshConfig.Auth), 1)
 	})
 
 	t.Run("permission denied on key file", func(t *testing.T) {
