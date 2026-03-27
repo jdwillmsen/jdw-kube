@@ -406,6 +406,31 @@ func (app *App) executePlan(
 		}
 	}
 
+	// Validate kubeconfig before any kubectl operations.
+	// During reconciliation (not initial bootstrap), the kubeconfig may contain a stale
+	// CA certificate if cluster secrets were regenerated. Re-fetch from Talos API if invalid.
+	if deployed.BootstrapCompleted && !plan.NeedsBootstrap && !cfg.DryRun && len(deployed.ControlPlanes) > 0 {
+		kubeconfigMgr := talos.NewKubeconfigManager(talosClient, app.Logger)
+		if err := kubeconfigMgr.Verify(ctx, cfg.ClusterName); err != nil {
+			app.Logger.Warn("kubeconfig validation failed, refreshing from Talos API",
+				zap.String("cluster", cfg.ClusterName),
+				zap.Error(err))
+			audit("KUBECONFIG-REFRESH", fmt.Sprintf("reason=validation_failed cluster=%s", cfg.ClusterName))
+
+			cpIP := deployed.ControlPlanes[0].IP
+			if fetchErr := kubeconfigMgr.FetchAndMerge(ctx, cpIP, cfg.ClusterName, cfg.ControlPlaneEndpoint); fetchErr != nil {
+				app.Logger.Error("kubeconfig refresh failed", zap.Error(fetchErr))
+				return fmt.Errorf("kubeconfig refresh: %w", fetchErr)
+			}
+
+			if verifyErr := kubeconfigMgr.Verify(ctx, cfg.ClusterName); verifyErr != nil {
+				app.Logger.Error("kubeconfig still invalid after refresh", zap.Error(verifyErr))
+				return fmt.Errorf("kubeconfig verification after refresh: %w", verifyErr)
+			}
+			app.Logger.Info("kubeconfig refreshed successfully", zap.String("cluster", cfg.ClusterName))
+		}
+	}
+
 	// Phase 1: Remove workers
 	if len(plan.RemoveWorkers) > 0 {
 		app.Logger.Info("removing workers", zap.Int("count", len(plan.RemoveWorkers)))
