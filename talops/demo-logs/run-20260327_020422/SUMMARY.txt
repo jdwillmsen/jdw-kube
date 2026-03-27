@@ -1,0 +1,24 @@
+━━━ TALOS BOOTSTRAP RUN SUMMARY ━━━
+  Status:       failed
+  Cluster:      test-core
+  Start:        2026-03-27 02:04:22
+  Duration:     1m12s
+  Run Dir:      logs\2026-03-27\run-20260327_020422
+  Error:        up: cluster bootstrap failed: execute plan: kubeconfig verification after refresh: kubectl --context test-core cluster-info: exit status 1, output: E0327 02:05:34.175821   83408 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"kubernetes\")"
+E0327 02:05:34.181522   83408 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"kubernetes\")"
+E0327 02:05:34.183625   83408 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"kubernetes\")"
+E0327 02:05:34.189807   83408 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"kubernetes\")"
+E0327 02:05:34.198712   83408 memcache.go:265] "Unhandled Error" err="couldn't get current server API group list: Get \"https://cluster.jdwlabs.com:6443/api?timeout=32s\": tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"kubernetes\")"
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+Unable to connect to the server: tls: failed to verify certificate: x509: certificate signed by unknown authority (possibly because of "x509: ECDSA verification failure" while trying to verify candidate authority certificate "kubernetes")
+
+  ─── Cluster Nodes ───
+  Control Planes: 3
+  Workers:        1
+  ─── Operations ───
+  Added:          2
+  Removed:        0
+  Updated:        0
+  Bootstrap:      false
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
