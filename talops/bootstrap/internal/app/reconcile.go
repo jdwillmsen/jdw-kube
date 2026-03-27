@@ -58,6 +58,9 @@ func (app *App) RunReconcile(ctx context.Context) error {
 	}
 	k8sClient := kubectl.NewClient(app.Logger)
 	k8sClient.SetContext(cfg.ClusterName)
+	if app.Session != nil && app.Session.AuditLog != nil {
+		k8sClient.SetAuditLogger(app.Session.AuditLog)
+	}
 
 	// Configure SSH authentication for scanner
 	if cfg.ProxmoxSSHKeyPath != "" {

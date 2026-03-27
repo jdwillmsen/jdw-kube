@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -30,6 +31,16 @@ func (a *AuditLogger) WriteEntry(tag, message string) {
 func (a *AuditLogger) Command(name string, args ...string) *AuditedCmd {
 	return &AuditedCmd{
 		Cmd:   exec.Command(name, args...),
+		audit: a,
+		name:  name,
+		args:  args,
+	}
+}
+
+// CommandContext creates an AuditedCmd with a context for cancellation/timeout support.
+func (a *AuditLogger) CommandContext(ctx context.Context, name string, args ...string) *AuditedCmd {
+	return &AuditedCmd{
+		Cmd:   exec.CommandContext(ctx, name, args...),
 		audit: a,
 		name:  name,
 		args:  args,

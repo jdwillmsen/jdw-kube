@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -173,11 +174,22 @@ func (km *KubeconfigManager) FetchAndMerge(ctx context.Context, endpoint net.IP,
 func (km *KubeconfigManager) Verify(ctx context.Context, clusterName string) error {
 	km.logger.Info("verifying Kubernetes access", zap.String("context", clusterName))
 
-	cmd := exec.CommandContext(ctx, "kubectl", "--context", clusterName, "cluster-info")
-	cmd.Env = append(os.Environ(), "KUBECONFIG="+km.kubeconfigPath())
-	output, err := cmd.CombinedOutput()
+	args := []string{"--context", clusterName, "cluster-info"}
+	var output []byte
+	var err error
+
+	if km.client != nil && km.client.audit != nil {
+		ac := km.client.audit.CommandContext(ctx, "kubectl", args...)
+		ac.Env = append(os.Environ(), "KUBECONFIG="+km.kubeconfigPath())
+		output, err = ac.CombinedOutput()
+	} else {
+		cmd := exec.CommandContext(ctx, "kubectl", args...)
+		cmd.Env = append(os.Environ(), "KUBECONFIG="+km.kubeconfigPath())
+		output, err = cmd.CombinedOutput()
+	}
+
 	if err != nil {
-		return fmt.Errorf("kubectl cluster-info failed: %w, output: %s", err, string(output))
+		return fmt.Errorf("kubectl %s: %w, output: %s", strings.Join(args, " "), err, string(output))
 	}
 
 	km.logger.Info("Kubernetes cluster is accessible", zap.String("output", string(output)))
@@ -226,12 +238,22 @@ func (km *KubeconfigManager) mergeKubeconfig(existingPath, newPath string) error
 
 	// Use KUBECONFIG env var to merge using kubectl
 	mergedPath := existingPath + ".merged"
-	cmd := exec.Command("kubectl", "config", "view", "--flatten")
+	args := []string{"config", "view", "--flatten"}
 	kubeconfigEnv := fmt.Sprintf("KUBECONFIG=%s%s%s", existingPath, string(filepath.ListSeparator), newPath)
-	cmd.Env = append(os.Environ(), kubeconfigEnv)
-	output, err := cmd.Output()
+
+	var output []byte
+	var err error
+	if km.client != nil && km.client.audit != nil {
+		ac := km.client.audit.Command("kubectl", args...)
+		ac.Env = append(os.Environ(), kubeconfigEnv)
+		output, err = ac.CombinedOutput()
+	} else {
+		cmd := exec.Command("kubectl", args...)
+		cmd.Env = append(os.Environ(), kubeconfigEnv)
+		output, err = cmd.CombinedOutput()
+	}
 	if err != nil {
-		return fmt.Errorf("kubectl config view failed: %w, output: %s", err, string(output))
+		return fmt.Errorf("kubectl %s: %w, output: %s", strings.Join(args, " "), err, string(output))
 	}
 
 	if err := os.WriteFile(mergedPath, output, 0600); err != nil {

@@ -156,21 +156,35 @@ func appendHostsFile(hostsFile string, data []byte) error {
 // ConfigureTalosctlEndpoints sets talosctl endpoints and nodes
 func (app *App) ConfigureTalosctlEndpoints(deployed *types.ClusterState) {
 	cfg := app.Cfg
+	talosEnv := "TALOSCONFIG=" + filepath.Join(cfg.SecretsDir, "talosconfig")
+
 	// Set endpoint to HAProxy IP
-	cmd := exec.Command("talosctl", "config", "endpoint", cfg.HAProxyIP.String())
-	cmd.Env = append(os.Environ(), "TALOSCONFIG="+filepath.Join(cfg.SecretsDir, "talosconfig"))
-	if output, err := cmd.CombinedOutput(); err != nil {
+	endpointArgs := []string{"config", "endpoint", cfg.HAProxyIP.String()}
+	output, err := app.execTalosctlAudited(endpointArgs, talosEnv)
+	if err != nil {
 		app.Logger.Warn("failed to set talosctl endpoint", zap.Error(err), zap.String("output", string(output)))
 	}
 
 	// Set node to first control plane
 	if len(deployed.ControlPlanes) > 0 {
-		cmd = exec.Command("talosctl", "config", "node", deployed.ControlPlanes[0].IP.String())
-		cmd.Env = append(os.Environ(), "TALOSCONFIG="+filepath.Join(cfg.SecretsDir, "talosconfig"))
-		if output, err := cmd.CombinedOutput(); err != nil {
+		nodeArgs := []string{"config", "node", deployed.ControlPlanes[0].IP.String()}
+		output, err := app.execTalosctlAudited(nodeArgs, talosEnv)
+		if err != nil {
 			app.Logger.Warn("failed to set talosctl node", zap.Error(err), zap.String("output", string(output)))
 		}
 	}
+}
+
+// execTalosctlAudited runs a talosctl command with audit logging if available
+func (app *App) execTalosctlAudited(args []string, envExtra string) ([]byte, error) {
+	if app.Session != nil && app.Session.AuditLog != nil {
+		ac := app.Session.AuditLog.Command("talosctl", args...)
+		ac.Env = append(os.Environ(), envExtra)
+		return ac.CombinedOutput()
+	}
+	cmd := exec.Command("talosctl", args...)
+	cmd.Env = append(os.Environ(), envExtra)
+	return cmd.CombinedOutput()
 }
 
 // VerifyCluster performs post-reconciliation health checks

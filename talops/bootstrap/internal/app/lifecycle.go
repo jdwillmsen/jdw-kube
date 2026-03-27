@@ -72,6 +72,9 @@ func (app *App) drainAllNodes(ctx context.Context) error {
 
 	k8sClient := kubectl.NewClient(app.Logger)
 	k8sClient.SetContext(app.Cfg.ClusterName)
+	if app.Session != nil && app.Session.AuditLog != nil {
+		k8sClient.SetAuditLogger(app.Session.AuditLog)
+	}
 
 	var failCount int
 

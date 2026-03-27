@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jdwlabs/infrastructure/bootstrap/internal/logging"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -64,6 +65,59 @@ func TestClient_SetContext(t *testing.T) {
 	args := client.baseArgs()
 	assert.Contains(t, args, "--context")
 	assert.Contains(t, args, "test-context")
+}
+
+func TestClient_SetAuditLogger(t *testing.T) {
+	client, _ := newTestClient(t)
+	assert.Nil(t, client.audit)
+
+	var buf bytes.Buffer
+	audit := logging.NewAuditLogger(&buf)
+	client.SetAuditLogger(audit)
+	assert.NotNil(t, client.audit)
+}
+
+func TestClient_AuditLogging(t *testing.T) {
+	var buf bytes.Buffer
+	audit := logging.NewAuditLogger(&buf)
+
+	client, _ := newTestClient(t)
+	client.SetContext("test-cluster")
+	client.SetAuditLogger(audit)
+
+	ctx := context.Background()
+	// Command will fail (kubectl not available in test env), but audit should still log
+	_, _ = client.GetNodeNameByIP(ctx, mustParseIP("192.168.1.10"))
+
+	auditOutput := buf.String()
+	assert.Contains(t, auditOutput, "CMD-START")
+	assert.Contains(t, auditOutput, "--context")
+	assert.Contains(t, auditOutput, "test-cluster")
+	assert.Contains(t, auditOutput, "get nodes")
+	assert.Contains(t, auditOutput, "CMD-EXIT")
+}
+
+func TestClient_ErrorIncludesFullCommand(t *testing.T) {
+	originalExec := execCommandContext
+	defer func() { execCommandContext = originalExec }()
+
+	execCommandContext = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		if runtime.GOOS == "windows" {
+			return exec.Command("cmd", "/c", "exit", "1")
+		}
+		return exec.Command("false")
+	}
+
+	client, _ := newTestClient(t)
+	client.SetContext("my-cluster")
+	ctx := context.Background()
+
+	_, err := client.GetNodeNameByIP(ctx, mustParseIP("192.168.1.1"))
+	assert.Error(t, err)
+	// Error should contain the full command with context flag
+	assert.Contains(t, err.Error(), "--context")
+	assert.Contains(t, err.Error(), "my-cluster")
+	assert.Contains(t, err.Error(), "get nodes")
 }
 
 func TestClient_baseArgs(t *testing.T) {
