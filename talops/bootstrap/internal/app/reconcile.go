@@ -451,24 +451,7 @@ func (app *App) executePlan(
 			}
 
 			if nodeIP != nil {
-				nodeName, err := k8sClient.GetNodeNameByIP(ctx, nodeIP)
-				if err != nil {
-					app.Logger.Warn("failed to get node name for worker", zap.Int("vmid", int(vmid)), zap.Error(err))
-				} else {
-					if err := k8sClient.DrainNode(ctx, nodeName); err != nil {
-						app.Logger.Warn("failed to drain worker", zap.String("node", nodeName), zap.Error(err))
-					}
-					if err := k8sClient.DeleteNode(ctx, nodeName); err != nil {
-						app.Logger.Warn("failed to delete worker from Kubernetes", zap.String("node", nodeName), zap.Error(err))
-					}
-				}
-
-				if err := talosClient.ResetNode(ctx, nodeIP, true); err != nil {
-					app.Logger.Warn("graceful reset failed, trying forced reset", zap.Int("vmid", int(vmid)), zap.Error(err))
-					if err := talosClient.ResetNode(ctx, nodeIP, false); err != nil {
-						app.Logger.Warn("forced reset also failed", zap.Int("vmid", int(vmid)), zap.Error(err))
-					}
-				}
+				app.removeNodeFromCluster(ctx, k8sClient, talosClient, vmid, nodeIP, types.RoleWorker, nil)
 			}
 
 			stateMgr.RemoveNodeState(deployed, vmid, types.RoleWorker)
@@ -512,15 +495,6 @@ func (app *App) executePlan(
 			}
 
 			if nodeIP != nil {
-				nodeName, err := k8sClient.GetNodeNameByIP(ctx, nodeIP)
-				if err != nil {
-					app.Logger.Warn("could not find k8s node name for CP", zap.Int("vmid", int(vmid)), zap.Error(err))
-				} else {
-					if err := k8sClient.DrainNode(ctx, nodeName); err != nil {
-						app.Logger.Warn("failed to drain control plane", zap.String("node", nodeName), zap.Error(err))
-					}
-				}
-
 				var healthyEndpoint net.IP
 				for _, cp := range deployed.ControlPlanes {
 					if cp.VMID != vmid {
@@ -528,30 +502,7 @@ func (app *App) executePlan(
 						break
 					}
 				}
-
-				if healthyEndpoint != nil {
-					memberID, err := talosClient.GetEtcdMemberIDByIP(ctx, healthyEndpoint, nodeIP)
-					if err != nil {
-						app.Logger.Warn("failed to get etcd member ID", zap.Error(err))
-					} else {
-						if err := talosClient.RemoveEtcdMember(ctx, healthyEndpoint, memberID); err != nil {
-							app.Logger.Warn("failed to remove etcd member", zap.Error(err))
-						}
-					}
-				}
-
-				if nodeName != "" {
-					if err := k8sClient.DeleteNode(ctx, nodeName); err != nil {
-						app.Logger.Warn("failed to delete CP from k8s", zap.Error(err))
-					}
-				}
-
-				if err := talosClient.ResetNode(ctx, nodeIP, true); err != nil {
-					app.Logger.Warn("graceful reset failed, trying forced", zap.Int("vmid", int(vmid)), zap.Error(err))
-					if err := talosClient.ResetNode(ctx, nodeIP, false); err != nil {
-						app.Logger.Warn("forced reset also failed", zap.Int("vmid", int(vmid)), zap.Error(err))
-					}
-				}
+				app.removeNodeFromCluster(ctx, k8sClient, talosClient, vmid, nodeIP, types.RoleControlPlane, healthyEndpoint)
 			}
 
 			stateMgr.RemoveNodeState(deployed, vmid, types.RoleControlPlane)

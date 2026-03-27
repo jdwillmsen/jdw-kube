@@ -44,7 +44,7 @@ func (app *App) RunUp(ctx context.Context, skipInfra bool) error {
 }
 
 // RunPreInfraRemovals detects nodes pending removal (present in deployed state but absent
-// from desired state) and gracefully removes them from the clsuter before terraform
+// from desired state) and gracefully removes them from the cluster before terraform
 // destroys the underlying VMs. This ensures proper drain, etcd member removal, and K8s
 // node deletion while the nodes are still reachable.
 func (app *App) RunPreInfraRemovals(ctx context.Context) error {
