@@ -1,0 +1,18 @@
+[2026-03-28 18:56:03] [PRE-INFRA-REMOVAL-START] remove_workers=1 remove_cps=0
+[2026-03-28 18:56:03] [CMD-START] kubectl --context test-core cluster-info
+[2026-03-28 18:56:13] [CMD-OUTPUT] 
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+Unable to connect to the server: EOF
+
+[2026-03-28 18:56:13] [CMD-EXIT] 1 [DURATION: 10246ms]
+[2026-03-28 18:56:24] [RECONCILE-START] cluster=test-core dry_run=false plan_mode=false
+[2026-03-28 18:56:56] [CMD-START] kubectl --context test-core cluster-info
+[2026-03-28 18:57:07] [CMD-OUTPUT] 
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+Unable to connect to the server: EOF
+
+[2026-03-28 18:57:07] [CMD-EXIT] 1 [DURATION: 10205ms]
+[2026-03-28 18:57:07] [KUBECONFIG-REFRESH] reason=validation_failed cluster=test-core
+[2026-03-28 18:57:09] [RECONCILE-END] cluster=test-core status=failed error=kubeconfig refresh: kubernetes API not reachable at 192.168.1.245: tcp dial 192.168.1.245:6443: dial tcp 192.168.1.245:6443: connectex: No connection could be made because the target machine actively refused it.

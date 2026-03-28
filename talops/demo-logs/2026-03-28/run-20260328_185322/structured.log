@@ -1,0 +1,51 @@
+{"level":"debug","ts":"2026-03-28T18:53:22.168-0500","msg":"session started","cluster":"cluster","config":"../scenarios/scaling_tests/01_3cp-2w.tfvars","log_dir":"logs\\2026-03-28\\run-20260328_185322"}
+{"level":"debug","ts":"2026-03-28T18:53:22.389-0500","msg":"prerequisite found","tool":"talosctl","path":"F:\\Dev\\bin\\talosctl.exe","version":"Client:"}
+{"level":"debug","ts":"2026-03-28T18:53:22.638-0500","msg":"prerequisite found","tool":"kubectl","path":"C:\\ProgramData\\chocolatey\\bin\\kubectl.exe","version":"Client Version: v1.35.0"}
+{"level":"debug","ts":"2026-03-28T18:53:22.936-0500","msg":"prerequisite found","tool":"terraform","path":"C:\\ProgramData\\chocolatey\\bin\\terraform.exe","version":"Terraform v1.14.3"}
+{"level":"info","ts":"2026-03-28T18:53:22.951-0500","msg":"pre-infra removal: nodes need graceful removal before terraform destroy","workers":1,"control_planes":0}
+{"level":"info","ts":"2026-03-28T18:53:22.955-0500","msg":"verifying Kubernetes access","context":"test-core"}
+{"level":"warn","ts":"2026-03-28T18:53:33.383-0500","msg":"kubeconfig invalid, refreshing before removal","error":"kubectl --context test-core cluster-info: exit status 1, output: \nTo further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.\nUnable to connect to the server: EOF\n"}
+{"level":"info","ts":"2026-03-28T18:53:33.383-0500","msg":"fetching kubeconfig","endpoint":"192.168.1.133","cluster":"test-core"}
+{"level":"warn","ts":"2026-03-28T18:53:43.384-0500","msg":"pre-infra removal failed; continuing with infrastructure deploy","hint":"nodes may not have been gracefully drained","error":"kubeconfig refresh for pre-infra removal: kubernetes API not reachable at 192.168.1.133: tcp dial 192.168.1.133:6443: dial tcp 192.168.1.133:6443: i/o timeout"}
+{"level":"debug","ts":"2026-03-28T18:53:43.389-0500","msg":"backed up","file":"..\\terraform\\backups\\tfvars-20260328_185343.terraform.tfvars"}
+{"level":"info","ts":"2026-03-28T18:53:43.389-0500","msg":"initializing terraform"}
+{"level":"debug","ts":"2026-03-28T18:53:43.389-0500","msg":"terraform already initialized"}
+{"level":"info","ts":"2026-03-28T18:53:43.389-0500","msg":"formatting and validating"}
+{"level":"debug","ts":"2026-03-28T18:53:44.338-0500","msg":"checking Proxmox ISO","iso":"local:iso/nocloud-amd64.iso"}
+{"level":"info","ts":"2026-03-28T18:53:44.355-0500","msg":"ISO found on Proxmox","iso":"local:iso/nocloud-amd64.iso"}
+{"level":"info","ts":"2026-03-28T18:53:44.356-0500","msg":"creating plan"}
+{"level":"info","ts":"2026-03-28T18:53:45.099-0500","msg":"auto-approving deployment"}
+{"level":"info","ts":"2026-03-28T18:53:45.099-0500","msg":"applying changes"}
+{"level":"info","ts":"2026-03-28T18:53:45.099-0500","msg":"terraform apply attempt","attempt":1,"max":3}
+{"level":"info","ts":"2026-03-28T18:54:40.737-0500","msg":"deployment complete"}
+{"level":"info","ts":"2026-03-28T18:54:40.738-0500","msg":"starting reconciliation","cluster":"test-core","dry_run":false,"plan_mode":false}
+{"level":"info","ts":"2026-03-28T18:54:40.739-0500","msg":"preflight: checking HAProxy SSH connectivity","host":"192.168.1.199","user":"root"}
+{"level":"info","ts":"2026-03-28T18:54:41.140-0500","msg":"preflight: HAProxy SSH connectivity OK"}
+{"level":"info","ts":"2026-03-28T18:54:41.141-0500","msg":"refreshing proxmox node IPs"}
+{"level":"info","ts":"2026-03-28T18:54:46.081-0500","msg":"loading desired state from terraform"}
+{"level":"info","ts":"2026-03-28T18:54:46.082-0500","msg":"loaded desired state","nodes":5}
+{"level":"info","ts":"2026-03-28T18:54:46.082-0500","msg":"loading deployed state"}
+{"level":"info","ts":"2026-03-28T18:54:46.082-0500","msg":"discovering live state"}
+{"level":"info","ts":"2026-03-28T18:54:53.396-0500","msg":"discovered live state","found":5}
+{"level":"debug","ts":"2026-03-28T18:54:53.396-0500","msg":"discovered VM","vmid":201,"ip":"192.168.1.248","status":"discovered"}
+{"level":"debug","ts":"2026-03-28T18:54:53.396-0500","msg":"discovered VM","vmid":202,"ip":"192.168.1.132","status":"discovered"}
+{"level":"debug","ts":"2026-03-28T18:54:53.397-0500","msg":"discovered VM","vmid":300,"ip":"192.168.1.175","status":"discovered"}
+{"level":"debug","ts":"2026-03-28T18:54:53.397-0500","msg":"discovered VM","vmid":301,"ip":"192.168.1.214","status":"discovered"}
+{"level":"debug","ts":"2026-03-28T18:54:53.397-0500","msg":"discovered VM","vmid":200,"ip":"192.168.1.245","status":"discovered"}
+{"level":"info","ts":"2026-03-28T18:55:13.398-0500","msg":"running Talos API preflight checks"}
+{"level":"debug","ts":"2026-03-28T18:55:13.401-0500","msg":"Talos API reachable","vmid":301,"ip":"192.168.1.214"}
+{"level":"debug","ts":"2026-03-28T18:55:13.405-0500","msg":"Talos API reachable","vmid":200,"ip":"192.168.1.245"}
+{"level":"debug","ts":"2026-03-28T18:55:13.407-0500","msg":"Talos API reachable","vmid":201,"ip":"192.168.1.248"}
+{"level":"debug","ts":"2026-03-28T18:55:13.410-0500","msg":"Talos API reachable","vmid":202,"ip":"192.168.1.132"}
+{"level":"debug","ts":"2026-03-28T18:55:13.411-0500","msg":"Talos API reachable","vmid":300,"ip":"192.168.1.175"}
+{"level":"info","ts":"2026-03-28T18:55:13.411-0500","msg":"building reconciliation plan"}
+{"level":"info","ts":"2026-03-28T18:55:13.412-0500","msg":"IP changed for deployed worker (live sync)","vmid":300,"old_ip":"192.168.1.236","new_ip":"192.168.1.175"}
+{"level":"info","ts":"2026-03-28T18:55:13.412-0500","msg":"IP changed for deployed CP (live sync)","vmid":200,"old_ip":"192.168.1.133","new_ip":"192.168.1.245"}
+{"level":"info","ts":"2026-03-28T18:55:13.413-0500","msg":"IP changed for deployed CP (live sync)","vmid":201,"old_ip":"192.168.1.144","new_ip":"192.168.1.248"}
+{"level":"info","ts":"2026-03-28T18:55:13.413-0500","msg":"IP changed for deployed CP (live sync)","vmid":202,"old_ip":"192.168.1.136","new_ip":"192.168.1.132"}
+{"level":"info","ts":"2026-03-28T18:55:13.413-0500","msg":"verifying Kubernetes access","context":"test-core"}
+{"level":"warn","ts":"2026-03-28T18:55:23.660-0500","msg":"kubeconfig validation failed, refreshing from Talos API","cluster":"test-core","error":"kubectl --context test-core cluster-info: exit status 1, output: \nTo further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.\nUnable to connect to the server: EOF\n"}
+{"level":"info","ts":"2026-03-28T18:55:23.660-0500","msg":"fetching kubeconfig","endpoint":"192.168.1.245","cluster":"test-core"}
+{"level":"error","ts":"2026-03-28T18:55:25.693-0500","msg":"kubeconfig refresh failed","error":"kubernetes API not reachable at 192.168.1.245: tcp dial 192.168.1.245:6443: dial tcp 192.168.1.245:6443: connectex: No connection could be made because the target machine actively refused it."}
+{"level":"error","ts":"2026-03-28T18:55:25.693-0500","msg":"plan execution failed","error":"kubeconfig refresh: kubernetes API not reachable at 192.168.1.245: tcp dial 192.168.1.245:6443: dial tcp 192.168.1.245:6443: connectex: No connection could be made because the target machine actively refused it."}
+{"level":"error","ts":"2026-03-28T18:55:25.693-0500","msg":"up: bootstrap failed; infrastructure is up","hint":"run 'talops reconcile' to retry"}
