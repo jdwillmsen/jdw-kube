@@ -236,13 +236,96 @@ func (km *KubeconfigManager) mergeKubeconfig(existingPath, newPath string) error
 		return os.WriteFile(existingPath, data, 0600)
 	}
 
-	// Use KUBECONFIG env var to merge using kubectl
+	// Read the new kubeconfig to find which cluster/context/user names it defines
+	newData, err := os.ReadFile(newPath)
+	if err != nil {
+		return fmt.Errorf("read new kubeconfig: %w", err)
+	}
+	var newKC kubeConfig
+	if err := yaml.Unmarshal(newData, &newKC); err != nil {
+		return fmt.Errorf("parse new kubeconfig: %w", err)
+	}
+
+	// Build sets of names to strip from existing config
+	clusterNames := make(map[string]bool)
+	contextNames := make(map[string]bool)
+	userNames := make(map[string]bool)
+	for _, c := range newKC.Clusters {
+		clusterNames[c.Name] = true
+	}
+	for _, c := range newKC.Contexts {
+		contextNames[c.Name] = true
+	}
+	for _, u := range newKC.Users {
+		userNames[u.Name] = true
+	}
+
+	// Read and strip conflicting entries from existing kubeconfig so the fresh
+	// Talos entries take precedence (kubectl config view uses first-wins semantics)
+	existingData, err := os.ReadFile(existingPath)
+	if err != nil {
+		return fmt.Errorf("read existing kubeconfig: %w", err)
+	}
+	var existingKC kubeConfig
+	if err := yaml.Unmarshal(existingData, &existingKC); err != nil {
+		return fmt.Errorf("parse existing kubeconfig: %w", err)
+	}
+
+	filtered := false
+	var keptClusters []kubeCluster
+	for _, c := range existingKC.Clusters {
+		if clusterNames[c.Name] {
+			filtered = true
+			continue
+		}
+		keptClusters = append(keptClusters, c)
+	}
+	existingKC.Clusters = keptClusters
+
+	var keptContexts []kubeContext
+	for _, c := range existingKC.Contexts {
+		if contextNames[c.Name] {
+			filtered = true
+			continue
+		}
+		keptContexts = append(keptContexts, c)
+	}
+	existingKC.Contexts = keptContexts
+
+	var keptUsers []kubeUser
+	for _, u := range existingKC.Users {
+		if userNames[u.Name] {
+			filtered = true
+			continue
+		}
+		keptUsers = append(keptUsers, u)
+	}
+	existingKC.Users = keptUsers
+
+	if filtered {
+		km.logger.Debug("stripped stale entries from existing kubeconfig before merge",
+			zap.Any("clusters", clusterNames),
+			zap.Any("contexts", contextNames),
+			zap.Any("users", userNames))
+	}
+
+	// Write the cleaned existing config to a temp file fro merging
+	cleanedExistingPath := existingPath + ".cleaned"
+	cleanedData, err := yaml.Marshal(&existingKC)
+	if err != nil {
+		return fmt.Errorf("marshal cleaned kubeconfig: %w", err)
+	}
+	if err := os.WriteFile(cleanedExistingPath, cleanedData, 0600); err != nil {
+		return fmt.Errorf("write cleaned kubeconfig: %w", err)
+	}
+	defer os.Remove(cleanedExistingPath)
+
+	// Use KUBECONFIG env var to merge using kubectl (new config first for precedence)
 	mergedPath := existingPath + ".merged"
 	args := []string{"config", "view", "--flatten"}
-	kubeconfigEnv := fmt.Sprintf("KUBECONFIG=%s%s%s", existingPath, string(filepath.ListSeparator), newPath)
+	kubeconfigEnv := fmt.Sprintf("KUBECONFIG=%s%s%s", newPath, string(filepath.ListSeparator), cleanedExistingPath)
 
 	var output []byte
-	var err error
 	if km.client != nil && km.client.audit != nil {
 		ac := km.client.audit.Command("kubectl", args...)
 		ac.Env = append(os.Environ(), kubeconfigEnv)
