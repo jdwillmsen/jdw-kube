@@ -38,11 +38,13 @@ type NodeSpec struct {
 
 // NodeState represents what we know is deployed (your DEPLOYED_*_IPS)
 type NodeState struct {
-	VMID       VMID      `json:"vmid"`
-	IP         net.IP    `json:"ip,omitempty"`
-	ConfigHash string    `json:"config_hash,omitempty"`
-	MAC        string    `json:"mac,omitempty"` // For IP rediscovery
-	LastSeen   time.Time `json:"last_seen"`
+	VMID       VMID       `json:"vmid"`
+	IP         net.IP     `json:"ip,omitempty"`
+	ConfigHash string     `json:"config_hash,omitempty"`
+	MAC        string     `json:"mac,omitempty"` // For IP rediscovery
+	LastSeen   time.Time  `json:"last_seen"`
+	Role       Role       `json:"role,omitempty"`       // Stored for audit trail (self-describing history entries)
+	RemovedAt  *time.Time `json:"removed_at,omitempty"` // Set when node is removed from cluster
 }
 
 // MarshalJSON customizes JSON serialization for NodeState
@@ -109,6 +111,7 @@ type ClusterState struct {
 	FirstControlPlane    VMID        `json:"first_control_plane_vmid,omitempty"`
 	ControlPlanes        []NodeState `json:"control_planes"`
 	Workers              []NodeState `json:"workers"`
+	RemovedNodes         []NodeState `json:"removed_nodes,omitempty"` // Audit trail of previously removed nodes
 	HAProxyIP            net.IP      `json:"haproxy_ip"`
 	ControlPlaneEndpoint string      `json:"control_plane_endpoint"`
 	KubernetesVersion    string      `json:"kubernetes_version"`

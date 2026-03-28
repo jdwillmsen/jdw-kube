@@ -557,6 +557,7 @@ func (m *Manager) UpdateNodeState(state *types.ClusterState, vmid types.VMID, ip
 		VMID:       vmid,
 		ConfigHash: hash,
 		LastSeen:   time.Now(),
+		Role:       role,
 	}
 	if ip != "" {
 		nodeState.IP = parseIP(ip)
@@ -591,17 +592,23 @@ func (m *Manager) UpdateNodeState(state *types.ClusterState, vmid types.VMID, ip
 	}
 }
 
-// RemoveNodeState removes a node from the cluster state.
-// Safe for concurrent use from multiple goroutines.
+// RemoveNodeState removes a node from the active cluster state and moves it
+// to the RemovedNodes audit trail. Safe for concurrent use from multiple goroutines.
 func (m *Manager) RemoveNodeState(state *types.ClusterState, vmid types.VMID, role types.Role) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	now := time.Now()
 
 	switch role {
 	case types.RoleControlPlane:
 		filtered := make([]types.NodeState, 0, len(state.ControlPlanes))
 		for _, cp := range state.ControlPlanes {
-			if cp.VMID != vmid {
+			if cp.VMID == vmid {
+				cp.Role = role
+				cp.RemovedAt = &now
+				state.RemovedNodes = append(state.RemovedNodes, cp)
+			} else {
 				filtered = append(filtered, cp)
 			}
 		}
@@ -610,7 +617,11 @@ func (m *Manager) RemoveNodeState(state *types.ClusterState, vmid types.VMID, ro
 	case types.RoleWorker:
 		filtered := make([]types.NodeState, 0, len(state.Workers))
 		for _, w := range state.Workers {
-			if w.VMID != vmid {
+			if w.VMID == vmid {
+				w.Role = role
+				w.RemovedAt = &now
+				state.RemovedNodes = append(state.RemovedNodes, w)
+			} else {
 				filtered = append(filtered, w)
 			}
 		}

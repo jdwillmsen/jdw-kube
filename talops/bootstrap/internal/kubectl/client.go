@@ -161,3 +161,67 @@ func (c *Client) GetNodes(ctx context.Context) (string, error) {
 	}
 	return string(output), nil
 }
+
+// KubeNode is a minimal representation of a K8s node parsed from kubectl output
+type KubeNode struct {
+	Name   string
+	Status string // e.g. "Ready", "NotReady,SchedulingDisabled"
+	IP     string // INTERNAL-IP
+	Roles  string // e.g. "control-plane", "<none>"
+}
+
+// GetParsedNodes returns structured node information from kubectl get nodes -o wide
+func (c *Client) GetParsedNodes(ctx context.Context) ([]KubeNode, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	cmdArgs := []string{"get", "nodes", "-o", "wide", "--no-headers"}
+	ac, cmd := c.auditedCommand(ctx, cmdArgs...)
+	output, err := combinedOutput(ac, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w, output: %s", c.cmdString(cmdArgs...), err, string(output))
+	}
+
+	var nodes []KubeNode
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 6 {
+			continue
+		}
+		nodes = append(nodes, KubeNode{
+			Name:   fields[0],
+			Status: fields[1],
+			Roles:  fields[2],
+			IP:     fields[5],
+		})
+	}
+	return nodes, nil
+}
+
+// WaitForNodeReady polls until the named node reaches Ready status or the timeout expires
+func (c *Client) WaitForNodeReady(ctx context.Context, nodeName string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		nodes, err := c.GetParsedNodes(ctx)
+		if err == nil {
+			for _, n := range nodes {
+				if n.Name == nodeName && n.Status == "Ready" {
+					return nil
+				}
+			}
+		}
+
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timeout waiting for node %s to become Ready after %s", nodeName, timeout)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}

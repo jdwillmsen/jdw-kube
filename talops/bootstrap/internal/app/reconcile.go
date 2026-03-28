@@ -639,6 +639,52 @@ func (app *App) executePlan(
 		}
 	}
 
+	// Phase 6b: Wait for newly added nodes to reach Ready
+	newNodeVMIDs := append(plan.AddControlPlanes, plan.AddWorkers...)
+	if len(newNodeVMIDs) > 0 && !cfg.DryRun && deployed.BootstrapCompleted {
+		app.Logger.Info("waiting for new nodes to become Ready", zap.Int("count", len(newNodeVMIDs)))
+		const nodeReadyTimeout = 5 * time.Minute
+
+		for _, vmid := range newNodeVMIDs {
+			// Skip the bootstrapped CP (already handled by etcd health wait)
+			if plan.NeedsBootstrap && vmid == bootstrappedVMID {
+				continue
+			}
+
+			var nodeIP net.IP
+			for _, cp := range deployed.ControlPlanes {
+				if cp.VMID == vmid {
+					nodeIP = cp.IP
+					break
+				}
+			}
+			if nodeIP == nil {
+				for _, w := range deployed.Workers {
+					if w.VMID == vmid {
+						nodeIP = w.IP
+						break
+					}
+				}
+			}
+			if nodeIP == nil {
+				app.Logger.Warn("cannot wait for node readiness: IP not in deployed state", zap.Int("vmid", int(vmid)))
+				continue
+			}
+
+			nodeName, err := k8sClient.GetNodeNameByIP(ctx, nodeIP)
+			if err != nil {
+				app.Logger.Warn("cannot resolve node name for readiness wait", zap.Int("vmid", int(vmid)), zap.Error(err))
+				continue
+			}
+
+			if err := k8sClient.WaitForNodeReady(ctx, nodeName, nodeReadyTimeout); err != nil {
+				app.Logger.Warn("node readiness wait timed out", zap.Int("vmid", int(vmid)), zap.String("node", nodeName), zap.Error(err))
+			} else {
+				app.Logger.Info("node is Ready", zap.Int("vmid", int(vmid)), zap.String("node", nodeName))
+			}
+		}
+	}
+
 	// Phase 7: Update configs
 	if len(plan.UpdateConfigs) > 0 {
 		app.Logger.Info("updating configurations", zap.Int("count", len(plan.UpdateConfigs)))
@@ -708,6 +754,24 @@ func (app *App) executePlan(
 	// Phase 9: Post-reconciliation verification
 	if !cfg.DryRun && deployed.BootstrapCompleted {
 		app.VerifyCluster(ctx, talosClient, k8sClient, deployed)
+	}
+
+	// Phase 10: Sweep stale K8s node objects
+	if deployed.BootstrapCompleted {
+		deleted, err := app.SweepStaleNodes(ctx, k8sClient, desired, deployed)
+		if err != nil {
+			app.Logger.Warn("stale node sweep completed with errors", zap.Error(err))
+		}
+		if deleted > 0 {
+			action := "deleted"
+			if cfg.DryRun {
+				action = "would delete"
+			}
+			app.Logger.Info("stale node sweep complete",
+				zap.String("action", action),
+				zap.Int("count", deleted))
+			audit("SWEEP-STALE-NODES", fmt.Sprintf("action=%s count=%d", action, deleted))
+		}
 	}
 
 	// Update session counters with final deployed state

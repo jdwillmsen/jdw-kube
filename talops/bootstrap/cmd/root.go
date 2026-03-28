@@ -70,6 +70,7 @@ func Execute() error {
 		infraCmd(a),
 		upCmd(a),
 		downCmd(a),
+		pruneNodesCmd(a),
 	)
 
 	runErr = rootCmd.Execute()
@@ -292,6 +293,23 @@ func upCmd(a *app.App) *cobra.Command {
 	cmd.Flags().BoolVar(&skipInfra, "skip-infra", false, "Skip Terraform provisioning, run only reconcile")
 
 	return cmd
+}
+
+func pruneNodesCmd(a *app.App) *cobra.Command {
+	return &cobra.Command{
+		Use:   "prune-nodes",
+		Short: "Delete NotReady K8s node objects not in the desired state",
+		Long: `Remove stale Kubernetes node objects that are in NotReady status and do not
+belong to and node defined in the current terraform.tfvars. This cleans up
+ghost nodes left behind by previous scaling tests or interrupted operations.
+
+Use --dry-run to preview which nodes would be deleted.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer cancel()
+			return a.RunPruneNodes(ctx)
+		},
+	}
 }
 
 func downCmd(a *app.App) *cobra.Command {

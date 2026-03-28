@@ -187,6 +187,71 @@ func (app *App) execTalosctlAudited(args []string, envExtra string) ([]byte, err
 	return cmd.CombinedOutput()
 }
 
+// SweepStaleNodes removes NotReady K8s node objects that don't belong to any
+// node in the desired state. Returns the count of nodes deleted and any errors.
+func (app *App) SweepStaleNodes(
+	ctx context.Context,
+	k8sClient *kubectl.Client,
+	desired map[types.VMID]*types.NodeSpec,
+	deployed *types.ClusterState,
+) (int, error) {
+	nodes, err := k8sClient.GetParsedNodes(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("get parsed nodes: %w", err)
+	}
+
+	// Build set of IPs that belong to actively desired nodes
+	desiredIPs := make(map[string]bool)
+	for _, cp := range deployed.ControlPlanes {
+		if cp.IP != nil {
+			desiredIPs[cp.IP.String()] = true
+		}
+	}
+	for _, w := range deployed.Workers {
+		if w.IP != nil {
+			desiredIPs[w.IP.String()] = true
+		}
+	}
+
+	var deleted int
+	var errs []string
+	for _, node := range nodes {
+		if node.Status == "Ready" {
+			continue
+		}
+		if desiredIPs[node.IP] {
+			continue
+		}
+
+		if app.Cfg.DryRun {
+			app.Logger.Info("would delete stale node",
+				zap.String("node", node.Name),
+				zap.String("ip", node.IP),
+				zap.String("status", node.Status))
+			deleted++
+			continue
+		}
+
+		app.Logger.Info("deleting stale node",
+			zap.String("node", node.Name),
+			zap.String("ip", node.IP),
+			zap.String("status", node.Status))
+		if err := k8sClient.DeleteNode(ctx, node.Name); err != nil {
+			app.Logger.Warn("failed to delete stale node",
+				zap.String("node", node.Name),
+				zap.Error(err))
+			errs = append(errs, fmt.Sprintf("%s: %v", node.Name, err))
+		} else {
+			deleted++
+		}
+	}
+
+	if len(errs) > 0 {
+		return deleted, fmt.Errorf("failed to delete %d stale node(s): %s", len(errs), strings.Join(errs, "; "))
+	}
+	return deleted, nil
+}
+
 // VerifyCluster performs post-reconciliation health checks
 func (app *App) VerifyCluster(ctx context.Context, talosClient *talos.Client, k8sClient *kubectl.Client, deployed *types.ClusterState) {
 	app.Logger.Info("verifying cluster health")

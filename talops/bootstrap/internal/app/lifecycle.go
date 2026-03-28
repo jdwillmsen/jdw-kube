@@ -248,6 +248,75 @@ func (app *App) removeNodeFromCluster(
 	}
 }
 
+// RunPruneNodes deletes NotReady K8s node objects that are not in the desired
+// state. This is a standalone command for cleaning up ghost nodes left behind
+// by previous scaling test runs or interrupted operations.
+func (app *App) RunPruneNodes(ctx context.Context) error {
+	cfg := app.Cfg
+	stateMgr := state.NewManager(cfg, app.Logger)
+
+	if err := stateMgr.ResolveTFVarsPath(); err != nil {
+		return fmt.Errorf("resolve tfvars: %w", err)
+	}
+	if err := stateMgr.LoadTerraformExtras(ctx); err != nil {
+		return fmt.Errorf("load terraform extras: %w", err)
+	}
+
+	desired, err := stateMgr.LoadDesiredState(ctx)
+	if err != nil {
+		return fmt.Errorf("load deployed state: %w", err)
+	}
+
+	deployed, err := stateMgr.LoadDeployedState(ctx)
+	if err != nil {
+		return fmt.Errorf("load deployed state: %w", err)
+	}
+
+	if !deployed.BootstrapCompleted {
+		app.Logger.Info("Cluster not bootstrapped, nothing to prune")
+		return nil
+	}
+
+	k8sClient := kubectl.NewClient(app.Logger)
+	k8sClient.SetContext(cfg.ClusterName)
+	if app.Session != nil && app.Session.AuditLog != nil {
+		k8sClient.SetAuditLogger(app.Session.AuditLog)
+	}
+
+	// Validate kubeconfig before kubectl calls
+	if len(deployed.ControlPlanes) > 0 {
+		talosClient := talos.NewClient(cfg)
+		talosClient.SetLogger(app.Logger)
+		if err := talosClient.Initialize(ctx); err != nil {
+			return fmt.Errorf("initialize talos client: %w", err)
+		}
+
+		kubeconfigMgr := talos.NewKubeconfigManager(talosClient, app.Logger)
+		if err := kubeconfigMgr.Verify(ctx, cfg.ClusterName); err != nil {
+			app.Logger.Warn("kubeconfig invalid, refreshing before prune", zap.Error(err))
+			cpIP := deployed.ControlPlanes[0].IP
+			if fetchErr := kubeconfigMgr.FetchAndMerge(ctx, cpIP, cfg.ClusterName, cfg.ControlPlaneEndpoint); fetchErr != nil {
+				return fmt.Errorf("kubeconfig refresh for prune: %w", fetchErr)
+			}
+		}
+	}
+
+	deleted, err := app.SweepStaleNodes(ctx, k8sClient, desired, deployed)
+	if err != nil {
+		app.Logger.Warn("prune completed with errors", zap.Error(err))
+	}
+
+	action := "deleted"
+	if cfg.DryRun {
+		action = "would delete"
+	}
+	app.Logger.Info("prune-nodes complete",
+		zap.String("action", action),
+		zap.Int("stale_nodes", deleted))
+
+	return err
+}
+
 func (app *App) RunDown(ctx context.Context, skipDrain, force bool) error {
 	if !app.Cfg.AutoApprove {
 		fmt.Fprint(app.Session.Console, "This will DESTROY the cluster. Type \"yes\": ")
