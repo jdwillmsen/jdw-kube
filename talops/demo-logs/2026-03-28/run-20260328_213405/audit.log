@@ -1,0 +1,24 @@
+[2026-03-28 21:34:09] [RECONCILE-START] cluster=test-core dry_run=false plan_mode=false
+[2026-03-28 21:34:21] [BOOTSTRAP-START] control_planes=0 workers=0
+[2026-03-28 21:34:34] [CMD-START] talosctl config endpoint 192.168.1.199
+[2026-03-28 21:34:34] [CMD-EXIT] 0 [DURATION: 122ms]
+[2026-03-28 21:34:35] [CMD-START] talosctl config node 192.168.1.243
+[2026-03-28 21:34:35] [CMD-EXIT] 0 [DURATION: 110ms]
+[2026-03-28 21:34:35] [CMD-START] kubectl --context test-core cluster-info
+[2026-03-28 21:34:45] [CMD-OUTPUT] 
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+Unable to connect to the server: EOF
+
+[2026-03-28 21:34:45] [CMD-EXIT] 1 [DURATION: 10480ms]
+[2026-03-28 21:34:45] [CMD-START] kubectl --context test-core get nodes -o wide
+[2026-03-28 21:34:55] [CMD-OUTPUT] 
+Unable to connect to the server: EOF
+
+[2026-03-28 21:34:55] [CMD-EXIT] 1 [DURATION: 10249ms]
+[2026-03-28 21:34:55] [CMD-START] kubectl --context test-core get nodes -o wide --no-headers
+[2026-03-28 21:35:06] [CMD-OUTPUT] 
+Unable to connect to the server: EOF
+
+[2026-03-28 21:35:06] [CMD-EXIT] 1 [DURATION: 10285ms]
+[2026-03-28 21:35:06] [RECONCILE-END] cluster=test-core status=success

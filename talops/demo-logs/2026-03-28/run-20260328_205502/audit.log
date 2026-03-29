@@ -1,3 +1,0 @@
-[2026-03-28 20:55:05] [RECONCILE-START] cluster=test-core dry_run=false plan_mode=false
-[2026-03-28 20:55:18] [BOOTSTRAP-START] control_planes=0 workers=0
-[2026-03-28 20:55:19] [RECONCILE-END] cluster=test-core status=success
