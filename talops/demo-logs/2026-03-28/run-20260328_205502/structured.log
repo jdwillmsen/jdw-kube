@@ -1,0 +1,38 @@
+{"level":"debug","ts":"2026-03-28T20:55:02.475-0500","msg":"session started","cluster":"cluster","config":"../scenarios/scaling_tests/01_3cp-2w.tfvars","log_dir":"logs\\2026-03-28\\run-20260328_205502"}
+{"level":"debug","ts":"2026-03-28T20:55:02.920-0500","msg":"prerequisite found","tool":"talosctl","path":"F:\\Dev\\bin\\talosctl.exe","version":"Client:"}
+{"level":"debug","ts":"2026-03-28T20:55:03.437-0500","msg":"prerequisite found","tool":"kubectl","path":"C:\\ProgramData\\chocolatey\\bin\\kubectl.exe","version":"Client Version: v1.35.0"}
+{"level":"debug","ts":"2026-03-28T20:55:03.776-0500","msg":"prerequisite found","tool":"terraform","path":"C:\\ProgramData\\chocolatey\\bin\\terraform.exe","version":"Terraform v1.14.3"}
+{"level":"debug","ts":"2026-03-28T20:55:03.954-0500","msg":"backed up","file":"..\\terraform\\backups\\tfstate-20260328_205503.terraform.tfstate"}
+{"level":"debug","ts":"2026-03-28T20:55:03.956-0500","msg":"backed up","file":"..\\terraform\\backups\\tfvars-20260328_205503.terraform.tfvars"}
+{"level":"info","ts":"2026-03-28T20:55:03.956-0500","msg":"initializing terraform"}
+{"level":"debug","ts":"2026-03-28T20:55:03.956-0500","msg":"terraform already initialized"}
+{"level":"info","ts":"2026-03-28T20:55:03.956-0500","msg":"formatting and validating"}
+{"level":"debug","ts":"2026-03-28T20:55:04.979-0500","msg":"checking Proxmox ISO","iso":"local:iso/nocloud-amd64.iso"}
+{"level":"info","ts":"2026-03-28T20:55:04.995-0500","msg":"ISO found on Proxmox","iso":"local:iso/nocloud-amd64.iso"}
+{"level":"info","ts":"2026-03-28T20:55:04.995-0500","msg":"creating plan"}
+{"level":"info","ts":"2026-03-28T20:55:05.933-0500","msg":"no changes needed - infrastructure is up to date"}
+{"level":"info","ts":"2026-03-28T20:55:05.935-0500","msg":"starting reconciliation","cluster":"test-core","dry_run":false,"plan_mode":false}
+{"level":"info","ts":"2026-03-28T20:55:05.936-0500","msg":"preflight: checking HAProxy SSH connectivity","host":"192.168.1.199","user":"root"}
+{"level":"info","ts":"2026-03-28T20:55:06.325-0500","msg":"preflight: HAProxy SSH connectivity OK"}
+{"level":"info","ts":"2026-03-28T20:55:06.325-0500","msg":"refreshing proxmox node IPs"}
+{"level":"info","ts":"2026-03-28T20:55:11.426-0500","msg":"loading desired state from terraform"}
+{"level":"info","ts":"2026-03-28T20:55:11.426-0500","msg":"loaded desired state","nodes":5}
+{"level":"info","ts":"2026-03-28T20:55:11.427-0500","msg":"loading deployed state"}
+{"level":"info","ts":"2026-03-28T20:55:11.427-0500","msg":"discovering live state"}
+{"level":"info","ts":"2026-03-28T20:55:18.905-0500","msg":"discovered live state","found":5}
+{"level":"debug","ts":"2026-03-28T20:55:18.905-0500","msg":"discovered VM","vmid":301,"ip":"192.168.1.174","status":"discovered"}
+{"level":"debug","ts":"2026-03-28T20:55:18.905-0500","msg":"discovered VM","vmid":200,"ip":"192.168.1.243","status":"discovered"}
+{"level":"debug","ts":"2026-03-28T20:55:18.906-0500","msg":"discovered VM","vmid":201,"ip":"192.168.1.238","status":"discovered"}
+{"level":"debug","ts":"2026-03-28T20:55:18.906-0500","msg":"discovered VM","vmid":202,"ip":"192.168.1.98","status":"discovered"}
+{"level":"debug","ts":"2026-03-28T20:55:18.906-0500","msg":"discovered VM","vmid":300,"ip":"192.168.1.117","status":"discovered"}
+{"level":"info","ts":"2026-03-28T20:55:18.906-0500","msg":"running Talos API preflight checks"}
+{"level":"debug","ts":"2026-03-28T20:55:18.907-0500","msg":"Talos API reachable","vmid":202,"ip":"192.168.1.98"}
+{"level":"debug","ts":"2026-03-28T20:55:18.908-0500","msg":"Talos API reachable","vmid":300,"ip":"192.168.1.117"}
+{"level":"debug","ts":"2026-03-28T20:55:18.908-0500","msg":"Talos API reachable","vmid":301,"ip":"192.168.1.174"}
+{"level":"debug","ts":"2026-03-28T20:55:18.910-0500","msg":"Talos API reachable","vmid":200,"ip":"192.168.1.243"}
+{"level":"debug","ts":"2026-03-28T20:55:18.911-0500","msg":"Talos API reachable","vmid":201,"ip":"192.168.1.238"}
+{"level":"info","ts":"2026-03-28T20:55:18.911-0500","msg":"building reconciliation plan"}
+{"level":"info","ts":"2026-03-28T20:55:18.919-0500","msg":"executing bootstrap"}
+{"level":"info","ts":"2026-03-28T20:55:18.920-0500","msg":"updating HAProxy configuration","host":"192.168.1.199","user":"root","backup_suffix":"20260328-205518"}
+{"level":"info","ts":"2026-03-28T20:55:19.677-0500","msg":"HAProxy configuration updated and reloaded successfully"}
+{"level":"info","ts":"2026-03-28T20:55:19.679-0500","msg":"reconciliation complete"}

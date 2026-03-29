@@ -19,7 +19,11 @@ import (
 )
 
 func (app *App) DisplayPlan(plan *types.ReconcilePlan) {
-	app.DisplayPlanTo(plan, app.Session.Console)
+	var w io.Writer = os.Stdout
+	if app.Session != nil {
+		w = app.Session.Console
+	}
+	app.DisplayPlanTo(plan, w)
 }
 
 func (app *App) DisplayPlanTo(plan *types.ReconcilePlan, w io.Writer) {
@@ -283,7 +287,11 @@ func (app *App) VerifyCluster(ctx context.Context, talosClient *talos.Client, k8
 	}
 
 	// Print success summary using box
-	box := logging.NewBox(app.Session.Console, app.Cfg.NoColor)
+	var w io.Writer = os.Stdout
+	if app.Session != nil {
+		w = app.Session.Console
+	}
+	box := logging.NewBox(w, app.Cfg.NoColor)
 	box.Header("BOOTSTRAP SUCCESSFUL")
 	box.Row("Cluster", deployed.ClusterName)
 	box.Row("Endpoint", app.Cfg.ControlPlaneEndpoint)

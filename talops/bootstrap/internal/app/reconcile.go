@@ -229,6 +229,84 @@ func (app *App) RunReconcile(ctx context.Context) error {
 	return nil
 }
 
+// updateSessionCounters refreshes the session counters from the current plan and deployed state.
+// Called at the start of executePlan and again after bootstrap recovery rebuilds the plan.
+func (app *App) updateSessionCounters(plan *types.ReconcilePlan, deployed *types.ClusterState) {
+	if app.Session == nil {
+		return
+	}
+	app.Session.ControlPlanes = len(deployed.ControlPlanes)
+	app.Session.Workers = len(deployed.Workers)
+	app.Session.AddedNodes = len(plan.AddControlPlanes) + len(plan.AddWorkers)
+	app.Session.RemovedNodes = len(plan.RemoveControlPlanes) + len(plan.RemoveWorkers)
+	app.Session.UpdatedConfigs = len(plan.UpdateConfigs)
+	app.Session.BootstrapNeeded = plan.NeedsBootstrap
+}
+
+// executeBootstrap deploys the first control plane and bootstraps etcd.
+// Returns the VMID of the bootstrapped node so Phase 3 can skip re-deploying it.
+func (app *App) executeBootstrap(
+	ctx context.Context,
+	plan *types.ReconcilePlan,
+	desired map[types.VMID]*types.NodeSpec,
+	deployed *types.ClusterState,
+	live map[types.VMID]*types.LiveNode,
+	stateMgr *state.Manager,
+	scanner *discovery.Scanner,
+	talosClient *talos.Client,
+	audit func(string, string),
+) (types.VMID, error) {
+	cfg := app.Cfg
+
+	app.Logger.Info("executing bootstrap")
+	audit("BOOTSTRAP-START", fmt.Sprintf("control_planes=%d workers=%d", len(plan.AddControlPlanes), len(plan.AddWorkers)))
+
+	if len(plan.AddControlPlanes) == 0 {
+		return 0, nil
+	}
+
+	firstVMID := plan.AddControlPlanes[0]
+	spec := desired[firstVMID]
+
+	if cfg.DryRun {
+		app.Logger.Info("would bootstrap first control plane",
+			zap.Int("vmid", int(firstVMID)),
+			zap.String("name", spec.Name))
+		deployed.BootstrapCompleted = true
+		if err := stateMgr.Save(ctx, deployed); err != nil {
+			app.Logger.Error("failed to save state after bootstrap", zap.Error(err))
+			return firstVMID, fmt.Errorf("save state after bootstrap: %w", err)
+		}
+		return firstVMID, nil
+	}
+
+	newIP, err := app.deployNode(ctx, firstVMID, types.RoleControlPlane, live, deployed, stateMgr, scanner, talosClient)
+	if err != nil {
+		app.Logger.Error("bootstrap first control plane failed", zap.Int("vmid", int(firstVMID)), zap.Error(err))
+		return 0, fmt.Errorf("bootstrap first CP: %w", err)
+	}
+
+	app.Logger.Info("bootstrapping etcd on first control plane", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)))
+	if err := talosClient.BootstrapEtcd(ctx, newIP); err != nil {
+		app.Logger.Error("etcd bootstrap failed", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)), zap.Error(err))
+		return 0, fmt.Errorf("bootstrap etcd: %w", err)
+	}
+
+	if err := talosClient.WaitForEtcdHealthy(ctx, newIP, 5*time.Minute); err != nil {
+		app.Logger.Error("etcd health check timed out", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)), zap.Error(err))
+		return 0, fmt.Errorf("wait for etcd healthy: %w", err)
+	}
+	app.Logger.Info("first control plane ready (API + etcd)", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)))
+
+	deployed.BootstrapCompleted = true
+	if err := stateMgr.Save(ctx, deployed); err != nil {
+		app.Logger.Error("failed to save state after bootstrap", zap.Error(err))
+		return firstVMID, fmt.Errorf("save state after bootstrap: %w", err)
+	}
+
+	return firstVMID, nil
+}
+
 // deployNode handles the apply -> reboot -> wait -> hash flow for adding a node
 func (app *App) deployNode(
 	ctx context.Context,
@@ -324,14 +402,7 @@ func (app *App) executePlan(
 	cfg := app.Cfg
 
 	// Populate session counters early so SUMMARY.txt has data even on error
-	if app.Session != nil {
-		app.Session.ControlPlanes = len(deployed.ControlPlanes)
-		app.Session.Workers = len(deployed.Workers)
-		app.Session.AddedNodes = len(plan.AddControlPlanes) + len(plan.AddWorkers)
-		app.Session.RemovedNodes = len(plan.RemoveControlPlanes) + len(plan.RemoveWorkers)
-		app.Session.UpdatedConfigs = len(plan.UpdateConfigs)
-		app.Session.BootstrapNeeded = plan.NeedsBootstrap
-	}
+	app.updateSessionCounters(plan, deployed)
 
 	var bootstrappedVMID types.VMID
 
@@ -343,44 +414,11 @@ func (app *App) executePlan(
 
 	// Phase 0: Bootstrap first CP if needed
 	if plan.NeedsBootstrap {
-		app.Logger.Info("executing bootstrap")
-		audit("BOOTSTRAP-START", fmt.Sprintf("control_planes=%d workers=%d", len(plan.AddControlPlanes), len(plan.AddWorkers)))
-
-		if len(plan.AddControlPlanes) > 0 {
-			firstVMID := plan.AddControlPlanes[0]
-			bootstrappedVMID = firstVMID
-			spec := desired[firstVMID]
-
-			if cfg.DryRun {
-				app.Logger.Info("would bootstrap first control plane",
-					zap.Int("vmid", int(firstVMID)),
-					zap.String("name", spec.Name))
-			} else {
-				newIP, err := app.deployNode(ctx, firstVMID, types.RoleControlPlane, live, deployed, stateMgr, scanner, talosClient)
-				if err != nil {
-					app.Logger.Error("bootstrap first control plane failed", zap.Int("vmid", int(firstVMID)), zap.Error(err))
-					return fmt.Errorf("bootstrap first CP: %w", err)
-				}
-
-				app.Logger.Info("bootstrapping etcd on first control plane", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)))
-				if err := talosClient.BootstrapEtcd(ctx, newIP); err != nil {
-					app.Logger.Error("etcd bootstrap failed", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)), zap.Error(err))
-					return fmt.Errorf("bootstrap etcd: %w", err)
-				}
-
-				if err := talosClient.WaitForEtcdHealthy(ctx, newIP, 5*time.Minute); err != nil {
-					app.Logger.Error("etcd health check timed out", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)), zap.Error(err))
-					return fmt.Errorf("wait for etcd healthy: %w", err)
-				}
-				app.Logger.Info("first control plane ready (API + etcd)", zap.String("ip", newIP.String()), zap.Int("vmid", int(firstVMID)))
-			}
-
-			deployed.BootstrapCompleted = true
-			if err := stateMgr.Save(ctx, deployed); err != nil {
-				app.Logger.Error("failed to save state after bootstrap", zap.Error(err))
-				return fmt.Errorf("save state after bootstrap: %w", err)
-			}
+		vmid, err := app.executeBootstrap(ctx, plan, desired, deployed, live, stateMgr, scanner, talosClient, audit)
+		if err != nil {
+			return err
 		}
+		bootstrappedVMID = vmid
 	} else if len(deployed.ControlPlanes) > 0 && !deployed.BootstrapCompleted {
 		if cfg.DryRun {
 			app.Logger.Info("would bootstrap etcd on existing first control plane",
@@ -426,6 +464,19 @@ func (app *App) executePlan(
 					zap.String("ip", cpIP.String()),
 					zap.Error(fetchErr))
 
+				// Preserve audit trail before clearing state
+				now := time.Now()
+				for _, cp := range deployed.ControlPlanes {
+					cp.Role = types.RoleControlPlane
+					cp.RemovedAt = &now
+					deployed.RemovedNodes = append(deployed.RemovedNodes, cp)
+				}
+				for _, w := range deployed.Workers {
+					w.Role = types.RoleWorker
+					w.RemovedAt = &now
+					deployed.RemovedNodes = append(deployed.RemovedNodes, w)
+				}
+
 				deployed.BootstrapCompleted = false
 				deployed.ControlPlanes = nil
 				deployed.Workers = nil
@@ -442,6 +493,16 @@ func (app *App) executePlan(
 					zap.Int("add_cps", len(plan.AddControlPlanes)),
 					zap.Int("add_workers", len(plan.AddWorkers)))
 				app.DisplayPlan(plan)
+
+				// Update session counters to reflect the recovery plan
+				app.updateSessionCounters(plan, deployed)
+
+				// Execute bootstrap now - Phase 0 already passed, so we must run it here
+				vmid, err := app.executeBootstrap(ctx, plan, desired, deployed, live, stateMgr, scanner, talosClient, audit)
+				if err != nil {
+					return err
+				}
+				bootstrappedVMID = vmid
 			} else {
 				if verifyErr := kubeconfigMgr.Verify(ctx, cfg.ClusterName); verifyErr != nil {
 					app.Logger.Error("kubeconfig still invalid after refresh", zap.Error(verifyErr))
