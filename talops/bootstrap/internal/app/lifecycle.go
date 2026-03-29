@@ -342,7 +342,57 @@ func (app *App) RunDown(ctx context.Context, skipDrain, force bool) error {
 	if err := app.RunInfraDestroy(ctx, tfDir, force, true); err != nil {
 		return fmt.Errorf("down: destroy failed: %w", err)
 	}
+
+	// Reset bootstrap state so the next `talops up` starts fresh.
+	// Without this, stale state causes the reconciler to skip bootstrap
+	// and fail trying to reach a K8s API that doesn't exist yet.
+	app.resetBootstrapState(ctx)
+
 	return nil
+}
+
+// resetBootstrapState clears the bootstrap after a full cluster teardown.
+// Preserves RemovedNodes for audit trail but marks the cluster as not bootstrapped
+// and clears all active node lists.
+func (app *App) resetBootstrapState(ctx context.Context) {
+	cfg := app.Cfg
+	stateMgr := state.NewManager(cfg, app.Logger)
+	if err := stateMgr.ResolveTFVarsPath(); err != nil {
+		app.Logger.Warn("could not resolve tfvars for state reset", zap.Error(err))
+	}
+	if err := stateMgr.LoadTerraformExtras(ctx); err != nil {
+		app.Logger.Warn("could not load terraform extras for state reset", zap.Error(err))
+	}
+
+	deployed, err := stateMgr.LoadDeployedState(ctx)
+	if err != nil {
+		app.Logger.Warn("could not load deployed state for reset", zap.Error(err))
+	}
+
+	// Move all active nodes to removed audit trail
+	now := time.Now()
+	for _, cp := range deployed.ControlPlanes {
+		cp.Role = types.RoleControlPlane
+		cp.RemovedAt = &now
+		deployed.RemovedNodes = append(deployed.RemovedNodes, cp)
+	}
+	for _, w := range deployed.Workers {
+		w.Role = types.RoleWorker
+		w.RemovedAt = &now
+		deployed.RemovedNodes = append(deployed.RemovedNodes, w)
+	}
+
+	deployed.ControlPlanes = nil
+	deployed.Workers = nil
+	deployed.BootstrapCompleted = false
+	deployed.FirstControlPlane = 0
+	deployed.Timestamp = now
+
+	if err := stateMgr.Save(ctx, deployed); err != nil {
+		app.Logger.Warn("failed to reset bootstrap state", zap.Error(err))
+	} else {
+		app.Logger.Info("bootstrap state reset after cluster teardown")
+	}
 }
 
 func (app *App) drainAllNodes(ctx context.Context) error {

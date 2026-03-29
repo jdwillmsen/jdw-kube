@@ -419,15 +419,36 @@ func (app *App) executePlan(
 
 			cpIP := deployed.ControlPlanes[0].IP
 			if fetchErr := kubeconfigMgr.FetchAndMerge(ctx, cpIP, cfg.ClusterName, cfg.ControlPlaneEndpoint); fetchErr != nil {
-				app.Logger.Error("kubeconfig refresh failed", zap.Error(fetchErr))
-				return fmt.Errorf("kubeconfig refresh: %w", fetchErr)
-			}
+				// K8s API unreachable on the CP - this likely means the VMs were
+				// recreated (e.g. after `talops down`) and need a bootstrap.
+				// Reset state and convert the plan to a fresh bootstrap instead of aborting.
+				app.Logger.Warn("K8s API unreachable on control plane, resetting to bootstrap mode",
+					zap.String("ip", cpIP.String()),
+					zap.Error(fetchErr))
 
-			if verifyErr := kubeconfigMgr.Verify(ctx, cfg.ClusterName); verifyErr != nil {
-				app.Logger.Error("kubeconfig still invalid after refresh", zap.Error(verifyErr))
-				return fmt.Errorf("kubeconfig verification after refresh: %w", verifyErr)
+				deployed.BootstrapCompleted = false
+				deployed.ControlPlanes = nil
+				deployed.Workers = nil
+				deployed.FirstControlPlane = 0
+
+				// Rebuild the plan as a fresh bootstrap
+				newPlan, rebuildErr := stateMgr.BuildReconcilePlan(ctx, desired, deployed, live)
+				if rebuildErr != nil {
+					return fmt.Errorf("rebuild plan for bootstrap recovery: %w", rebuildErr)
+				}
+				newPlan.NeedsBootstrap = true
+				plan = newPlan
+				app.Logger.Info("recovered to bootstrap mode",
+					zap.Int("add_cps", len(plan.AddControlPlanes)),
+					zap.Int("add_workers", len(plan.AddWorkers)))
+				app.DisplayPlan(plan)
+			} else {
+				if verifyErr := kubeconfigMgr.Verify(ctx, cfg.ClusterName); verifyErr != nil {
+					app.Logger.Error("kubeconfig still invalid after refresh", zap.Error(verifyErr))
+					return fmt.Errorf("kubeconfig verification after refresh: %w", verifyErr)
+				}
+				app.Logger.Info("kubeconfig refreshed successfully", zap.String("cluster", cfg.ClusterName))
 			}
-			app.Logger.Info("kubeconfig refreshed successfully", zap.String("cluster", cfg.ClusterName))
 		}
 	}
 
