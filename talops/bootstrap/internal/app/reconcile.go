@@ -330,17 +330,18 @@ func (app *App) executeBootstrap(
 		if err := stateMgr.Save(ctx, deployed); err != nil {
 			return firstCP.VMID, fmt.Errorf("save state after deferred bootstrap: %w", err)
 		}
-		return firstCP.VMID, nil
-	}
 
-	// In deferred mode, all CPs all already deployed with configs.
-	// Wait for them to join etcd so we have quorum before K8s API starts.
-	if len(deployed.ControlPlanes) > 1 {
-		if err := talosClient.WaitForEtcdMembers(ctx, firstCP.IP, len(deployed.ControlPlanes), 3*time.Minute); err != nil {
-			app.Logger.Warn("not all CPs joined etcd within timeout; continuing",
-				zap.Int("expected", len(deployed.ControlPlanes)),
-				zap.Error(err))
+		// In deferred mode, all CPs are already deployed with configs.
+		// Wait for them to join etcd so we have quorum before K8s API starts.
+		if len(deployed.ControlPlanes) > 1 {
+			if err := talosClient.WaitForEtcdMembers(ctx, firstCP.IP, len(deployed.ControlPlanes), 3*time.Minute); err != nil {
+				app.Logger.Warn("not all CPs joined etcd within timeout; continuing",
+					zap.Int("expected", len(deployed.ControlPlanes)),
+					zap.Error(err))
+			}
 		}
+
+		return firstCP.VMID, nil
 	}
 
 	app.Logger.Warn("bootstrap requested but no control planes available")
@@ -721,12 +722,11 @@ func (app *App) executePlan(
 			}
 
 			if kubeconfigFetched {
-
 				if err := kubeconfigMgr.Verify(ctx, cfg.ClusterName); err != nil {
 					app.Logger.Warn("kubeconfig verification failed after fetch", zap.Error(err))
-				} else {
-					app.Logger.Warn("kubeconfig fetch failed after all attempts (can retry with 'talops reconcile')")
 				}
+			} else {
+				app.Logger.Warn("kubeconfig fetch failed after all attempts (can retry with 'talops reconcile')")
 			}
 		}
 
