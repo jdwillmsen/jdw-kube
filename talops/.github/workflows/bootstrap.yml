@@ -19,6 +19,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: bootstrap/go.mod
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: bootstrap
       - run: go vet ./...
       - run: go test -race -timeout 120s ./...
       - run: go build -o /dev/null .

@@ -50,21 +50,31 @@ run: build
 
 # Cross compilation
 build-linux:
-	@echo "Building for Linux..."
+	@echo "Building for Linux (amd64)..."
 	@mkdir -p $(BUILD_DIR)
 	GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 .
 
+build-linux-arm64:
+	@echo "Building for Linux (arm64)..."
+	@mkdir -p $(BUILD_DIR)
+	GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 .
+
 build-windows:
-	@echo "Building for Windows..."
+	@echo "Building for Windows (amd64)..."
 	@mkdir -p $(BUILD_DIR)
 	GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe .
 
 build-mac:
-	@echo "Building for macOS..."
+	@echo "Building for macOS (amd64)..."
 	@mkdir -p $(BUILD_DIR)
 	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 .
 
-build-all: build-linux build-windows build-mac
+build-mac-arm64:
+	@echo "Building for macOS (amd64)..."
+	@mkdir -p $(BUILD_DIR)
+	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 .
+
+build-all: build-linux build-linux-arm64 build-windows build-mac build-mac-arm64
 
 # Development helpers
 fmt:
@@ -91,7 +101,7 @@ clean-logs:
 help:
 	@echo "Available targets:"
 	@echo "  make build        - Build the binary"
-	@echo "  make build-all    - Build for all platforms"
+	@echo "  make build-all    - Build for all platforms (linux/darwin/windows, amd64/arm64)"
 	@echo "  make test         - Run tests"
 	@echo "  make test-race    - Run tests with race detector"
 	@echo "  make clean        - Clean build artifacts"
