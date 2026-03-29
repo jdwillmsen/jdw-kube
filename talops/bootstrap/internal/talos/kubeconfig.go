@@ -355,6 +355,40 @@ func (km *KubeconfigManager) writeDirectly(path string, data []byte) error {
 	return os.WriteFile(path, data, 0600)
 }
 
+// WaitForKubernetesAPI polls port 6443 on the given IP until it accepts a TCP
+// connection or the timeout expires. After an etcd bootstrap the K8s API server
+// can take 1-3 minutes to start; this replaces the single-shot probe in
+// FetchAndMerge with a patient retry loop.
+func (km *KubeconfigManager) WaitForKubernetesAPI(ctx context.Context, ip net.IP, maxWait time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, maxWait)
+	defer cancel()
+
+	addr := fmt.Sprintf("%s:6443", ip)
+	km.logger.Info("waiting for Kubernetes API to become reachable",
+		zap.String("addr", addr),
+		zap.Duration("timeout", maxWait))
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	// Try immediately, then on each tick
+	for attempt := 1; ; attempt++ {
+		conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+		if err == nil {
+			conn.Close()
+			km.logger.Info("Kubernetes API reachable", zap.String("addr", addr), zap.Int("attempt", attempt))
+			return nil
+		}
+		km.logger.Debug("Kubernetes API not yet reachable", zap.String("addr", addr), zap.Int("attempt", attempt), zap.Error(err))
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for Kubernetes API at %s after %s: %w", addr, maxWait, err)
+		case <-ticker.C:
+		}
+	}
+}
+
 // verifyKubernetesAPI checks that the Kubernetes API port (6443) is reachable on the
 // given IP. This is a lightweight TCP probe - it does not authenticate.
 func (km *KubeconfigManager) verifyKubernetesAPI(ctx context.Context, ip net.IP) error {

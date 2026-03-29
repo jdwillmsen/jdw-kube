@@ -260,12 +260,15 @@ func (app *App) SweepStaleNodes(
 func (app *App) VerifyCluster(ctx context.Context, talosClient *talos.Client, k8sClient *kubectl.Client, deployed *types.ClusterState) {
 	app.Logger.Info("verifying cluster health")
 
+	var k8sHealthy bool
+
 	// Check Kubernetes API
 	info, err := k8sClient.ClusterInfo(ctx)
 	if err != nil {
 		app.Logger.Warn("cluster-info check failed", zap.Error(err))
 	} else {
 		app.Logger.Info("kubernetes API accessible", zap.String("info", strings.TrimSpace(info)))
+		k8sHealthy = true
 	}
 
 	// List nodes
@@ -277,22 +280,32 @@ func (app *App) VerifyCluster(ctx context.Context, talosClient *talos.Client, k8
 	}
 
 	// Check etcd health
+	var etcdHealthy bool
 	if len(deployed.ControlPlanes) > 0 {
 		members, err := talosClient.GetEtcdMembers(ctx, deployed.ControlPlanes[0].IP)
 		if err != nil {
 			app.Logger.Warn("failed to get etcd members", zap.Error(err))
 		} else {
 			app.Logger.Info("etcd members healthy", zap.Int("count", len(members)))
+			etcdHealthy = true
 		}
 	}
 
-	// Print success summary using box
+	// Print summary using box - banner reflects actual health
 	var w io.Writer = os.Stdout
 	if app.Session != nil {
 		w = app.Session.Console
 	}
 	box := logging.NewBox(w, app.Cfg.NoColor)
-	box.Header("BOOTSTRAP SUCCESSFUL")
+
+	if k8sHealthy && etcdHealthy {
+		box.Header("BOOTSTRAP SUCCESSFUL")
+	} else if etcdHealthy {
+		box.Header("BOOTSTRAP PARTIAL - K8s API not yet reachable")
+	} else {
+		box.Header("BOOTSTRAP INCOMPLETE - cluster not healthy")
+	}
+
 	box.Row("Cluster", deployed.ClusterName)
 	box.Row("Endpoint", app.Cfg.ControlPlaneEndpoint)
 	box.Row("Control Planes", fmt.Sprintf("%d", len(deployed.ControlPlanes)))
@@ -303,9 +316,15 @@ func (app *App) VerifyCluster(ctx context.Context, talosClient *talos.Client, k8
 	for _, w := range deployed.Workers {
 		box.Item("•", fmt.Sprintf("VMID %d: %s", w.VMID, w.IP))
 	}
-	box.Section("Quick Start")
-	box.Item("$", "kubectl get nodes")
-	box.Item("$", "talosctl dashboard")
-	box.Item("$", "talosctl etcd members")
+
+	if !k8sHealthy {
+		box.Section("Next Steps")
+		box.Item("!", "K8s API may need more time - retry with 'talops reconcile'")
+	} else {
+		box.Section("Quick Start")
+		box.Item("$", "kubectl get nodes")
+		box.Item("$", "talosctl dashboard")
+		box.Item("$", "talosctl etcd members")
+	}
 	box.Footer()
 }

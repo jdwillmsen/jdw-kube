@@ -298,6 +298,10 @@ func (app *App) executeBootstrap(
 			app.Logger.Error("failed to save state after bootstrap", zap.Error(err))
 			return firstVMID, fmt.Errorf("save state after bootstrap: %w", err)
 		}
+
+		// Wait for other CPs to join etcd (they will be deployed in Phase 3).
+		// For a fresh bootstrap only the first CP is deployed here; the rest join later.
+		// No quorum wait needed yet - Phase 3 handles the remaining CPs.
 		return firstVMID, nil
 	}
 
@@ -327,6 +331,16 @@ func (app *App) executeBootstrap(
 			return firstCP.VMID, fmt.Errorf("save state after deferred bootstrap: %w", err)
 		}
 		return firstCP.VMID, nil
+	}
+
+	// In deferred mode, all CPs all already deployed with configs.
+	// Wait for them to join etcd so we have quorum before K8s API starts.
+	if len(deployed.ControlPlanes) > 1 {
+		if err := talosClient.WaitForEtcdMembers(ctx, firstCP.IP, len(deployed.ControlPlanes), 3*time.Minute); err != nil {
+			app.Logger.Warn("not all CPs joined etcd within timeout; continuing",
+				zap.Int("expected", len(deployed.ControlPlanes)),
+				zap.Error(err))
+		}
 	}
 
 	app.Logger.Warn("bootstrap requested but no control planes available")
@@ -673,25 +687,45 @@ func (app *App) executePlan(
 		if len(deployed.ControlPlanes) > 0 {
 			cpIP := deployed.ControlPlanes[0].IP
 
-			app.Logger.Info("waiting for control plane readiness before kubeconfig fetch",
-				zap.String("ip", cpIP.String()))
-			if err := talosClient.WaitForReady(ctx, cpIP, types.RoleControlPlane); err != nil {
-				app.Logger.Warn("CP readiness wait timed out, attempting kubeconfig fetch anyway", zap.Error(err))
+			// Wait for K8s API to accept connections. After etcd bootstrap the API
+			// server can take 1-3 minutes to start (needs etcd quorum, scheduler,
+			// controller-manager initialization).
+			if err := kubeconfigMgr.WaitForKubernetesAPI(ctx, cpIP, 5*time.Minute); err != nil {
+				app.Logger.Warn("Kubernetes API did not become reachable within timeout",
+					zap.String("ip", cpIP.String()),
+					zap.Error(err))
+				// Non-fatal: kubeconfig fetch will fail below but we continue
 			}
 
-			if err := kubeconfigMgr.FetchAndMerge(ctx, cpIP, cfg.ClusterName, cfg.ControlPlaneEndpoint); err != nil {
-				if len(plan.AddWorkers) > 0 {
-					app.Logger.Error("kubeconfig fetch failed during bootstrap with workers pending (fatal)", zap.Error(err))
-					return fmt.Errorf("kubeconfig fetch during bootstrap: %w", err)
-				}
-				app.Logger.Warn("kubeconfig fetch failed (can retry later)", zap.Error(err))
-			} else {
-				if err := kubeconfigMgr.Verify(ctx, cfg.ClusterName); err != nil {
-					if len(plan.AddWorkers) > 0 {
-						app.Logger.Error("K8s API unreachable during bootstrap with workers pending (fatal)", zap.Error(err))
-						return fmt.Errorf("K8s API verification during bootstrap: %w", err)
+			// Retry kubeconfig fetch - even after the API port opens, the first
+			// attempt can race with TLS certificate provisioning.
+			var kubeconfigFetched bool
+			const maxFetchAttempts = 3
+			for attempt := 1; attempt <= maxFetchAttempts; attempt++ {
+				if err := kubeconfigMgr.FetchAndMerge(ctx, cpIP, cfg.ClusterName, cfg.ControlPlaneEndpoint); err != nil {
+					app.Logger.Warn("kubeconfig fetch attempt failed",
+						zap.Int("attempt", attempt),
+						zap.Int("max_attempts", maxFetchAttempts),
+						zap.Error(err))
+					if attempt < maxFetchAttempts {
+						select {
+						case <-ctx.Done():
+							break
+						case <-time.After(15 * time.Second):
+						}
 					}
-					app.Logger.Warn("kubeconfig verification failed", zap.Error(err))
+					continue
+				}
+				kubeconfigFetched = true
+				break
+			}
+
+			if kubeconfigFetched {
+
+				if err := kubeconfigMgr.Verify(ctx, cfg.ClusterName); err != nil {
+					app.Logger.Warn("kubeconfig verification failed after fetch", zap.Error(err))
+				} else {
+					app.Logger.Warn("kubeconfig fetch failed after all attempts (can retry with 'talops reconcile')")
 				}
 			}
 		}

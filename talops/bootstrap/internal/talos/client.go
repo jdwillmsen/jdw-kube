@@ -475,6 +475,47 @@ func (c *Client) GetEtcdMembers(ctx context.Context, ip net.IP) ([]EtcdMember, e
 	return members, nil
 }
 
+// WaitForEtcdMembers polls until etcd reports at least expectedCount members or the
+// timeout expires. Used after bootstrap to wait for all CPs to join the etcd cluster
+// before attempting to fetch kubeconfig (K8s API needs quorum).
+func (c *Client) WaitForEtcdMembers(ctx context.Context, ip net.IP, expectedCount int, maxWait time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, maxWait)
+	defer cancel()
+
+	c.logger.Info("waiting for etcd members to join",
+		zap.String("ip", ip.String()),
+		zap.Int("expected", expectedCount),
+		zap.Duration("timeout", maxWait))
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		members, err := c.GetEtcdMembers(ctx, ip)
+		if err == nil && len(members) >= expectedCount {
+			c.logger.Info("etcd quorum reached",
+				zap.Int("members", len(members)),
+				zap.Int("expected", expectedCount))
+			return nil
+		}
+
+		currentCount := 0
+		if err == nil {
+			currentCount = len(members)
+		}
+		c.logger.Debug("etcd members not yet at expected count",
+			zap.Int("current", currentCount),
+			zap.Int("expected", expectedCount))
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for %d etcd members on %s (currently %d): %w",
+				expectedCount, ip, currentCount, ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
 // GetClusterMembers returns the peer URLs/hostnames of all current etcd members.
 // Used to mark live nodes with StatusJoined.
 func (c *Client) GetClusterMembers(ctx context.Context, endpoint net.IP) ([]string, error) {
