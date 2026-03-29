@@ -730,7 +730,7 @@ func (app *App) executePlan(
 			}
 		}
 
-		app.ConfigureTalosctlEndpoints(deployed)
+		// talosctl config is updated after Phase 8 for all reconcile runs
 	}
 
 	// Phase 6: Add workers (parallel, max 3 concurrent)
@@ -886,12 +886,17 @@ func (app *App) executePlan(
 		}
 	}
 
-	// Phase 9: Post-reconciliation verification
+	// Phase 9: Configure talosctl endpoints/nodes and merge into ~/.talos/config
+	if !cfg.DryRun && deployed.BootstrapCompleted && len(deployed.ControlPlanes) > 0 {
+		app.ConfigureTalosctl(deployed)
+	}
+
+	// Phase 10: Post-reconciliation verification
 	if !cfg.DryRun && deployed.BootstrapCompleted {
 		app.VerifyCluster(ctx, talosClient, k8sClient, deployed)
 	}
 
-	// Phase 10: Sweep stale K8s node objects
+	// Phase 11: Sweep stale K8s node objects
 	if deployed.BootstrapCompleted {
 		deleted, err := app.SweepStaleNodes(ctx, k8sClient, desired, deployed)
 		if err != nil {

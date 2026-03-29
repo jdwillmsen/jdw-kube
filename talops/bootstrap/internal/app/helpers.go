@@ -157,25 +157,54 @@ func appendHostsFile(hostsFile string, data []byte) error {
 	return cmd.Run()
 }
 
-// ConfigureTalosctlEndpoints sets talosctl endpoints and nodes
-func (app *App) ConfigureTalosctlEndpoints(deployed *types.ClusterState) {
+// ConfigureTalosctl sets talosctl endpoints and nodes in the cluster-local
+// talosconfig, then merges it into ~/.talos/config so that bare `talosctl`
+// commands work without --talosconfig or --endpoints/--nodes flags.
+func (app *App) ConfigureTalosctl(deployed *types.ClusterState) {
 	cfg := app.Cfg
-	talosEnv := "TALOSCONFIG=" + filepath.Join(cfg.SecretsDir, "talosconfig")
+	talosConfigPath := filepath.Join(cfg.SecretsDir, "talosconfig")
+	talosEnv := "TALOSCONFIG=" + talosConfigPath
 
-	// Set endpoint to HAProxy IP
+	// Set endpoint to HAProxy IP (stable VIP, always reachable)
 	endpointArgs := []string{"config", "endpoint", cfg.HAProxyIP.String()}
 	output, err := app.execTalosctlAudited(endpointArgs, talosEnv)
 	if err != nil {
 		app.Logger.Warn("failed to set talosctl endpoint", zap.Error(err), zap.String("output", string(output)))
 	}
 
-	// Set node to first control plane
-	if len(deployed.ControlPlanes) > 0 {
-		nodeArgs := []string{"config", "node", deployed.ControlPlanes[0].IP.String()}
+	// Set nodes to all node IPs (CPs first, then workers)
+	var nodeIPs []string
+	for _, cp := range deployed.ControlPlanes {
+		if cp.IP != nil {
+			nodeIPs = append(nodeIPs, cp.IP.String())
+		}
+	}
+	for _, w := range deployed.Workers {
+		if w.IP != nil {
+			nodeIPs = append(nodeIPs, w.IP.String())
+		}
+	}
+	if len(nodeIPs) > 0 {
+		nodeArgs := append([]string{"config", "node"}, nodeIPs...)
 		output, err := app.execTalosctlAudited(nodeArgs, talosEnv)
 		if err != nil {
-			app.Logger.Warn("failed to set talosctl node", zap.Error(err), zap.String("output", string(output)))
+			app.Logger.Warn("failed to set talosctl nodes", zap.Error(err), zap.String("output", string(output)))
 		}
+	}
+
+	// Merge cluster talosconfig into the user's default ~/.talos/config
+	mergeArgs := []string{"config", "merge", talosConfigPath}
+	output, err = app.execTalosctlAudited(mergeArgs, "")
+	if err != nil {
+		// Non-fatal: cluster-local config still works with --talosconfig flag
+		app.Logger.Warn("failed to merge talosconfig into default config",
+			zap.String("source", talosConfigPath),
+			zap.Error(err),
+			zap.String("output", string(output)))
+	} else {
+		app.Logger.Info("talosconfig merged into default config",
+			zap.String("context", cfg.ClusterName),
+			zap.Int("nodes", len(nodeIPs)))
 	}
 }
 
