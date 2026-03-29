@@ -70,7 +70,7 @@ build-mac:
 	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 .
 
 build-mac-arm64:
-	@echo "Building for macOS (amd64)..."
+	@echo "Building for macOS (arm64)..."
 	@mkdir -p $(BUILD_DIR)
 	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 .
 
